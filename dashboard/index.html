@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - DriveSafe AI</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-text">
+                        <h1>DriveSafe AI</h1>
+                        <p>Monitoramento de Frota</p>
+                    </div>
+                </div>
+                <div class="header-status">
+                    <span class="status-indicator active">
+                        Sistema Ativo
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Stats Grid -->
+            <section class="stats-grid">
+                <div class="card">
+                    <div class="card-content">
+                        <p class="card-title">Motoristas</p>
+                        <p class="card-value" id="total-drivers">0</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-content">
+                        <p class="card-title">Veículos</p>
+                        <p class="card-value" id="total-vehicles">0</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-content">
+                        <p class="card-title">Alertas Hoje</p>
+                        <p class="card-value" id="total-alerts-today">0</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-content">
+                        <p class="card-title">Alertas Críticos</p>
+                        <p class="card-value" id="high-risk-alerts">0</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-content">
+                        <p class="card-title">Em Monitoramento</p>
+                        <p class="card-value" id="monitoring-count">2</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-content">
+                        <p class="card-title">Status Frota</p>
+                        <p class="card-value" id="fleet-status">Normal</p>
+                    </div>
+                </div>
+
+                <div class="card wide">
+                    <div class="card-content">
+                        <p class="card-title">Última Ocorrência</p>
+                        <p class="card-value" id="last-alert">Nenhuma</p>
+                    </div>
+                </div>
+
+                <div class="card wide">
+                    <div class="card-content">
+                        <p class="card-title">Motorista com Mais Alertas</p>
+                        <p class="card-value" id="top-driver">Nenhum</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Alerts Table -->
+            <section class="table-section">
+                <div class="table-header">
+                    <h2>Últimos Alertas</h2>
+                    <button class="btn-refresh" onclick="loadData()">🔄 Atualizar</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Motorista</th>
+                                <th>Veículo</th>
+                                <th>Tipo de Alerta</th>
+                                <th>Horário</th>
+                                <th>Duração</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alerts-table-body">
+                            <tr>
+                                <td colspan="6" class="loading">Carregando alertas...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
