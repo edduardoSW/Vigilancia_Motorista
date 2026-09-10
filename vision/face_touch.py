@@ -14,9 +14,10 @@ Regras (limiares iniciais, a validar com vídeos anotados, como as piscadas em v
   boca fica de fora (comer, beber, tapar a boca no bocejo) e as bordas laterais também (mão na orelha).
 - Gestos separados por menos de 1,5 s formam um episódio só.
 - Mão segurando o celular não conta, nem nada enquanto o celular está no ouvido.
-- Mão tapando o rosto: se os pontos do rosto somem, vale o último rosto visto há até 2 s, e o gesto conta como mão
-  no rosto. Enquanto a mão está no olho, vision/engine.py desliga as medidas do olho, como nos óculos escuros: o
-  olho tapado não vira piscada, PERCLOS nem microssono.
+- Mão tapando o rosto: se os pontos do rosto somem, vale o último rosto visto (até 2 s antes de a mão chegar, e
+  enquanto a mão continuar ali). O gesto conta como mão no rosto e não gera o aviso de rosto não detectado
+  (vision/drowsiness.py). Enquanto a mão está no olho, vision/engine.py desliga as medidas do olho, como nos óculos
+  escuros: o olho tapado não vira piscada, PERCLOS nem microssono.
 
 Limitações conhecidas:
 - As mãos são medidas cerca de 4 vezes por segundo (DETECT_EVERY_S do celular). Um vai e vem rápido pode ser
@@ -66,6 +67,7 @@ EYE_OPENNESS_FIELDS = ("ear_right", "ear_left")
 class FaceTouchAssessment:
     gesture: str | None = None  # gesto em andamento: olhos_esfregados, mao_no_rosto ou None
     eye_covered: bool = False  # mão no olho agora: as medidas do olho não valem
+    face_hidden: bool = False  # rosto perdido com a mão na frente: não é "rosto não detectado"
     rubs_10min: int = 0
     touches_10min: int = 0
     events: list = field(default_factory=list)
@@ -176,6 +178,7 @@ class FaceTouchTracker:
         assessment.touches_10min = len(self._done) - assessment.rubs_10min
         if self._episode is not None:
             assessment.gesture = self._classify(self._episode)
+            assessment.face_hidden = not metrics.face_found
         assessment.events, self._pending = self._pending, []
         return assessment
 
@@ -184,7 +187,7 @@ class FaceTouchTracker:
         return {key: recent.count(gesture) for gesture, key in WINDOW_KEYS.items()}
 
     def _observe(self, observed_at: float, now: float, metrics, hands) -> None:
-        if self._face is None or now - self._face[0] > FACE_MEMORY_S:
+        if self._face is None or (now - self._face[0] > FACE_MEMORY_S and self._episode is None):
             return
         _, box, eyes = self._face
         width = box[2] - box[0]

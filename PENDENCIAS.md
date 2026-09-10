@@ -15,7 +15,7 @@ Estado em 10/09/2026, 21h: **etapa 1 feita** (gestos de sono no script da câmer
 | App em **modo de teste local** (sem servidor e sem banco) | `abrir-app-local.cmd` (Windows) ou `python servir_app_local.py` → http://localhost:8765. Escolha uma conta de exemplo e entre com o PIN de teste combinado no chat. |
 | Servidor completo (API + app com login real) | `python start_system.py` (ou `uvicorn backend.main:app`). Abra o app uma vez com `?modo=servidor` para ele usar a API (a escolha fica salva; `?modo=local` volta). |
 | Primeiro acesso no modo servidor | `python manage.py criar-usuario --papel admin --nome "Seu nome" --email voce@exemplo.com` (ou `--celular`). Dados de exemplo: `python manage.py demo --com-alertas`. |
-| Testes | `python tests/test_server_sync.py` (26) · `tests/test_politica_remota.py` (6) · `tests/test_modulos.py` (13) · `tests/test_detector.py` (11) · `tests/test_avaliacao.py` (7) · `tests/test_celular.py` (13) · `tests/test_face_touch.py` (10). Todos passaram em 10/09 com Python 3.14.5. Depois da etapa 1, rodados de novo em outra máquina com Python 3.14.2: todos passaram de novo (detecção, política remota e os 26 do servidor, depois de instalar o requirements.txt). |
+| Testes | `python tests/test_server_sync.py` (26) · `tests/test_politica_remota.py` (6) · `tests/test_modulos.py` (13) · `tests/test_detector.py` (11) · `tests/test_avaliacao.py` (7) · `tests/test_celular.py` (13) · `tests/test_face_touch.py` (11). Todos passaram em 10/09 com Python 3.14.5. Depois da etapa 1, rodados de novo em outra máquina com Python 3.14.2: todos passaram de novo (detecção, política remota e os 26 do servidor, depois de instalar o requirements.txt). |
 
 ## O que ficou pronto nesta etapa
 
@@ -58,8 +58,8 @@ quando ela está com sono. É o que Matheus quer ver funcionando agora: o script
 - [x] **Mão no rosto:** pelo menos 3 pontos da mão na parte de cima do rosto (testa, olhos, bochechas) por 1 s ou
   mais. A faixa da boca fica de fora (comer, beber, tapar a boca no bocejo) e as bordas laterais também (mão na
   orelha). Nada conta com o celular no ouvido nem com a mão que segura o celular.
-- [x] **Oclusão:** se os pontos do rosto somem com a mão na frente, vale o último rosto visto há até 2 s e o gesto
-  continua contando. Enquanto a mão está no olho, `vision/engine.py` desliga as medidas do olho, como nos óculos
+- [x] **Oclusão:** se os pontos do rosto somem com a mão na frente, vale o último rosto visto (até 2 s antes de a
+  mão chegar, e enquanto ela continuar ali): o gesto continua contando e não gera o aviso de rosto não detectado. Enquanto a mão está no olho, `vision/engine.py` desliga as medidas do olho, como nos óculos
   escuros: o olho tapado não vira piscada, PERCLOS nem microssono.
 - [x] **Falsos positivos cobertos nos testes:** ajustar os óculos (menos de 1 s, sem vai e vem), comer ou beber,
   coçar a orelha, passar a mão na testa (suor), segurar o celular perto do olho e celular no ouvido.
@@ -73,8 +73,8 @@ quando ela está com sono. É o que Matheus quer ver funcionando agora: o script
   - Janela da câmera (`draw_overlay`): gesto em andamento e contagem dos últimos 10 min.
   - `analisar_video.py`: as duas métricas no CSV de janelas, coluna `gesto_mao` no CSV de quadros e
     `gestos_maos` no resumo.
-- [x] **Testes:** `tests/test_face_touch.py` (10 verificações, detector falso com mão de 21 pontos, no estilo de
-  `tests/test_celular.py`).
+- [x] **Testes:** `tests/test_face_touch.py` (11 verificações, detector falso com mão de 21 pontos, no estilo de
+  `tests/test_celular.py`, uma delas com o motor inteiro).
 
 Ficou para a etapa 2:
 - [ ] Ver na câmera de verdade (`python run_monitor.py --window`) se o vai e vem é pego a ~4 medidas por segundo.
@@ -82,7 +82,6 @@ Ficou para a etapa 2:
 - [ ] Coçar o nariz não tem teste próprio: só o raio do olho (0,2 rosto) separa os dois. Conferir em vídeo.
 - [ ] Hoje a mão num olho desliga as medidas **dos dois** olhos. Desligar só o olho tapado exige mexer na abertura
   combinada de `vision/eyes.py`.
-- [ ] Mão no rosto por mais de 10 s com o rosto perdido ainda pode gerar "rosto não detectado".
 
 ### Etapa 2 — Calibrar e validar com gravações reais
 

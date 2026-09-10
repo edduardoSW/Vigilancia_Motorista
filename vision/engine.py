@@ -85,6 +85,7 @@ class DriverStateEngine:
         self._activation: ActivationAssessment | None = None
         self._last_hidden_event = None
         self._eyes_covered = False
+        self._face_hidden = False
 
     @property
     def baseline(self) -> Baseline | None:
@@ -98,6 +99,7 @@ class DriverStateEngine:
         visibility = self.visibility.update(metrics)
         # Mão no olho no quadro anterior (vision/face_touch.py): o olho tapado não vira piscada, PERCLOS nem microssono.
         measured = metrics if visibility.eyes_ok and not self._eyes_covered else mask_eye_signals(metrics)
+        self.drowsiness.face_hidden_by_hand = self._face_hidden
         drowsy = self.drowsiness.update(measured)
         if self.drowsiness.last_calibration is not None:
             self._start_trip_baseline()
@@ -108,6 +110,7 @@ class DriverStateEngine:
         phone = self.phone.update(metrics, frame, moving=not self.context.stopped) if self.phone is not None else None
         touch = getattr(phone, "face_touch", None)
         self._eyes_covered = touch is not None and touch.eye_covered
+        self._face_hidden = touch is not None and touch.face_hidden
 
         events = list(drowsy.events)
         self._eyes_hidden_event(t, visibility, events)

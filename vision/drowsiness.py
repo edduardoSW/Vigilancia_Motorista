@@ -233,6 +233,8 @@ class DrowsinessMonitor:
         self._yawn_start = None
         self._yawn_counted = False
         self._face_missing_since = None
+        # Mão tapando o rosto (vision/face_touch.py, passado pelo vision/engine.py): não conta como rosto perdido.
+        self.face_hidden_by_hand = False
         self._last_event_at = {}
         self._attention_since = None
         self._next_evaluation = -math.inf
@@ -277,7 +279,7 @@ class DrowsinessMonitor:
         openness, source = self._model.openness(metrics)
         assessment.openness = openness
         assessment.frame_source = source
-        self._track_face_missing(t, metrics.face_found, assessment)
+        self._track_face_missing(t, metrics.face_found or self.face_hidden_by_hand, assessment)
 
         if openness is not None:
             self._perclos.add_valid(t, dt)

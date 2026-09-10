@@ -11,8 +11,10 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from vision.drowsiness import Assessment  # noqa: E402
+from vision.drowsiness import Assessment, DrowsinessMonitor  # noqa: E402
+from vision.engine import DriverStateEngine  # noqa: E402
 from vision.eyes import Sample  # noqa: E402
+from vision.face import FaceMetrics  # noqa: E402
 from vision.face_touch import (  # noqa: E402
     HAND_ON_FACE,
     RUBBING,
@@ -164,6 +166,27 @@ for second in range(0, 331):
     levels["sozinho"] = fusion_alone.update(float(second), awake, phone=gestures).level
 assert levels == {"com": 2, "sem": 1, "sozinho": 0}, levels
 ok("3 gestos em 10 min com sinal leve de sono: risco alto em 5 min; sem gestos fica em atenção; sozinhos, nada")
+
+def engine_alerts(hands, face, seconds=20.0, fps=15.0):
+    engine = DriverStateEngine(DrowsinessMonitor(), activation_mode="desligado", background_baseline=False,
+                               phone=PhoneMonitor(FakeDetector(lambda t: ([], hands(t))), background=False))
+    alerts = []
+    for i in range(int(seconds * fps)):
+        t = i / fps
+        found = face(t)
+        metrics = FaceMetrics(timestamp=t, face_found=found, ear_left=0.3 if found else None,
+                              ear_right=0.3 if found else None, pitch=0.0 if found else None,
+                              yaw=0.0 if found else None, eye_points=EYE_POINTS if found else None,
+                              face_box=FACE_BOX if found else None, ear_points=EARS if found else None)
+        alerts += [event.alert_type for event in engine.update(metrics, IMAGE).events]
+    return alerts
+
+
+hidden = engine_alerts(lambda t: [hand_at(320, 150)] if 2.0 <= t < 15.0 else [], face=lambda t: not 3.0 <= t < 16.0)
+lost = engine_alerts(lambda t: [], face=lambda t: not 3.0 <= t < 16.0)
+assert "rosto_nao_detectado" not in hidden and HAND_ON_FACE in hidden, hidden
+assert "rosto_nao_detectado" in lost, lost
+ok("mão tapando o rosto por 13 s é mão no rosto, não 'rosto não detectado'; sem mão, o aviso sai em 10 s")
 
 tracker = FaceTouchTracker()
 frame = Frame(timestamp=0.0, face_found=True, face_box=FACE_BOX, eye_points=EYE_POINTS)
