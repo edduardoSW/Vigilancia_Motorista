@@ -2,6 +2,12 @@
 
 Estado em 10/09/2026, 17h. Este trabalho está num **branch separado** (não na `main`) porque não terminou.
 
+## ⚠️ Ler antes de continuar: feedback do Matheus em 10/09, 16h40
+
+1. **O painel de controle não deve ser web.** O `webapp/` (PWA) foi feito a partir de uma resposta marcada como "App web instalável", mas Matheus diz que nunca quis o painel na web. **Definir o formato antes de mexer no `webapp/`** (programa de computador? app de celular?). O backend (API, banco, regras de acesso, testes) serve para qualquer formato.
+2. **O visual atual foi rejeitado**: "muito feio, cara de IA, paleta de cores horrenda, efeitos desnecessários, sem cara de algo profissional e sério". No redesign: paleta sóbria e contida, tipografia séria, **sem** efeitos decorativos (grão, tracejado de estrada, marcos de km, animação de estrada, piscada, contador rolando). Mostrar uma prévia concreta (imagem ou tela estática) e aprovar **antes** de codar.
+3. O que Matheus quer ver funcionando agora é o **script da câmera** (`python run_monitor.py --window`), não o site.
+
 ## Como abrir o que já existe
 
 | O quê | Como |
