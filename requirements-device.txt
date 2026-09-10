@@ -1,0 +1,10 @@
+# Dispositivo de monitoramento: Raspberry Pi (aarch64), Linux x86_64, macOS e Windows.
+#
+# O MediaPipe depende do opencv-contrib-python. Não instale opencv-python junto:
+# os dois fornecem o módulo cv2 e entram em conflito.
+#
+# macOS com processador Intel: o MediaPipe não publica pacote para ele. Lá só o OpenCV é instalado
+# e o agente usa o modo alternativo (YuNet + classificador de olho), com menos medidas.
+# O opencv-contrib-python 5.0.0.93 para Mac Intel exige macOS 14 ou mais novo.
+mediapipe==1.0.1; sys_platform != "darwin" or platform_machine != "x86_64"
+opencv-contrib-python==5.0.0.93

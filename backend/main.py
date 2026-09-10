@@ -1,182 +1,158 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
-from datetime import datetime, timedelta
-from typing import List
+"""Servidor central DriveSafe AI: API, app instalável (PWA) e avisos em tempo real."""
+import asyncio
+import logging
 import os
 import sys
-import pytz
+from contextlib import asynccontextmanager
+from urllib.parse import urlparse
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import MutableHeaders
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.database import get_db, init_db, Driver, Vehicle, Alert, TZ
-from backend.schemas import (
-    Driver as DriverSchema, DriverCreate,
-    Vehicle as VehicleSchema, VehicleCreate,
-    Alert as AlertSchema, AlertCreate,
-    AlertWithDetails, DashboardStats
-)
+from backend import config  # noqa: E402
+from backend.auth import SESSION_COOKIE, principal_from_token  # noqa: E402
+from backend.database import Device, SessionLocal, User, init_db  # noqa: E402
+from backend.identifiers import format_phone, normalize_phone  # noqa: E402
+from backend.live import Subscriber, hub  # noqa: E402
+from backend.routes import admin, alerts, auth_routes, device_api, fleet, people, test_mode  # noqa: E402
+from backend.schemas import AppInfoOut, ContactOut  # noqa: E402
 
-def format_brazil_time(dt):
-    if dt.tzinfo is None:
-        dt = TZ.localize(dt)
-    else:
-        dt = dt.astimezone(TZ)
-    return dt.strftime("%d/%m/%Y %H:%M:%S")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("drivesafe.api")
 
-app = FastAPI(title="DriveSafe AI API")
+CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; font-src 'self'; "
+       "connect-src 'self' {websocket}; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; "
+       "frame-ancestors 'none'; object-src 'none'")
+DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-init_db()
+class SecurityHeaders:
+    """Cabeçalhos de segurança em toda resposta HTTP (sem bufferizar o vídeo ao vivo do modo teste)."""
 
-active_connections: List[WebSocket] = []
+    def __init__(self, app):
+        self.app = app
 
-@app.on_event("startup")
-def startup_event():
-    db = next(get_db())
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        host = dict(scope.get("headers") or []).get(b"host", b"").decode("latin-1")
 
-    if db.query(Driver).count() == 0:
-        sample_driver = Driver(name="João Silva", license_number="SP123456", phone="11999999999")
-        db.add(sample_driver)
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("Referrer-Policy", "same-origin")
+                headers.setdefault("X-Frame-Options", "DENY")
+                headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+                if not path.startswith(DOCS_PATHS):
+                    websocket = f"ws://{host} wss://{host}" if host else ""
+                    headers.setdefault("Content-Security-Policy", CSP.format(websocket=websocket))
+            await send(message)
 
-        sample_driver2 = Driver(name="Maria Santos", license_number="RJ789012", phone="21988888888")
-        db.add(sample_driver2)
+        await self.app(scope, receive, send_with_headers)
 
-        sample_vehicle = Vehicle(plate="ABC-1234", model="Volvo FH", type="Caminhão")
-        db.add(sample_vehicle)
 
-        sample_vehicle2 = Vehicle(plate="DEF-5678", model="Mercedes-Benz OF", type="Ônibus")
-        db.add(sample_vehicle2)
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    hub.attach_loop(asyncio.get_running_loop())
+    db = SessionLocal()
+    try:
+        if db.query(User.id).first() is None:
+            logger.warning('Nenhum usuário cadastrado. Crie o primeiro administrador: python manage.py criar-usuario '
+                           '--papel admin --nome "Seu nome" --email voce@exemplo.com (ou --celular "(11) 98765-4321")')
+        if not normalize_phone(config.CONTACT_PHONE):
+            logger.warning("DRIVESAFE_CONTATO_CELULAR não definido: a tela de login não mostra o celular da equipe.")
+        if db.query(Device.id).first() is None:
+            logger.warning("Nenhum dispositivo cadastrado. Crie pelo app (Dispositivos) ou com manage.py criar-dispositivo.")
+    finally:
+        db.close()
+    yield
+    test_mode.shutdown()
 
-        db.commit()
 
-@app.get("/")
-def read_root():
-    return FileResponse(os.path.join(BASE_DIR, "dashboard", "index.html"))
+app = FastAPI(title="DriveSafe AI", version=config.APP_VERSION, lifespan=lifespan)
+app.add_middleware(SecurityHeaders)
+for router in (device_api.router, auth_routes.router, admin.router, people.router, fleet.router, alerts.router,
+               test_mode.router):
+    app.include_router(router)
 
-@app.get("/api/drivers", response_model=List[DriverSchema])
-def get_drivers(db: Session = Depends(get_db)):
-    return db.query(Driver).all()
 
-@app.post("/api/drivers", response_model=DriverSchema)
-def create_driver(driver: DriverCreate, db: Session = Depends(get_db)):
-    db_driver = Driver(**driver.model_dump())
-    db.add(db_driver)
-    db.commit()
-    db.refresh(db_driver)
-    return db_driver
+@app.get("/health", include_in_schema=False)
+def health():
+    return {"status": "ok", "version": config.APP_VERSION}
 
-@app.get("/api/drivers/{driver_id}", response_model=DriverSchema)
-def get_driver(driver_id: int, db: Session = Depends(get_db)):
-    driver = db.query(Driver).filter(Driver.id == driver_id).first()
-    if not driver:
-        raise HTTPException(status_code=404, detail="Motorista não encontrado")
-    return driver
 
-@app.get("/api/vehicles", response_model=List[VehicleSchema])
-def get_vehicles(db: Session = Depends(get_db)):
-    return db.query(Vehicle).all()
+@app.get("/api/app-info", response_model=AppInfoOut, tags=["sessão"])
+def app_info():
+    """Público: a tela de login não tem cadastro, só o celular da equipe para pedir acesso."""
+    phone = normalize_phone(config.CONTACT_PHONE)
+    contact = None
+    if phone:
+        contact = ContactOut(phone=format_phone(phone), tel_url=f"tel:+{phone}",
+                             whatsapp_url=f"https://wa.me/{phone}" if config.CONTACT_WHATSAPP else None)
+    return AppInfoOut(version=config.APP_VERSION, timezone=config.TIMEZONE, self_signup=False, contact=contact)
 
-@app.post("/api/vehicles", response_model=VehicleSchema)
-def create_vehicle(vehicle: VehicleCreate, db: Session = Depends(get_db)):
-    db_vehicle = Vehicle(**vehicle.model_dump())
-    db.add(db_vehicle)
-    db.commit()
-    db.refresh(db_vehicle)
-    return db_vehicle
-
-@app.get("/api/alerts", response_model=List[AlertWithDetails])
-def get_alerts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    alerts = db.query(Alert).order_by(desc(Alert.timestamp)).offset(skip).limit(limit).all()
-    result = []
-    for alert in alerts:
-        alert_dict = AlertWithDetails(
-            id=alert.id,
-            driver_id=alert.driver_id,
-            vehicle_id=alert.vehicle_id,
-            alert_type=alert.alert_type,
-            risk_level=alert.risk_level,
-            duration=alert.duration,
-            timestamp=alert.timestamp,
-            driver_name=alert.driver.name if alert.driver else None,
-            vehicle_plate=alert.vehicle.plate if alert.vehicle else None,
-            timestamp_brazil=format_brazil_time(alert.timestamp)
-        )
-        result.append(alert_dict)
-    return result
-
-@app.post("/api/alerts", response_model=AlertSchema)
-def create_alert(alert: AlertCreate, db: Session = Depends(get_db)):
-    db_alert = Alert(**alert.model_dump())
-    db.add(db_alert)
-    db.commit()
-    db.refresh(db_alert)
-
-    for connection in active_connections:
-        try:
-            alert_dict = AlertWithDetails(
-                id=db_alert.id,
-                driver_id=db_alert.driver_id,
-                vehicle_id=db_alert.vehicle_id,
-                alert_type=db_alert.alert_type,
-                risk_level=db_alert.risk_level,
-                duration=db_alert.duration,
-                timestamp=db_alert.timestamp,
-                driver_name=db_alert.driver.name if db_alert.driver else None,
-                vehicle_plate=db_alert.vehicle.plate if db_alert.vehicle else None,
-                timestamp_brazil=format_brazil_time(db_alert.timestamp)
-            )
-            import json
-            connection.send_text(json.dumps({
-                "type": "new_alert",
-                "data": alert_dict.model_dump()
-            }, default=str))
-        except:
-            pass
-
-    return db_alert
-
-@app.get("/api/dashboard/stats", response_model=DashboardStats)
-def get_dashboard_stats(db: Session = Depends(get_db)):
-    today = datetime.now(TZ).date()
-    start_of_day = datetime.combine(today, datetime.min.time())
-
-    total_alerts_today = db.query(func.count(Alert.id)).filter(Alert.timestamp >= start_of_day).scalar()
-
-    total_drivers = db.query(func.count(Driver.id)).scalar()
-    total_vehicles = db.query(func.count(Vehicle.id)).scalar()
-
-    high_risk_alerts = db.query(func.count(Alert.id)).filter(
-        Alert.timestamp >= start_of_day,
-        Alert.risk_level >= 3
-    ).scalar()
-
-    recent_alerts = get_alerts(skip=0, limit=10, db=db)
-
-    return DashboardStats(
-        total_alerts_today=total_alerts_today,
-        total_drivers=total_drivers,
-        total_vehicles=total_vehicles,
-        high_risk_alerts=high_risk_alerts,
-        recent_alerts=recent_alerts
-    )
-
-@app.get("/api/drivers/{driver_id}/alerts")
-def get_driver_alerts(driver_id: int, db: Session = Depends(get_db)):
-    alerts = db.query(Alert).filter(Alert.driver_id == driver_id).order_by(desc(Alert.timestamp)).all()
-    return alerts
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    origin = websocket.headers.get("origin")
+    if origin and urlparse(origin).netloc != websocket.headers.get("host"):
+        await websocket.close(code=4403)
+        return
+    db = SessionLocal()
+    try:
+        principal = principal_from_token(db, websocket.cookies.get(SESSION_COOKIE))
+        subscriber = None
+        if principal is not None and not principal.user.must_change_password:
+            subscriber = Subscriber(websocket, principal.role, principal.company_id, principal.driver_id)
+    finally:
+        db.close()
+    if subscriber is None:
+        await websocket.close(code=4401)
+        return
     await websocket.accept()
-    active_connections.append(websocket)
+    hub.add(subscriber)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
+        pass
+    finally:
+        hub.remove(subscriber)
 
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "dashboard", "static")), name="static")
+
+# ---------- app instalável ----------
+
+def webapp_file(name: str, media_type: str, headers: dict | None = None) -> FileResponse:
+    return FileResponse(os.path.join(config.WEBAPP_DIR, name), media_type=media_type, headers=headers)
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    return webapp_file("index.html", "text/html; charset=utf-8", {"Cache-Control": "no-cache"})
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def manifest():
+    return webapp_file("manifest.webmanifest", "application/manifest+json", {"Cache-Control": "no-cache"})
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    return webapp_file("sw.js", "text/javascript; charset=utf-8",
+                       {"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
+@app.get("/offline.html", include_in_schema=False)
+def offline():
+    return webapp_file("offline.html", "text/html; charset=utf-8")
+
+
+app.mount("/assets", StaticFiles(directory=os.path.join(config.WEBAPP_DIR, "assets"), check_dir=False), name="assets")

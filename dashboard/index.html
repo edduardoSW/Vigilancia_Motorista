@@ -59,15 +59,15 @@
 
                 <div class="card">
                     <div class="card-content">
-                        <p class="card-title">Em Monitoramento</p>
-                        <p class="card-value" id="monitoring-count">2</p>
+                        <p class="card-title">Dispositivos Online</p>
+                        <p class="card-value" id="monitoring-count">0/0</p>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-content">
                         <p class="card-title">Status Frota</p>
-                        <p class="card-value" id="fleet-status">Normal</p>
+                        <p class="card-value" id="fleet-status">—</p>
                     </div>
                 </div>
 
@@ -80,28 +80,78 @@
 
                 <div class="card wide">
                     <div class="card-content">
-                        <p class="card-title">Motorista com Mais Alertas</p>
+                        <p class="card-title">Motorista com Mais Alertas (7 dias)</p>
                         <p class="card-value" id="top-driver">Nenhum</p>
                     </div>
                 </div>
             </section>
 
-            <!-- Recent Alerts Table -->
+            <!-- Devices Table -->
             <section class="table-section">
                 <div class="table-header">
-                    <h2>Últimos Alertas</h2>
+                    <h2>Dispositivos</h2>
                     <button class="btn-refresh" onclick="loadData()">🔄 Atualizar</button>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
+                                <th>Dispositivo</th>
+                                <th>Veículo</th>
+                                <th>Motorista</th>
+                                <th>Status</th>
+                                <th>Último contato</th>
+                                <th>Na fila</th>
+                                <th>Câmera</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devices-table-body">
+                            <tr>
+                                <td colspan="7" class="loading">Carregando dispositivos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Alerts Table -->
+            <section class="table-section">
+                <div class="table-header">
+                    <h2>Alertas</h2>
+                </div>
+                <form class="filters" id="filters-form">
+                    <label>De
+                        <input type="date" id="filter-start">
+                    </label>
+                    <label>Até
+                        <input type="date" id="filter-end">
+                    </label>
+                    <label>Veículo
+                        <select id="filter-vehicle">
+                            <option value="">Todos os veículos</option>
+                        </select>
+                    </label>
+                    <label>Dispositivo
+                        <select id="filter-device">
+                            <option value="">Todos os dispositivos</option>
+                        </select>
+                    </label>
+                    <div class="filters-actions">
+                        <button type="submit" class="btn-refresh">Filtrar</button>
+                        <button type="button" class="btn-refresh" id="btn-clear">Limpar</button>
+                        <button type="button" class="btn-primary" id="btn-export">Exportar CSV</button>
+                    </div>
+                </form>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
                                 <th>Motorista</th>
                                 <th>Veículo</th>
+                                <th>Dispositivo</th>
                                 <th>Tipo de Alerta</th>
                                 <th>Horário</th>
                                 <th>Duração</th>
-                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="alerts-table-body">

@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "DriveSafe AI",
+  "short_name": "DriveSafe",
+  "description": "Frota ao vivo, revisão de eventos de fadiga e uso de celular, motoristas e modo teste do DriveSafe AI.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/#/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#14110f",
+  "theme_color": "#14110f",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Revisar eventos", "short_name": "Revisar", "url": "/#/revisar", "icons": [{ "src": "/assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Frota ao vivo", "short_name": "Frota", "url": "/#/frota", "icons": [{ "src": "/assets/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
