@@ -275,6 +275,7 @@ class PhoneMonitor:
                                  if not any(hand_touches_phone(hand, phone) for phone in phones)])
 
     def close(self) -> None:
+        self.face_touch.close()
         self._stop.set()
         self._wake.set()
         if self._thread is not None:

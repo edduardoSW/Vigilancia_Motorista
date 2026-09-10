@@ -1,6 +1,6 @@
 # Pendências — DriveSafe AI
 
-Estado em 10/09/2026, 21h: **etapa 1 feita** (gestos de sono no script da câmera). Este trabalho está num **branch separado** (não na `main`) porque não terminou.
+Estado em 10/09/2026, 21h: **etapa 1 feita** (gestos de sono no script da câmera) e **ferramentas da etapa 2 prontas** (a etapa 2 espera as gravações). Este trabalho está num **branch separado** (não na `main`) porque não terminou.
 
 ## ⚠️ Ler antes de continuar: feedback do Matheus em 10/09, 16h40
 
@@ -15,13 +15,16 @@ Estado em 10/09/2026, 21h: **etapa 1 feita** (gestos de sono no script da câmer
 | App em **modo de teste local** (sem servidor e sem banco) | `abrir-app-local.cmd` (Windows) ou `python servir_app_local.py` → http://localhost:8765. Escolha uma conta de exemplo e entre com o PIN de teste combinado no chat. |
 | Servidor completo (API + app com login real) | `python start_system.py` (ou `uvicorn backend.main:app`). Abra o app uma vez com `?modo=servidor` para ele usar a API (a escolha fica salva; `?modo=local` volta). |
 | Primeiro acesso no modo servidor | `python manage.py criar-usuario --papel admin --nome "Seu nome" --email voce@exemplo.com` (ou `--celular`). Dados de exemplo: `python manage.py demo --com-alertas`. |
-| Testes | `python tests/test_server_sync.py` (26) · `tests/test_politica_remota.py` (6) · `tests/test_modulos.py` (13) · `tests/test_detector.py` (11) · `tests/test_avaliacao.py` (7) · `tests/test_celular.py` (13) · `tests/test_face_touch.py` (11). Todos passaram em 10/09 com Python 3.14.5. Depois da etapa 1, rodados de novo em outra máquina com Python 3.14.2: todos passaram de novo (detecção, política remota e os 26 do servidor, depois de instalar o requirements.txt). |
+| Validar com gravações (etapa 2) | `python avaliar_gestos.py resultados/video_gestos.csv anotacao_gestos.csv` e `python avaliar_celular.py anotacao_celular.csv --resultados resultados/`. Roteiro na etapa 2; modelos de anotação em `modelos_anotacao/`. |
+| Testes | `python tests/test_server_sync.py` (26) · `tests/test_politica_remota.py` (6) · `tests/test_modulos.py` (13) · `tests/test_detector.py` (11) · `tests/test_avaliacao.py` (7) · `tests/test_celular.py` (13) · `tests/test_face_touch.py` (12) · `tests/test_avaliar_gestos_celular.py` (5). Todos passaram em 10/09 com Python 3.14.5. Depois da etapa 1, rodados de novo em outra máquina com Python 3.14.2: todos passaram de novo (detecção, política remota e os 26 do servidor, depois de instalar o requirements.txt). |
 
 ## O que ficou pronto nesta etapa
 
 - **Gestos de sono (etapa 1, 10/09 à noite)**: `vision/face_touch.py` conta olhos esfregados ou coçados e mão no
   rosto com os pontos das mãos que o celular já mede, desliga as medidas do olho tapado pela mão, soma um sinal leve
   ao risco e aparece na janela da câmera, no CSV do `analisar_video.py` e nos tipos de evento. Detalhes na etapa 1.
+- **Ferramentas de validação (etapa 2, 10/09 à noite)**: `avaliar_gestos.py` e `avaliar_celular.py`, com modelos de
+  anotação em `modelos_anotacao/`. Faltam as gravações.
 - **Detecção** (feito antes): sonolência (módulo 1), sinais compatíveis com ativação atípica (2), linha de base individual (3), fusão de risco com histerese e regra de rebote (4), celular na mão/no ouvido/olhando, óculos escuros, avaliação com vídeos e datasets.
 - **Backend multiempresa** (`backend/`): empresas, acessos por papel (equipe/admin, gestor, motorista), sessão em cookie com proteção CSRF, senha com scrypt, bloqueio após 5 erros, **sem cadastro aberto** (só a equipe cria logins, por e-mail ou celular; gestor só bloqueia), senha temporária obrigatória de trocar, auditoria, consentimentos LGPD com histórico, revisão de eventos, estado ao vivo dos dispositivos, política do servidor aplicada no dispositivo (`vision/remote_policy.py`), tempo real por WebSocket filtrado por empresa, modo teste (`/api/test-mode`: câmera ao vivo, marcação de piscadas, análise de vídeo), contato da equipe por celular (`DRIVESAFE_CONTATO_CELULAR`).
 - **Banco**: SQLite por padrão; já aceita PostgreSQL por `DATABASE_URL=postgresql+psycopg://...` (plano: VPS no futuro).
@@ -35,7 +38,7 @@ Estado em 10/09/2026, 21h: **etapa 1 feita** (gestos de sono no script da câmer
 | Etapa | O quê | Depende de | Situação |
 |---|---|---|---|
 | **1. Gestos de sono no script da câmera** | coçar os olhos e mão no rosto | nada | **feita em 10/09, até 21h30** |
-| **2. Calibrar e validar com gravações reais** | validar os gestos, celular com aparelhos reais, escolher a melhoria de precisão | Matheus gravar vídeos e juntar celulares | a fazer |
+| **2. Calibrar e validar com gravações reais** | validar os gestos, celular com aparelhos reais, escolher a melhoria de precisão | Matheus gravar vídeos e juntar celulares | **ferramentas prontas em 10/09**; faltam gravar e anotar |
 | **3. Painel e site** | conferir o app, modo teste no navegador e pelo servidor, formulários, site, documentação | definir o formato do painel e aprovar a prévia visual | a fazer |
 
 ### Etapa 1 — Gestos de sono no script da câmera (10/09, até 21h30) — feita
@@ -68,8 +71,8 @@ quando ela está com sono. É o que Matheus quer ver funcionando agora: o script
   - Eventos `olhos_esfregados` e `mao_no_rosto` (risco 1, no máximo 1 por tipo a cada 60 s, fora da fila de
     revisão), com nomes em `backend/alert_types.py` e `webapp/assets/js/local/alert-types.js`, categoria sonolência.
   - Sinal leve no risco: ficou em `vision/risk.py` (e não em `vision/drowsiness.py`), junto da regra de contexto.
-    3 ou mais episódios em 10 min **com** outro sinal leve de sono levam ao risco alto em 5 min, em vez de 10.
-    Sozinhos, não mudam o risco.
+    3 ou mais olhos esfregados em 10 min **com** outro sinal leve de sono levam ao risco alto em 5 min, em vez de 10.
+    Sozinhos, não mudam o risco. Mão parada no rosto não pesa (mudado na etapa 2, pela fonte abaixo).
   - Janela da câmera (`draw_overlay`): gesto em andamento e contagem dos últimos 10 min.
   - `analisar_video.py`: as duas métricas no CSV de janelas, coluna `gesto_mao` no CSV de quadros e
     `gestos_maos` no resumo.
@@ -87,11 +90,46 @@ Ficou para a etapa 2:
 
 Depende de Matheus gravar vídeos e juntar celulares. Não mexe no painel.
 
+**Ferramentas prontas em 10/09 à noite; faltam as gravações.**
+
+Pronto nesta etapa:
+- [x] `avaliar_gestos.py`: compara o `_gestos.csv` com a anotação manual. Mostra acertos, falsos positivos e perdidos
+  por gesto e sem olhar o nome, a troca entre os dois gestos e os falsos positivos em cima de cada negativo anotado
+  (óculos, nariz, comer...).
+- [x] `avaliar_celular.py`: descrito na parte do celular, abaixo.
+- [x] `analisar_video.py --celular` grava o `_gestos.csv` (cada episódio) e as medidas da caixa do celular em cada
+  quadro do `_quadros.csv`.
+- [x] Modelos de anotação em `modelos_anotacao/` (ponto e vírgula, ponto decimal).
+- [x] Testes: `tests/test_avaliar_gestos_celular.py` (5) e mais 1 em `tests/test_face_touch.py` (12).
+
+Roteiro para validar:
+1. **Gravar** (~30 fps, rosto inteiro na imagem). Os primeiros 30 s ou mais com o rosto parado, olhos abertos e sem
+   gestos: o `analisar_video.py` calibra com o começo do vídeo (1/3 de um vídeo curto, no mínimo 30 s).
+   - Gestos: coçar um olho, os dois, com os nós dos dedos, mão parada na testa ou na bochecha; e os negativos
+     (ajustar óculos, coçar o nariz, comer, beber, passar a mão no suor, celular no ouvido).
+   - Celular: cada aparelho em cada situação, e os negativos (lista abaixo).
+2. **Rodar** cada vídeo: `python analisar_video.py gravacao.mp4 --celular --saida resultados/`.
+3. **Anotar** à mão copiando os modelos de `modelos_anotacao/`.
+4. **Comparar**: `python avaliar_gestos.py resultados/gravacao_gestos.csv anotacao_gestos.csv` e
+   `python avaliar_celular.py anotacao_celular.csv --resultados resultados/`.
+5. **Ajustar** os limiares listados abaixo com os números e rodar os testes de novo.
+
 #### Gestos de sono: validar a etapa 1
 - [ ] Gravar vídeos com os gestos anotados à mão (coçar um olho, os dois, com os nós dos dedos, mão parada no rosto,
-  ajustar óculos, coçar o nariz, comer, beber) e medir precisão e sensibilidade com o `vision/evaluation.py`, do
-  mesmo jeito que as piscadas.
-- [ ] Buscar a fonte da ORD (Wierwille e Ellsworth, 1994) e o peso do gesto antes de subir o sinal no risco.
+  ajustar óculos, coçar o nariz, comer, beber) e medir precisão e sensibilidade com o `avaliar_gestos.py`.
+- [x] **Fonte da ORD conferida** (10/09, noite), só por fonte secundária: Wierwille e Ellsworth (1994), *Accident
+  Analysis & Prevention* 26(5):571–581, DOI 10.1016/0001-4575(94)90019-1. Nas descrições reproduzidas por Wiegand et
+  al. (VTTI, 2009, https://scholar.lib.vt.edu/VTTI/reports/ORD_Final_Report_022509.pdf), "rubbing the face or eyes" é
+  maneirismo do nível **moderadamente sonolento**, que nem todos apresentam, **sem peso numérico**. O artigo de 1994
+  não abriu (403).
+- [x] **Tocar o rosto é comum acordado:** 26,4 toques/h em direção normal (5,1 a 90,7/h entre pessoas; 26,1/h com
+  carga de trabalho baixa), em Ralph et al. (2022), *Ergonomics* 65(7):943–959, DOI 10.1080/00140139.2021.2004241
+  (lido só o resumo). São uns 4 toques em 10 min: o limiar de 3 gestos somando mão no rosto disparava sem sono.
+  **Mudança:** só olhos esfregados pesam no risco (`vision/risk.py`); mão parada no rosto é contada e mostrada.
+- [ ] Nenhuma fonte deu a frequência de esfregar os olhos com sono e acordado: tirar das gravações (quantos por hora
+  em cada estado) antes de mexer em `HAND_GESTURES_LIGHT_SIGNAL`.
+- [ ] Mão no rosto varia muito entre pessoas: se voltar a pesar no risco, usar linha de base por motorista (como os
+  z-scores do módulo 3).
 - [ ] Ajustar com os dados: `EYE_RADIUS_FACES`, `RUB_MIN_AMPLITUDE_FACES`, `RUB_WINDOW_S`, `HAND_ON_FACE_MIN_S`,
   `UPPER_FACE_FRACTION` e `HAND_GESTURES_LIGHT_SIGNAL`.
 
@@ -109,18 +147,18 @@ Os limiares ainda são chute e precisam de dados:
 - [ ] **Teste de tamanho com vários celulares reais:** juntar aparelhos de tamanhos diferentes (compacto de uns 5,4", comum de 6,1", grande de 6,7" ou mais, dobrável), com e sem capinha, de cores diferentes, e um celular antigo pequeno.
   - Gravar cada um na mão (na frente do peito, na altura do queixo, digitando), no ouvido, no colo e no suporte.
   - Variar a distância da câmera e a luz (dia, noite com infravermelho).
-- [ ] **Medir em cada gravação:**
+- [x] **Medir em cada gravação** (automático desde 10/09 à noite, no `_quadros.csv` do `analisar_video.py --celular`):
   - confiança do EfficientDet;
   - largura e altura da caixa divididas pela largura do rosto;
   - proporção da caixa (alto/largo).
-  - Com isso, definir a faixa plausível de tamanho de um celular em relação ao rosto e descartar caixas pequenas ou grandes demais.
+- [ ] Com a faixa sugerida pelo `avaliar_celular.py` (p5 a p95 em larguras de rosto), descartar em `vision/phone.py` as caixas pequenas ou grandes demais para um celular.
 - [ ] **Negativos, que não podem virar celular:**
   - mão vazia na orelha, coçar a orelha, ajeitar o cabelo;
   - fone de ouvido com fio e sem fio;
   - carteira, controle remoto, maço de cigarro, copo;
   - crachá pendurado, óculos na mão.
-- [ ] **Ajustar com os dados:** `PHONE_MIN_SCORE`, `PHONE_EAR_DX_FACES` e `PHONE_EAR_DY_FACES`, `EAR_RADIUS_FACES`, `PHONE_EAR_MEMORY_S`, `HAND_ON_PHONE_MARGIN` e `PHONE_MOVE_FACES`. Medir precisão e sensibilidade de cada estado (na mão, no ouvido, olhando) com anotação manual dos vídeos, como nas piscadas (`vision/evaluation.py`).
-- [ ] Criar um script de simulação (por exemplo `avaliar_celular.py`) que rode as gravações, gere a tabela de tamanhos e confianças por aparelho e mostre a matriz de confusão entre sem celular, na mão, no ouvido e olhando.
+- [ ] **Ajustar com os dados:** `PHONE_MIN_SCORE`, `PHONE_EAR_DX_FACES` e `PHONE_EAR_DY_FACES`, `EAR_RADIUS_FACES`, `PHONE_EAR_MEMORY_S`, `HAND_ON_PHONE_MARGIN` e `PHONE_MOVE_FACES`. Medir precisão e sensibilidade de cada estado (na mão, no ouvido, olhando) com anotação manual dos vídeos, usando o `avaliar_celular.py`.
+- [x] `avaliar_celular.py` (10/09, noite): lê os `_quadros.csv` das gravações e a anotação; gera a tabela de tamanhos e confianças por aparelho, a matriz de confusão entre sem celular, na mão, no ouvido e olhando, o acerto por situação e a faixa sugerida de tamanho.
 
 #### Decisão desta etapa
 - Qual melhoria de precisão começar: teste de pupila com câmera infravermelha com o veículo parado, ou frequência cardíaca por pulseira BLE.

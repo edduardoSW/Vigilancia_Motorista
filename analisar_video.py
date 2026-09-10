@@ -11,6 +11,7 @@ Gera (ao lado do vídeo ou em --saida), em CSV com vírgula e ponto decimal:
   <nome>_piscadas.csv  cada piscada: início, fim, duração, amplitude, velocidades da pálpebra e AVR
   <nome>_janelas.csv   uma linha por segundo: métricas de janela, z-scores, sinais de ativação e nível de risco
   <nome>_eventos.csv   alertas que o dispositivo teria disparado
+  <nome>_gestos.csv    com --celular: cada episódio de olhos esfregados ou mão no rosto (para o avaliar_gestos.py)
   <nome>_grafico.png   EAR, abertura do olho e nível de risco ao longo do tempo
   <nome>_resumo.json   perfil calibrado, estatísticas gerais e por trecho, desempenho
 """
@@ -72,6 +73,20 @@ def _window_row(t: float, state) -> dict:
     if state.phone is not None:
         row["celular"] = state.phone.state
     return row
+
+
+def _phone_measures(state) -> dict:
+    """Confiança e tamanho da caixa do celular em larguras de rosto, para o avaliar_celular.py."""
+    phone, metrics = state.phone, state.metrics
+    measures = {"celular_confianca": phone.phone_score, "celular_largura_rosto": None,
+                "celular_altura_rosto": None, "celular_proporcao": None}
+    face = metrics.face_box if metrics.face_found else None
+    if phone.boxes and face is not None and face[2] > face[0]:
+        x1, y1, x2, y2 = phone.boxes[0]
+        face_width = face[2] - face[0]
+        measures.update(celular_largura_rosto=(x2 - x1) / face_width, celular_altura_rosto=(y2 - y1) / face_width,
+                        celular_proporcao=(y2 - y1) / (x2 - x1) if x2 > x1 else None)
+    return measures
 
 
 def save_plot(path: Path, times, ears, openness, risk_levels, blinks, calibration_end, threshold) -> bool:
@@ -212,6 +227,8 @@ def main(argv=None) -> int:
                 "gesto_mao": (state.phone.face_touch.gesture or "") if state.phone is not None else "",
                 "latencia_ms": latencies[-1],
             })
+            if phone is not None:
+                frame_info[-1].update(_phone_measures(state))
             if state.window and state.window is not last_window:
                 last_window = state.window
                 window_rows.append(_window_row(t, state))
@@ -297,6 +314,13 @@ def main(argv=None) -> int:
         for t, event in events:
             writer.writerow([f"{t:.2f}", event.alert_type, event.risk_level, event.duration,
                              json.dumps(event.details, ensure_ascii=False)])
+
+    if phone is not None:
+        with open(f"{base}_gestos.csv", "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["inicio_s", "fim_s", "gesto", "lado", "inversoes",
+                                                        "fracao_olho_encoberto"])
+            writer.writeheader()
+            writer.writerows(phone.face_touch.episodes)
 
     plot = None
     if not args.sem_grafico:

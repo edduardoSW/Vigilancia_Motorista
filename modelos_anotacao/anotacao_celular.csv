@@ -1,0 +1,8 @@
+arquivo;aparelho;inicio_s;fim_s;estado;situacao
+aparelho1_dia.mp4;aparelho1_capinha;0.0;20.0;sem_celular;sem_aparelho
+aparelho1_dia.mp4;aparelho1_capinha;20.0;45.0;celular_na_mao;peito
+aparelho1_dia.mp4;aparelho1_capinha;45.0;70.0;celular_no_ouvido;ouvido
+aparelho1_dia.mp4;aparelho1_capinha;70.0;90.0;olhando_celular;digitando
+aparelho1_dia.mp4;aparelho1_capinha;90.0;110.0;sem_celular;suporte
+negativos_dia.mp4;carteira;0.0;30.0;sem_celular;negativo_carteira
+negativos_dia.mp4;sem_aparelho;30.0;60.0;sem_celular;negativo_mao_na_orelha

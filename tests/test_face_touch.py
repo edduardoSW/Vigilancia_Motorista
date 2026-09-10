@@ -158,14 +158,17 @@ fusion_with, fusion_without, fusion_alone = RiskFusion(), RiskFusion(), RiskFusi
 mild = Assessment(face_found=True)
 mild.level, mild.reasons = 1, ["bocejos"]
 awake = Assessment(face_found=True)
-gestures = PhoneAssessment(face_touch=FaceTouchAssessment(rubs_10min=2, touches_10min=1))
+gestures = PhoneAssessment(face_touch=FaceTouchAssessment(rubs_10min=3))
+touches_only = PhoneAssessment(face_touch=FaceTouchAssessment(rubs_10min=2, touches_10min=6))
+fusion_touches = RiskFusion()
 levels = {}
 for second in range(0, 331):
     levels["com"] = fusion_with.update(float(second), mild, phone=gestures).level
     levels["sem"] = fusion_without.update(float(second), mild, phone=PhoneAssessment(face_touch=FaceTouchAssessment())).level
     levels["sozinho"] = fusion_alone.update(float(second), awake, phone=gestures).level
-assert levels == {"com": 2, "sem": 1, "sozinho": 0}, levels
-ok("3 gestos em 10 min com sinal leve de sono: risco alto em 5 min; sem gestos fica em atenção; sozinhos, nada")
+    levels["mao_no_rosto"] = fusion_touches.update(float(second), mild, phone=touches_only).level
+assert levels == {"com": 2, "sem": 1, "sozinho": 0, "mao_no_rosto": 1}, levels
+ok("3 olhos esfregados em 10 min com sinal leve de sono: risco alto em 5 min; mão parada no rosto não pesa; sozinhos, nada")
 
 def engine_alerts(hands, face, seconds=20.0, fps=15.0):
     engine = DriverStateEngine(DrowsinessMonitor(), activation_mode="desligado", background_baseline=False,
@@ -187,6 +190,15 @@ lost = engine_alerts(lambda t: [], face=lambda t: not 3.0 <= t < 16.0)
 assert "rosto_nao_detectado" not in hidden and HAND_ON_FACE in hidden, hidden
 assert "rosto_nao_detectado" in lost, lost
 ok("mão tapando o rosto por 13 s é mão no rosto, não 'rosto não detectado'; sem mão, o aviso sai em 10 s")
+
+episodes = list(monitor.face_touch.episodes)
+assert len(episodes) == 1 and episodes[0]["gesto"] == RUBBING and episodes[0]["lado"] == "direito"
+assert episodes[0]["inicio_s"] < episodes[0]["fim_s"] and episodes[0]["inversoes"] >= 2
+open_monitor, _ = run(lambda t: [hand_at(320, 135)] if t >= 10.0 else [])
+assert not open_monitor.face_touch.episodes
+open_monitor.close()
+assert [episode["gesto"] for episode in open_monitor.face_touch.episodes] == [HAND_ON_FACE]
+ok("episódios fechados ficam guardados para o _gestos.csv; o que está aberto no fim do vídeo fecha no close()")
 
 tracker = FaceTouchTracker()
 frame = Frame(timestamp=0.0, face_found=True, face_box=FACE_BOX, eye_points=EYE_POINTS)

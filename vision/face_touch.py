@@ -3,9 +3,15 @@
 Os pontos das mãos vêm do Hand Landmarker que já roda para o celular (vision/phone.py), na mesma thread: nenhum
 modelo a mais. Os pontos do rosto vêm do Face Landmarker (vision/face.py).
 
-Base (hipótese, a confirmar): escalas de sonolência avaliada por observador, como a ORD (Wierwille e Ellsworth,
-1994), citam esfregar os olhos e o rosto como sinal comportamental. Por isso o gesto é sinal leve: sozinho não vira
-alerta e só pesa no risco junto com outro sinal de sono (vision/risk.py).
+Base:
+- A escala de sonolência avaliada por observador de Wierwille e Ellsworth (1994, Accid. Anal. Prev. 26(5):571-581),
+  nas descrições reproduzidas por Wiegand et al. (VTTI, 2009), põe "rubbing the face or eyes" entre os maneirismos do
+  nível moderadamente sonolento: contramedida de fase intermediária, que nem todos apresentam, sem peso numérico.
+  Conferido só na fonte secundária (o artigo de 1994 não abriu).
+- Tocar o rosto é comum acordado: 26,4 toques por hora em direção normal, mais com carga de trabalho baixa (Ralph et
+  al., 2022, Ergonomics 65(7):943-959; lido só o resumo). Por isso só olhos esfregados pesam no risco, e como sinal
+  leve: sozinhos não viram alerta, só junto com outro sinal de sono (vision/risk.py). Mão parada no rosto é contada
+  e mostrada, mas não pesa.
 
 Regras (limiares iniciais, a validar com vídeos anotados, como as piscadas em vision/evaluation.py):
 - Esfregar ou coçar o olho: ponta ou nó do indicador ou do médio perto de um olho (raio proporcional à largura do
@@ -55,6 +61,7 @@ FACE_MEMORY_S = 2.0
 EYE_COVER_S = 0.5
 COUNT_WINDOW_S = 600.0
 EVENT_COOLDOWN_S = 60.0
+EPISODE_HISTORY = 5000  # episódios guardados para o _gestos.csv do analisar_video.py
 
 RUBBING = "olhos_esfregados"
 HAND_ON_FACE = "mao_no_rosto"
@@ -151,6 +158,7 @@ class FaceTouchTracker:
 
     def __init__(self):
         self.totals = {RUBBING: 0, HAND_ON_FACE: 0}
+        self.episodes = deque(maxlen=EPISODE_HISTORY)  # cada episódio fechado, para comparar com anotação manual
         self._episode: _Episode | None = None
         self._done = deque()  # (fim, gesto)
         self._face = None  # (t, caixa, centros dos olhos) do último rosto visto
@@ -185,6 +193,12 @@ class FaceTouchTracker:
     def window_metrics(self, t: float) -> dict:
         recent = [gesture for end, gesture in self._done if end >= t - COUNT_WINDOW_S]
         return {key: recent.count(gesture) for gesture, key in WINDOW_KEYS.items()}
+
+    def close(self) -> None:
+        """Fecha o episódio em andamento (fim do vídeo): ele entra na contagem e em episodes."""
+        if self._episode is not None:
+            self._finish(self._episode)
+            self._episode = None
 
     def _observe(self, observed_at: float, now: float, metrics, hands) -> None:
         if self._face is None or (now - self._face[0] > FACE_MEMORY_S and self._episode is None):
@@ -228,16 +242,19 @@ class FaceTouchTracker:
         end = episode.last
         self._done.append((end, gesture))
         self.totals[gesture] += 1
+        described = {}
+        if episode.samples:
+            described["lado"] = SIDES[max(set(episode.sides), key=episode.sides.count)]
+            described["fracao_olho_encoberto"] = round(episode.hidden / len(episode.samples), 2)
+        if gesture == RUBBING:
+            described["inversoes"] = len(reversal_times(episode.samples, episode.face_width))
+        self.episodes.append(dict(inicio_s=round(episode.start, 2), fim_s=round(end, 2), gesto=gesture, **described))
         last = self._last_event_at.get(gesture)
         if last is not None and end - last < EVENT_COOLDOWN_S:
             return
         self._last_event_at[gesture] = end
         duration = end - episode.start
         details = {"duracao_s": round(duration, 1),
-                   WINDOW_KEYS[gesture]: sum(1 for t, g in self._done if g == gesture and t >= end - COUNT_WINDOW_S)}
-        if episode.samples:
-            details["lado"] = SIDES[max(set(episode.sides), key=episode.sides.count)]
-            details["fracao_olho_encoberto"] = round(episode.hidden / len(episode.samples), 2)
-        if gesture == RUBBING:
-            details["inversoes"] = len(reversal_times(episode.samples, episode.face_width))
+                   WINDOW_KEYS[gesture]: sum(1 for t, g in self._done if g == gesture and t >= end - COUNT_WINDOW_S),
+                   **described}
         self._pending.append(DetectedEvent(gesture, 1, round(duration, 2), details))
