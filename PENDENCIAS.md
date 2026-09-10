@@ -34,6 +34,29 @@ Estado em 10/09/2026, 17h. Este trabalho está num **branch separado** (não na 
 - [ ] Visual: alinhamento vertical do texto nos botões com a Overpass, tema dia, celular (abas embaixo e "Mais"), faixa de 24 h, gráfico de 30 dias.
 - [ ] Modo servidor no navegador: login real, primeiro acesso, tempo real, revisão, bloqueio de acesso.
 
+### 1b. Detecção nova: coçar os olhos e mão no rosto (pedido de 10/09)
+
+Contar quantas vezes a pessoa **coça ou esfrega os olhos** e **põe a mão no rosto**, gestos que aparecem quando ela está com sono.
+
+> Hipótese, confirmar: escalas de sonolência avaliada por observador (por exemplo, a ORD de Wierwille e Ellsworth, 1994) citam esfregar olhos e rosto como sinal comportamental. Buscar a fonte e o peso antes de usar no nível de risco.
+
+- [ ] **Reaproveitar o que já roda:** o `vision/phone.py` já executa o Hand Landmarker numa thread (pontos da mão em `HAND_KEY_POINTS`), e o `vision/face.py` já dá os pontos dos olhos e o `face_box`. Não carregar outro modelo.
+- [ ] **Esfregar ou coçar o olho:**
+  - A ponta do indicador ou do médio (pontos 8 e 12), ou os nós dos dedos, fica perto da região de um olho (raio proporcional à largura do rosto, como `EAR_RADIUS_FACES`).
+  - A ponta faz vai e vem (a direção do movimento inverte pelo menos 2 vezes em cerca de 1 s).
+  - O olho daquele lado some ou fecha enquanto isso.
+  - Um episódio conta quando dura de 0,5 s a 5 s. Juntar gestos separados por menos de 1,5 s.
+- [ ] **Mão no rosto:** pontos da mão dentro do `face_box` por pelo menos 1 s, sem ser celular no ouvido (estado `celular_no_ouvido` já existe) e sem cobrir a boca num bocejo.
+- [ ] **Oclusão:** se a mão cobre o rosto e os pontos do rosto se perdem, isso conta como "mão no rosto", não como "rosto não detectado". Nesse intervalo, o olho coberto não entra no PERCLOS nem nas piscadas, igual ao tratamento de óculos escuros em `vision/visibility.py`.
+- [ ] **Falsos positivos a tratar:** ajustar óculos, coçar o nariz, comer ou beber, limpar o suor e segurar o celular. Exigir o movimento repetido perto do olho para "coçar os olhos".
+- [ ] **Saídas:**
+  - Métricas na janela: `coceiras_olhos_10min` e `maos_no_rosto_10min`, com rótulos em `webapp/assets/js/format.js`.
+  - Eventos `olhos_esfregados` e `mao_no_rosto`, com nomes em `backend/alert_types.py` e `webapp/assets/js/local/alert-types.js`, na categoria sonolência.
+  - Sinal leve no nível de risco (`vision/drowsiness.py`): por exemplo, 3 ou mais episódios em 10 min junto com outro sinal de sono. Sozinho não vira alerta forte.
+  - Mostrar a contagem no overlay da câmera (`draw_overlay` em `vision/driver_monitor.py`) e no CSV de janelas do `analisar_video.py`.
+- [ ] **Testes:** sequências sintéticas de mão e rosto, no estilo de `tests/test_celular.py` (grade de 21 pontos), cobrindo esfregar o olho, mão parada no rosto, celular no ouvido (não pode contar) e ajuste de óculos (não pode contar).
+- [ ] **Validação:** gravar vídeos com os gestos anotados à mão e medir precisão e sensibilidade com o `vision/evaluation.py`, do mesmo jeito que as piscadas.
+
 ### 2. Modo teste com câmera no navegador (modo local)
 - [ ] Copiar `@mediapipe/tasks-vision` **1.0.1** (Apache-2.0; `vision_bundle.mjs` e a pasta `wasm/`) para `webapp/assets/vendor/` e `vision/models/face_landmarker.task` para `webapp/assets/models/`.
 - [ ] Portar o essencial de `vision/eyes.py` e `vision/drowsiness.py` para JS, com os mesmos limiares: piscada começa em abertura 0,50 e termina em 0,60; microssono 1 s; sono 3 s; sem resposta 6 s; fechamento longo 0,5 s; PERCLOS P80 contando só fechamentos acima de 250 ms; sonolência com PERCLOS 3 min ≥ 0,12; atenção com PERCLOS ≥ 0,08 ou 1,5× a base; bocejo com abertura da boca ≥ 0,45 por 2 s; cabeceio ≥ 15°; rosto ausente 10 s; intervalo entre avisos 300 s (atenção), 120 s (sonolência), 600 s (rosto).
