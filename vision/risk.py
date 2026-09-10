@@ -6,6 +6,8 @@ o sistema não faz diagnóstico.
 - Sonolência (módulo 1) define a base: perigo → crítico, sonolência → alto, atenção → atenção.
 - Contexto (madrugada ou mais de 5 h 30 min ao volante, vision/context.py): sinais leves de sonolência que duram
   5 min viram risco alto, em vez de esperar os 10 min normais.
+- Gestos de sono com as mãos (vision/face_touch.py): 3 ou mais episódios de olhos esfregados ou mão no rosto em
+  10 min fazem o mesmo que o contexto. Sozinhos não mudam o risco (sinal leve, hipótese a validar).
 - Rebote: quando o efeito do estimulante passa, vêm depressão, fadiga e sono (Takitane et al., 2013, Ciência &
   Saúde Coletiva). Depois de ativação atípica sustentada por 10 min, qualquer sinal de sonolência na hora seguinte
   eleva o risco para alto na mesma hora, com alarme. Tempos e limiares são hipóteses a validar.
@@ -21,6 +23,7 @@ from vision.drowsiness import DetectedEvent
 LEVEL_NAMES = ("normal", "atencao", "alto", "critico")
 HOLD_DOWN_S = {3: 10.0, 2: 60.0, 1: 60.0}
 CONTEXT_ESCALATION_S = 300.0
+HAND_GESTURES_LIGHT_SIGNAL = 3
 REBOUND_MIN_ACTIVATION_S = 600.0
 REBOUND_GAP_S = 120.0  # intervalo tolerado sem sinais dentro de um mesmo episódio de ativação
 REBOUND_WINDOW_S = 3600.0
@@ -69,11 +72,16 @@ class RiskFusion:
         target = drowsiness.level
         reasons = list(drowsiness.reasons) if drowsiness.level else []
 
+        touch = getattr(phone, "face_touch", None)
+        hand_gestures = touch is not None and touch.episodes_10min >= HAND_GESTURES_LIGHT_SIGNAL
         if drowsiness.level == 1:
             self._mild_since = t if self._mild_since is None else self._mild_since
-            if (context.get("madrugada") or context.get("limite_direcao_excedido")) and t - self._mild_since >= CONTEXT_ESCALATION_S:
+            risky_context = context.get("madrugada") or context.get("limite_direcao_excedido")
+            if hand_gestures:
+                reasons.append("olhos_esfregados_ou_mao_no_rosto")
+            if (risky_context or hand_gestures) and t - self._mild_since >= CONTEXT_ESCALATION_S:
                 target = max(target, 2)
-                reasons.append("sinais_leves_em_contexto_de_risco")
+                reasons.append("sinais_leves_em_contexto_de_risco" if risky_context else "sinais_leves_com_gestos_de_sono")
         else:
             self._mild_since = None
 

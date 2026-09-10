@@ -29,6 +29,7 @@ import cv2
 import numpy as np
 
 from vision.drowsiness import DetectedEvent
+from vision.face_touch import FaceTouchAssessment, FaceTouchTracker
 
 logger = logging.getLogger("drivesafe.phone")
 
@@ -100,6 +101,7 @@ class PhoneAssessment:
     phone_score: float | None = None
     hands: int = 0
     boxes: list = field(default_factory=list)  # caixas de celular recentes, para desenhar na janela
+    face_touch: FaceTouchAssessment | None = None  # olhos esfregados e mão no rosto (vision/face_touch.py)
 
 
 def driver_roi(face_box, frame_shape) -> tuple[int, int, int, int]:
@@ -221,6 +223,9 @@ class PhoneMonitor:
         self._looking_since = self._looking_last = None
         self._last_event_at = {}
         self._last_alarm_at = -math.inf
+        # Os mesmos pontos das mãos servem para os gestos de sono: nenhum modelo a mais.
+        self.face_touch = FaceTouchTracker()
+        self._touch_hands = None
         self._thread = None
         if background:
             self._thread = threading.Thread(target=self._worker, name="drivesafe-celular", daemon=True)
@@ -265,6 +270,9 @@ class PhoneMonitor:
                 self._last["phone_away"] = t
         if ears is not None and any(hand_near_ear(hand, ears, face_width) for hand in observation.hands):
             self._last["hand_ear"] = t
+        # Mão segurando o celular não é gesto de sono.
+        self._touch_hands = (t, [hand for hand in observation.hands
+                                 if not any(hand_touches_phone(hand, phone) for phone in phones)])
 
     def close(self) -> None:
         self._stop.set()
@@ -320,6 +328,10 @@ class PhoneMonitor:
         assessment = PhoneAssessment(state=state, duration=round(ear_for if state == "celular_no_ouvido" else hand_for, 2),
                                      phone_score=max(p[4] for p in phones) if phones else None,
                                      hands=len(observation.hands) if recent else 0, boxes=[p[:4] for p in phones])
+        touch, self._touch_hands = self._touch_hands, None
+        assessment.face_touch = self.face_touch.update(t, metrics, touch[1] if touch else None,
+                                                       touch[0] if touch else None, blocked=state == "celular_no_ouvido")
+        assessment.events.extend(assessment.face_touch.events)
         if not moving or state == "sem_celular":
             return assessment
 

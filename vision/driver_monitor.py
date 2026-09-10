@@ -22,6 +22,7 @@ NO_FACE_COLOR = (150, 150, 150)
 RISK_TEXT = {0: "RISCO NORMAL", 1: "RISCO: ATENCAO", 2: "RISCO ALTO", 3: "RISCO CRITICO"}
 PHONE_TEXT = {"celular_na_mao": "Celular na mao", "celular_no_ouvido": "Celular no ouvido",
               "olhando_celular": "Olhando o celular"}
+GESTURE_TEXT = {"olhos_esfregados": "Esfregando os olhos", "mao_no_rosto": "Mao no rosto"}
 VISIBILITY_TEXT = {"oculos_escuros": "Olhos nao visiveis (oculos escuros)", "olhos_fora_da_imagem": "Olhos fora da imagem"}
 PUPIL_TEXT = {"camera_rgb": "nao confiavel (camera RGB)", "iris_pequena": "iris pequena na imagem",
               "sem_contraste": "sem contraste", "olho_fechando": "olho fechando", "sem_pontos_da_iris": "sem iris (YuNet)"}
@@ -93,6 +94,12 @@ def draw_overlay(frame, state: DriverState, latency: dict | None = None):
     entries.append((f"Piscadas no ultimo minuto: {drowsy.blinks_last_minute}", 0.5, 1, white))
     if state.phone is not None and state.phone.state != "sem_celular":
         entries.append((f"{PHONE_TEXT[state.phone.state]} ({state.phone.duration:.0f}s)", 0.5, 1, warning))
+    touch = state.phone.face_touch if state.phone is not None else None
+    if touch is not None:
+        if touch.gesture is not None:
+            entries.append((GESTURE_TEXT[touch.gesture], 0.5, 1, warning))
+        entries.append((f"Em 10 min: olhos esfregados {touch.rubs_10min}, mao no rosto {touch.touches_10min}",
+                        0.45, 1, (200, 200, 200)))
     if metrics.pupil_ratio is not None:
         entries.append((f"Pupila/iris: {metrics.pupil_ratio:.2f}", 0.5, 1, white))
     elif metrics.face_found and metrics.pupil_quality:

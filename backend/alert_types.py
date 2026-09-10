@@ -22,11 +22,13 @@ ALERT_TYPE_LABELS = {
     "celular_na_mao": "Celular na mão",
     "celular_no_ouvido": "Celular no ouvido",
     "olhando_celular": "Olhando o celular (mais de 2 s)",
+    "olhos_esfregados": "Olhos esfregados ou coçados (sinal leve de sono)",
+    "mao_no_rosto": "Mão no rosto por mais de 1 s (sinal leve de sono)",
 }
 
 CATEGORIES = {
     "sonolencia": {"atencao", "sonolencia", "microssono", "sono", "nao_responsivo", "sonolencia_abrupta",
-                   "possivel_sonolencia", "eyes_closed"},
+                   "possivel_sonolencia", "eyes_closed", "olhos_esfregados", "mao_no_rosto"},
     "celular": {"celular_na_mao", "celular_no_ouvido", "olhando_celular", "phone_usage"},
     "ativacao": {"ativacao_atipica"},
     "jornada": {"direcao_continua"},

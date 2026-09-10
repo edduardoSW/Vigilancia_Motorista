@@ -202,6 +202,8 @@ export const DETAIL_LABELS = {
   entropia_transicao_bits: "Variação do olhar (bits)", duracao_min: "Duração",
   min_desde_o_ultimo_sinal: "Minutos desde o último sinal", confianca_celular: "Confiança da detecção do celular",
   maos_detectadas: "Mãos detectadas", olhando_para_baixo: "Olhando para baixo", demo: "Dado de demonstração",
+  coceiras_olhos_10min: "Olhos esfregados ou coçados em 10 min", maos_no_rosto_10min: "Mão no rosto em 10 min",
+  lado: "Lado", inversoes: "Vaivéns do dedo perto do olho", fracao_olho_encoberto: "Olho encoberto durante o gesto",
 };
 
 export function detailLabel(key) {

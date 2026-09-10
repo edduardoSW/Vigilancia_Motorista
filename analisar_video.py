@@ -209,6 +209,7 @@ def main(argv=None) -> int:
                 "infravermelho": metrics.infrared, "luminancia_olho": metrics.eye_luminance,
                 "olhar_x": metrics.gaze_x, "olhar_y": metrics.gaze_y, "nivel_sonolencia": state.drowsiness.level,
                 "nivel_risco": state.risk.level, "celular": state.phone.state if state.phone is not None else "",
+                "gesto_mao": (state.phone.face_touch.gesture or "") if state.phone is not None else "",
                 "latencia_ms": latencies[-1],
             })
             if state.window and state.window is not last_window:
@@ -371,6 +372,7 @@ def main(argv=None) -> int:
     }
     if phone is not None:
         summary["celular_s"] = {name: round(count / fps, 1) for name, count in Counter(info["celular"] for info in frame_info).items()}
+        summary["gestos_maos"] = dict(phone.face_touch.totals)
     Path(f"{base}_resumo.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
     general = summary["geral"]
