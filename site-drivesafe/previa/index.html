@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DriveSafe AI — prévia da página inicial</title>
+<!-- Prévia estática para aprovação do visual (10/09/2026). Não é o site final: ele será em Next.js com next-intl. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3efe6;
+    --paper-deep: #e8e1d2;
+    --ink: #1c1d1f;
+    --ink-soft: #4b4c4e;
+    --rule: #cdc4b2;
+    --signal: #b86e00;
+    --signal-text: #7f4c00;
+    --night: #15171a;
+    --night-raised: #1f2226;
+    --night-ink: #e8e3d7;
+    --night-soft: #a9a59b;
+    --night-rule: #353940;
+    --pad: clamp(1.25rem, 5vw, 4rem);
+    --max: 76rem;
+    --rail: 0rem;
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+  }
+  @media (min-width: 64rem) { :root { --rail: 7rem; } }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 1.0625rem/1.6 var(--sans); }
+  a { color: inherit; }
+  h1, h2, h3, p { margin: 0; }
+  .shell { max-width: var(--max); margin-inline: auto; padding-inline: var(--pad); }
+
+  /* Cabeçalho */
+  .top { border-bottom: 1px solid var(--rule); }
+  .top .shell { display: flex; align-items: center; gap: 2rem; min-height: 4.25rem; }
+  .brand { font-weight: 600; letter-spacing: -0.01em; text-decoration: none; }
+  .brand span { color: var(--signal-text); }
+  .nav { display: none; gap: 1.75rem; font-size: 0.9375rem; color: var(--ink-soft); }
+  .nav a { text-decoration: none; }
+  .top-end { margin-left: auto; display: flex; align-items: center; gap: 1.25rem; font-size: 0.9375rem; }
+  .lang { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink-soft); }
+  .lang b { color: var(--ink); font-weight: 500; }
+  .login { text-decoration: none; border-bottom: 1px solid var(--ink); padding-bottom: 1px; }
+  @media (min-width: 60rem) { .nav { display: flex; } }
+
+  /* Registro de horas: cada seção é uma hora do dia */
+  .entry { padding-block: clamp(3.5rem, 8vw, 6.5rem); border-bottom: 1px solid var(--rule); }
+  .entry .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); column-gap: 2rem; }
+  .stamp { font-family: var(--mono); font-size: 0.875rem; color: var(--signal-text); padding-top: 0.35rem; }
+  .stamp small { display: block; color: var(--ink-soft); font-size: 0.75rem; margin-top: 0.15rem; }
+  @media (max-width: 63.99rem) {
+    .entry .shell { grid-template-columns: minmax(0, 1fr); }
+    .stamp { margin-bottom: 1rem; display: flex; gap: 0.75rem; align-items: baseline; }
+    .stamp small { margin: 0; }
+  }
+  .body { container-type: inline-size; }
+  h2 { font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; font-size: clamp(1.75rem, 5.2cqi, 2.75rem); max-width: 24ch; }
+  .lead { color: var(--ink-soft); max-width: 58ch; margin-top: 1.25rem; font-size: 1.125rem; }
+
+  /* 06:00 — abertura */
+  .hero .body { display: grid; gap: 3rem; align-items: center; }
+  @media (min-width: 60rem) { .hero .body { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
+  .hero-text { container-type: inline-size; }
+  h1 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.08; font-size: clamp(2.25rem, 8.6cqi, 4rem); max-width: 18ch; }
+  .actions { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; margin-top: 2rem; }
+  .btn { display: inline-flex; align-items: center; min-height: 3rem; padding-inline: 1.375rem; border-radius: 4px;
+         background: var(--ink); color: var(--paper); text-decoration: none; font-weight: 500; }
+  .link { text-decoration: none; border-bottom: 1px solid var(--rule); padding-bottom: 2px; }
+  .note { margin-top: 1.5rem; font-size: 0.9375rem; color: var(--ink-soft); }
+
+  .disc { margin: 0; }
+  .disc svg { width: 100%; max-width: 30rem; height: auto; display: block; margin-inline: auto; }
+  .disc figcaption { margin: 1rem auto 0; max-width: 30rem; font-size: 0.875rem; color: var(--ink-soft); }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin-top: 0.6rem; font-family: var(--mono); font-size: 0.75rem; color: var(--ink); }
+  .legend i { display: inline-block; width: 0.9rem; height: 0.35rem; margin-right: 0.4rem; vertical-align: middle; }
+
+  /* 09:30 — sinais */
+  .signals { display: grid; gap: 0; margin-top: 2.5rem; border-top: 1px solid var(--rule); }
+  @media (min-width: 48rem) { .signals { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 3rem; } }
+  .signal { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 1rem; padding-block: 1.1rem; border-bottom: 1px solid var(--rule); }
+  .signal dt { font-family: var(--mono); font-size: 0.875rem; color: var(--signal-text); padding-top: 0.15rem; }
+  .signal dd { margin: 0; }
+  .signal dd strong { display: block; font-weight: 600; }
+  .signal dd span { color: var(--ink-soft); font-size: 0.9375rem; }
+  .caveat { margin-top: 1.75rem; font-size: 0.9375rem; color: var(--ink-soft); max-width: 62ch; }
+
+  /* 14:00 — como funciona */
+  .steps { list-style: none; margin: 2.5rem 0 0; padding: 0; display: grid; gap: 2rem; counter-reset: step; }
+  @media (min-width: 56rem) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2.5rem; } }
+  .steps li { counter-increment: step; border-top: 2px solid var(--ink); padding-top: 1rem; }
+  .steps li::before { content: counter(step, decimal-leading-zero); font-family: var(--mono); font-size: 0.8125rem; color: var(--ink-soft); }
+  .steps h3 { font-size: 1.1875rem; font-weight: 600; margin-top: 0.5rem; line-height: 1.3; }
+  .steps p { color: var(--ink-soft); margin-top: 0.5rem; font-size: 0.9875rem; }
+
+  /* 02:14 — madrugada (única seção escura) */
+  .night { background: var(--night); color: var(--night-ink); border-bottom: 0; }
+  .night .stamp { color: #e0a24a; }
+  .night .stamp small, .night .lead { color: var(--night-soft); }
+  .log { margin-top: 2.5rem; border: 1px solid var(--night-rule); border-radius: 4px; background: var(--night-raised); max-width: 44rem; }
+  .log-row { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: 1rem; padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--night-rule); align-items: baseline; }
+  .log-row:last-child { border-bottom: 0; }
+  .log-row time { font-family: var(--mono); font-size: 0.875rem; color: var(--night-soft); }
+  .log-row b { font-weight: 500; }
+  .log-row em { font-style: normal; font-family: var(--mono); font-size: 0.75rem; color: var(--night-soft); }
+  .log-row.alert b { color: #f0b35c; }
+  .night .caveat { color: var(--night-soft); }
+
+  /* 18:00 — transportadora */
+  .split { display: grid; gap: 2.5rem; margin-top: 2.5rem; }
+  @media (min-width: 56rem) { .split { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4rem; } }
+  .split h3 { font-size: 1.0625rem; font-weight: 600; }
+  .split ul { margin: 0.75rem 0 0; padding-left: 1.1rem; color: var(--ink-soft); }
+  .split li + li { margin-top: 0.4rem; }
+
+  /* 06:00 — contato */
+  .contact { background: var(--paper-deep); }
+  .who { display: grid; gap: 1.5rem; margin-top: 2.5rem; }
+  @media (min-width: 56rem) { .who { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2.5rem; } }
+  .who h3 { font-size: 1.0625rem; font-weight: 600; }
+  .who p { color: var(--ink-soft); margin-top: 0.4rem; font-size: 0.9875rem; }
+
+  .foot { padding-block: 2rem; font-size: 0.875rem; color: var(--ink-soft); }
+  .foot .shell { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="shell">
+    <a class="brand" href="#">DriveSafe <span>AI</span></a>
+    <nav class="nav" aria-label="Principal">
+      <a href="#sinais">O que mede</a>
+      <a href="#como">Como funciona</a>
+      <a href="#empresa">Para transportadoras</a>
+      <a href="#contato">Contato</a>
+    </nav>
+    <div class="top-end">
+      <span class="lang"><b>PT</b> / EN</span>
+      <a class="login" href="#">Já é cliente? Entrar</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="entry hero" aria-labelledby="titulo">
+    <div class="shell">
+      <p class="stamp">06:00<small>saída</small></p>
+      <div class="body">
+        <div class="hero-text">
+          <h1 id="titulo">O sono aparece nos olhos antes de aparecer na estrada.</h1>
+          <p class="lead">Uma câmera na cabine mede piscadas, olhos fechando e uso do celular. Avisa o motorista na hora e
+            registra só o evento para a empresa: tipo, horário e duração. Nenhuma imagem é gravada.</p>
+          <div class="actions">
+            <a class="btn" href="#contato">Falar pelo WhatsApp</a>
+            <a class="link" href="#como">Ver como funciona</a>
+          </div>
+          <p class="note">Em fase de piloto com transportadoras.</p>
+        </div>
+        <figure class="disc">
+          <svg id="disco" viewBox="0 0 400 400" role="img" aria-labelledby="disco-titulo">
+            <title id="disco-titulo">Disco de 24 horas de um dia de exemplo, com faixas de direção e descanso e três avisos na madrugada</title>
+          </svg>
+          <figcaption>Um dia de exemplo no disco de 24 horas: direção, descanso e os avisos da madrugada.
+            <div class="legend">
+              <span><i style="background:#1c1d1f"></i>direção</span>
+              <span><i style="background:#cdc4b2"></i>parado</span>
+              <span><i style="background:#b86e00"></i>aviso</span>
+            </div>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="entry" id="sinais" aria-labelledby="sinais-titulo">
+    <div class="shell">
+      <p class="stamp">09:30<small>na estrada</small></p>
+      <div class="body">
+        <h2 id="sinais-titulo">O que a câmera percebe</h2>
+        <p class="lead">Cada motorista é comparado com ele mesmo descansado: os primeiros minutos da viagem calibram o
+          jeito de piscar de cada pessoa.</p>
+        <dl class="signals">
+          <div class="signal"><dt>1 s</dt><dd><strong>Olhos fechados por 1 segundo</strong><span>Microssono: alarme na cabine na mesma hora.</span></dd></div>
+          <div class="signal"><dt>3 min</dt><dd><strong>Olhos fechando por mais tempo</strong><span>Parte do tempo de olho fechado nos últimos minutos (PERCLOS).</span></dd></div>
+          <div class="signal"><dt>piscada</dt><dd><strong>Piscadas mais longas que o normal</strong><span>Em relação à calibração do próprio motorista.</span></dd></div>
+          <div class="signal"><dt>cabeça</dt><dd><strong>Cabeceios e bocejos</strong><span>Sinais complementares, nunca alarme sozinhos.</span></dd></div>
+          <div class="signal"><dt>celular</dt><dd><strong>Celular na mão, no ouvido ou no olhar</strong><span>Celular preso no suporte não gera aviso.</span></dd></div>
+          <div class="signal"><dt>mãos</dt><dd><strong>Olhos esfregados</strong><span>Sinal leve: só pesa junto com outro sinal de sono.</span></dd></div>
+        </dl>
+        <p class="caveat">O sistema indica nível de risco. Não faz diagnóstico médico e não substitui descanso e pausas.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="entry" id="como" aria-labelledby="como-titulo">
+    <div class="shell">
+      <p class="stamp">14:00<small>parada</small></p>
+      <div class="body">
+        <h2 id="como-titulo">Como funciona no veículo</h2>
+        <ol class="steps">
+          <li><h3>Calibra com o motorista descansado</h3><p>Nos primeiros minutos, o aparelho aprende o normal daquela pessoa.</p></li>
+          <li><h3>Avisa dentro da cabine</h3><p>Alarme sonoro quando o risco sobe. O motorista não precisa tocar em nada.</p></li>
+          <li><h3>Registra o evento, não a imagem</h3><p>Sem internet, guarda na fila e envia quando o sinal voltar.</p></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="entry night" aria-labelledby="madrugada-titulo">
+    <div class="shell">
+      <p class="stamp">02:14<small>madrugada</small></p>
+      <div class="body">
+        <h2 id="madrugada-titulo">De madrugada, um sinal leve já conta.</h2>
+        <p class="lead">Entre meia-noite e 7 h, ou depois de 5 h 30 min seguidas ao volante, sinais leves de sono sobem o
+          risco em 5 minutos, em vez de 10.</p>
+        <div class="log" role="table" aria-label="Registro de exemplo da madrugada">
+          <div class="log-row" role="row"><time>01:52</time><b>Atenção: olhos fechando acima do normal</b><em>risco 1</em></div>
+          <div class="log-row alert" role="row"><time>02:14</time><b>Microssono: olhos fechados por 1,2 s</b><em>risco 3</em></div>
+          <div class="log-row alert" role="row"><time>02:21</time><b>Sonolência: piscadas longas e cabeceio</b><em>risco 2</em></div>
+          <div class="log-row" role="row"><time>02:40</time><b>Veículo parado para descanso</b><em>telemetria</em></div>
+        </div>
+        <p class="caveat">Registro de exemplo, com dados fictícios.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="entry" id="empresa" aria-labelledby="empresa-titulo">
+    <div class="shell">
+      <p class="stamp">18:00<small>chegada</small></p>
+      <div class="body">
+        <h2 id="empresa-titulo">Para a transportadora</h2>
+        <p class="lead">O gestor vê a frota e revisa os eventos importantes. Cada acesso é criado pela nossa equipe.</p>
+        <div class="split">
+          <div>
+            <h3>O que a empresa acompanha</h3>
+            <ul>
+              <li>Estado de cada veículo em tempo real</li>
+              <li>Fila de eventos para revisar, com o contexto da viagem</li>
+              <li>Histórico por motorista e relatórios exportáveis</li>
+            </ul>
+          </div>
+          <div>
+            <h3>O que fica protegido</h3>
+            <ul>
+              <li>Nenhuma imagem sai do veículo</li>
+              <li>Consentimento do motorista registrado, conforme a LGPD</li>
+              <li>O motorista vê os próprios dados e o que autorizou</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="entry contact" id="contato" aria-labelledby="contato-titulo">
+    <div class="shell">
+      <p class="stamp">06:00<small>dia seguinte</small></p>
+      <div class="body">
+        <h2 id="contato-titulo">Converse com a gente</h2>
+        <p class="lead">Atendimento só por WhatsApp, sem cadastro.</p>
+        <div class="who">
+          <div><h3>Transportadoras</h3><p>Piloto com parte da frota, instalação acompanhada.</p></div>
+          <div><h3>Universidades e pesquisa</h3><p>Validação dos sinais com gravações e protocolos de estudo.</p></div>
+          <div><h3>Investidores e editais</h3><p>Material técnico e o estado atual do protótipo.</p></div>
+        </div>
+        <div class="actions"><a class="btn" href="#">Falar pelo WhatsApp</a></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="shell"><span>DriveSafe AI · protótipo em teste</span><span>PT / EN</span></div>
+</footer>
+
+<script>
+  // Desenha o disco de exemplo (estático, sem animação). 0 h no topo, sentido horário, como no tacógrafo.
+  const svg = document.getElementById("disco");
+  const NS = "http://www.w3.org/2000/svg";
+  const cx = 200, cy = 200;
+  const add = (tag, attrs) => { const el = document.createElementNS(NS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); svg.appendChild(el); return el; };
+  const point = (hour, r) => { const a = (hour / 24) * 2 * Math.PI - Math.PI / 2; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const arc = (h1, h2, r) => { const [x1, y1] = point(h1, r), [x2, y2] = point(h2, r); const large = (h2 - h1) > 12 ? 1 : 0; return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`; };
+
+  add("circle", { cx, cy, r: 186, fill: "#faf7f0", stroke: "#cdc4b2" });
+  for (let h = 0; h < 24; h += 0.5) {
+    const major = Number.isInteger(h);
+    const [x1, y1] = point(h, 186), [x2, y2] = point(h, major ? 172 : 179);
+    add("line", { x1, y1, x2, y2, stroke: major ? "#8f8778" : "#cdc4b2", "stroke-width": 1 });
+  }
+  for (const h of [0, 6, 12, 18]) {
+    const [x, y] = point(h, 156);
+    const t = add("text", { x, y, "text-anchor": "middle", "dominant-baseline": "central", "font-family": "IBM Plex Mono, monospace", "font-size": 12, fill: "#4b4c4e" });
+    t.textContent = String(h).padStart(2, "0");
+  }
+  const day = [[0, 2.67, "d"], [2.67, 7, "p"], [7, 11.5, "d"], [11.5, 12.5, "p"], [12.5, 17, "d"], [17, 24, "p"]];
+  for (const [a, b, kind] of day) {
+    add("path", { d: arc(a, b, 128), fill: "none", stroke: kind === "d" ? "#1c1d1f" : "#cdc4b2", "stroke-width": kind === "d" ? 14 : 6 });
+  }
+  add("circle", { cx, cy, r: 104, fill: "none", stroke: "#e2dbcc" });
+  for (const [h, label] of [[1 + 52 / 60, "01:52"], [2 + 14 / 60, "02:14"], [2 + 21 / 60, "02:21"]]) {
+    const [x1, y1] = point(h, 112), [x2, y2] = point(h, 146);
+    add("line", { x1, y1, x2, y2, stroke: "#b86e00", "stroke-width": 2.5 });
+  }
+  const [lx, ly] = point(2.1, 92);
+  const label = add("text", { x: lx - 4, y: ly + 6, "font-family": "IBM Plex Mono, monospace", "font-size": 11, fill: "#7f4c00" });
+  label.textContent = "02:14";
+  const center = add("text", { x: cx, y: cy - 6, "text-anchor": "middle", "font-family": "IBM Plex Sans, sans-serif", "font-size": 15, "font-weight": 600, fill: "#1c1d1f" });
+  center.textContent = "11 h 40 min";
+  const sub = add("text", { x: cx, y: cy + 16, "text-anchor": "middle", "font-family": "IBM Plex Mono, monospace", "font-size": 11, fill: "#4b4c4e" });
+  sub.textContent = "de direção · 3 avisos";
+</script>
+</body>
+</html>

@@ -191,7 +191,17 @@ decisão.
 - [ ] Filtros em Relatórios (período, categoria, motorista, veículo).
 - [ ] Conta → "dados de teste" no modo local: restaurar exemplo, ligar/desligar simulação de eventos.
 
-#### Site de apresentação (Next.js) — não começou
+#### Site de apresentação (Next.js) — prévia estática pronta, aguardando aprovação
+- [x] **Prévia estática da página inicial (10/09, noite):** `site-drivesafe/previa/index.html`, com prints
+  `previa-desktop.png` (1440 px) e `previa-celular.png` (400 px). O "Diário de bordo" virou estrutura: cada seção
+  é uma hora do dia e o disco de 24 h é o gráfico de um dia de exemplo. Segue o feedback do app: papel claro,
+  grafite e um âmbar, IBM Plex Sans e Mono, **sem** grão, estrada, marcos de km, animação ou tela piscando (a
+  madrugada é só uma seção escura). Texto só com o que o código faz; dados do disco e da madrugada marcados como exemplo.
+- [ ] **Aprovar ou pedir ajustes na prévia antes de codar o Next.js.** Em aberto: número do WhatsApp (o botão está
+  sem link), texto final, versão em inglês e as fotos. O `prompts-imagens.md` ainda pede disco animado, tela
+  piscando e grão de filme, que o feedback cortou: revisar os prompts antes de gerar imagens.
+- [ ] Rodada de referências com URLs (regra do vault) antes do Next.js: a prévia usou só os padrões do vault.
+- [ ] Depois da aprovação: Next.js + next-intl (PT e EN), versões conferidas no registro na hora, prova com build + lint.
 - Direção aprovada: **"Diário de bordo"**. O site é um dia de 24 h num disco de tacógrafo: começa de dia em papel claro, escurece na madrugada (a tela pisca no microssono) e amanhece no contato.
 - PT e EN com next-intl. Públicos: transportadoras, investidores e editais, universidades e pesquisa.
 - Contato **só por celular/WhatsApp** (sem cadastro) e link "Já é cliente? Entrar no app".
