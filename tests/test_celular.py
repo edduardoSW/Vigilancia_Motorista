@@ -19,6 +19,7 @@ from vision.phone import (  # noqa: E402
     driver_roi,
     hand_near_ear,
     hand_touches_phone,
+    phone_near_ear,
 )
 
 checks = 0
@@ -110,8 +111,30 @@ ok("celular no ouvido por mais de 3 s: evento, risco alto e alarme")
 scratching = run(after(5.0)(lambda t: ([], [hand_at(262, 175)])))
 assert all(r.state == "sem_celular" for r in scratching)
 talking = run(after(5.0)(lambda t: ([], [hand_at(262, 175)])), mar=lambda t: 0.1 + 0.08 * ((int(t * 6) % 2) * 2 - 1))
-assert talking[-1].state == "celular_no_ouvido"
-ok("mão na orelha sem aparelho à vista: nada; com a boca mexendo (falando): celular no ouvido")
+assert all(r.state == "sem_celular" for r in talking)
+put_away = run(lambda t: ([PHONE_IN_HAND], [hand_at(320, 370)]) if 5.0 <= t < 6.0
+               else ([], [hand_at(262, 175)]) if t >= 6.0 else ([], []))
+assert put_away[-1].state == "sem_celular" and "celular_no_ouvido" not in events(put_away), events(put_away)
+ok("mão vazia na orelha não é celular: nem falando, nem logo depois de guardar o aparelho")
+
+covered = run(lambda t: ([PHONE_AT_EAR], [hand_at(262, 175)]) if 5.0 <= t < 6.5
+              else ([], [hand_at(262, 175)]) if t >= 6.5 else ([], []))
+assert "celular_no_ouvido" in events(covered), events(covered)
+ok("celular visto na orelha e depois tapado pela mão continua 'no ouvido' por alguns segundos")
+
+switch = run(lambda t: ([PHONE_IN_HAND], [hand_at(320, 370)]) if 5.0 <= t < 7.9
+             else ([PHONE_AT_EAR], [hand_at(262, 175)]) if t >= 7.9 else ([], []), seconds=13.0)
+ear_alert_at = next(i for i, r in enumerate(switch) if any(e.alert_type == "celular_no_ouvido" for e in r.events)) / 30.0
+assert "celular_na_mao" not in events(switch) and ear_alert_at >= 10.8, (events(switch), ear_alert_at)
+ok(f"da mão (2,9 s) para o ouvido: cada estado conta o próprio tempo; 'no ouvido' só {ear_alert_at - 7.9:.1f} s depois")
+
+PHONE_AT_CHIN = (240.0, 208.0, 275.0, 268.0, 0.6)  # na mão, do lado do rosto, na altura do queixo
+assert phone_near_ear(PHONE_AT_EAR, EARS, 100.0) and not phone_near_ear(PHONE_AT_CHIN, EARS, 100.0)
+chin = run(after(5.0)(lambda t: ([PHONE_AT_CHIN], [hand_at(257, 238)])))
+assert chin[-1].state == "celular_na_mao" and events(chin) == ["celular_na_mao"], events(chin)
+other_hand = run(after(5.0)(lambda t: ([PHONE_IN_HAND], [hand_at(320, 370), hand_at(262, 175)])))
+assert other_hand[-1].state == "celular_na_mao" and events(other_hand) == ["celular_na_mao"], events(other_hand)
+ok("celular na mão na altura do queixo, ou com a outra mão na orelha, continua 'na mão'")
 
 mounted = run(after(5.0)(lambda t: ([PHONE_IN_HAND], [])))
 assert all(r.state == "sem_celular" for r in mounted)

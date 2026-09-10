@@ -46,7 +46,10 @@ ROI_HALF_WIDTH_FACES = 1.6
 ROI_ABOVE_FACES = 0.6
 ROI_BELOW_FACES = 2.4
 EAR_RADIUS_FACES = 0.45
-PHONE_EAR_RADIUS_FACES = 0.7
+# Celular no ouvido: centro do aparelho numa elipse em volta da orelha, mais larga que alta. Um raio de 0,7 rosto
+# pegava o aparelho na mão na altura do queixo, do lado do rosto.
+PHONE_EAR_DX_FACES = 0.7
+PHONE_EAR_DY_FACES = 0.5
 HAND_ON_PHONE_MARGIN = 0.25
 HAND_KEY_POINTS = (0, 4, 5, 8, 9, 12, 13, 16, 17, 20)  # punho, pontas dos dedos e articulações da base
 MIN_HAND_POINTS = 3
@@ -54,7 +57,9 @@ MIN_HAND_POINTS = 3
 EVIDENCE_S = 1.5
 CONFIRM_WINDOW_S = 2.0
 CONFIRM_HITS = 2
-PHONE_MEMORY_S = 10.0  # mão na orelha conta como celular se o aparelho apareceu há pouco
+# Mão na orelha só mantém "no ouvido" se o próprio aparelho foi visto na orelha há pouco (a mão costuma tapá-lo).
+# Mão vazia na orelha não conta, nem com a boca mexendo: dava falso positivo (teste de 10/09).
+PHONE_EAR_MEMORY_S = 5.0
 # O model card do Hand Landmarker põe fora do escopo a mão segurando objetos: os pontos da mão podem falhar justo
 # com o celular na mão. Por isso o aparelho se mexendo também conta. Celular preso num suporte fica parado em
 # relação à câmera (os dois estão presos ao veículo) e não conta. Hipótese: 8% da largura do rosto em 2 s.
@@ -64,8 +69,6 @@ LOOK_DOWN_PITCH_DEG = 15.0
 LOOK_DOWN_GAZE = 0.25
 REFERENCE_S = 30.0
 REFERENCE_STEP_S = 0.5
-TALKING_WINDOW_S = 2.0
-TALKING_MAR_STD = 0.02  # boca mexendo: hipótese para "falando", a validar
 
 LOOKING_ALERT_S = 2.0
 EAR_ALERT_S = 3.0
@@ -125,7 +128,8 @@ def hand_near_ear(hand: np.ndarray, ears, face_width: float) -> bool:
 
 def phone_near_ear(phone, ears, face_width: float) -> bool:
     center_x, center_y = (phone[0] + phone[2]) / 2.0, (phone[1] + phone[3]) / 2.0
-    return any(math.hypot(center_x - ear[0], center_y - ear[1]) <= PHONE_EAR_RADIUS_FACES * face_width for ear in ears)
+    return any(((center_x - ear[0]) / (PHONE_EAR_DX_FACES * face_width)) ** 2
+               + ((center_y - ear[1]) / (PHONE_EAR_DY_FACES * face_width)) ** 2 <= 1.0 for ear in ears)
 
 
 class PhoneDetector:
@@ -206,11 +210,12 @@ class PhoneMonitor:
         self._failures = 0
         self._phone_hits = deque()
         self._phone_centers = deque()  # (t, x, y, escala) de cada celular detectado
-        self._last = dict.fromkeys(("phone", "hand_on_phone", "hand_ear", "phone_ear"), -math.inf)
+        self._last = dict.fromkeys(("phone", "hand_on_phone", "hand_ear", "phone_ear", "phone_away"), -math.inf)
+        self._state_since = {}
+        self._state_last = {}
         self._pitch_reference = deque()
         self._gaze_reference = deque()
         self._next_reference = -math.inf
-        self._mar = deque()
         self._state = "sem_celular"
         self._episode_since = self._episode_last = None
         self._looking_since = self._looking_last = None
@@ -256,6 +261,8 @@ class PhoneMonitor:
                 self._last["hand_on_phone"] = t
             if ears is not None and phone_near_ear(phone, ears, face_width):
                 self._last["phone_ear"] = t
+            elif ears is not None:
+                self._last["phone_away"] = t
         if ears is not None and any(hand_near_ear(hand, ears, face_width) for hand in observation.hands):
             self._last["hand_ear"] = t
 
@@ -277,7 +284,10 @@ class PhoneMonitor:
             return t - self._last[key] <= window
 
         in_hand = confirmed and (seen("hand_on_phone") or self._phone_moving())
-        at_ear = (confirmed and seen("phone_ear")) or (seen("hand_ear") and (seen("phone", PHONE_MEMORY_S) or self._talking()))
+        # Aparelho à vista agora longe da orelha (na mão, no colo): outra mão encostada na orelha não vira "no ouvido".
+        phone_away = seen("phone_away") and not seen("phone_ear")
+        at_ear = (confirmed and seen("phone_ear")) or (
+            seen("hand_ear") and not phone_away and seen("phone_ear", PHONE_EAR_MEMORY_S))
         looking = self._looking_down(metrics, in_hand)
         if looking and (in_hand or confirmed):
             state = "olhando_celular"
@@ -299,12 +309,15 @@ class PhoneMonitor:
                 self._looking_since = t
             self._looking_last = t
 
-        episode = t - self._episode_since if state != "sem_celular" else 0.0
+        # Cada estado conta o próprio tempo. Antes o tempo do episódio inteiro valia para os dois: 3 s com o celular
+        # na mão e um instante perto da orelha disparavam "celular no ouvido" junto com "celular na mão".
+        ear_for = self._time_in("ouvido", state == "celular_no_ouvido", t)
+        hand_for = self._time_in("mao", state in ("celular_na_mao", "olhando_celular"), t)
         looking_for = t - self._looking_since if state == "olhando_celular" else 0.0
         observation = self.last_observation
         recent = observation is not None and t - observation.timestamp <= EVIDENCE_S
         phones = observation.phones if recent else []
-        assessment = PhoneAssessment(state=state, duration=round(episode, 2),
+        assessment = PhoneAssessment(state=state, duration=round(ear_for if state == "celular_no_ouvido" else hand_for, 2),
                                      phone_score=max(p[4] for p in phones) if phones else None,
                                      hands=len(observation.hands) if recent else 0, boxes=[p[:4] for p in phones])
         if not moving or state == "sem_celular":
@@ -314,11 +327,21 @@ class PhoneMonitor:
                    "maos_detectadas": assessment.hands, "olhando_para_baixo": looking}
         if state == "olhando_celular" and looking_for >= LOOKING_ALERT_S:
             self._raise(t, assessment, 2, "olhos_no_celular", "olhando_celular", 4, looking_for, details, alarm=True)
-        elif state == "celular_no_ouvido" and episode >= EAR_ALERT_S:
-            self._raise(t, assessment, 2, "celular_no_ouvido", "celular_no_ouvido", 3, episode, details, alarm=True)
-        elif state in ("celular_na_mao", "olhando_celular") and episode >= HAND_ALERT_S:
-            self._raise(t, assessment, 1, "celular_na_mao", "celular_na_mao", 3, episode, details, alarm=False)
+        elif state == "celular_no_ouvido" and ear_for >= EAR_ALERT_S:
+            self._raise(t, assessment, 2, "celular_no_ouvido", "celular_no_ouvido", 3, ear_for, details, alarm=True)
+        elif state in ("celular_na_mao", "olhando_celular") and hand_for >= HAND_ALERT_S:
+            self._raise(t, assessment, 1, "celular_na_mao", "celular_na_mao", 3, hand_for, details, alarm=False)
         return assessment
+
+    def _time_in(self, key: str, active: bool, t: float) -> float:
+        """Tempo seguido num estado, aceitando falhas de até STATE_GAP_S no meio."""
+        if not active:
+            return 0.0
+        last = self._state_last.get(key)
+        if last is None or t - last > STATE_GAP_S:
+            self._state_since[key] = t
+        self._state_last[key] = t
+        return t - self._state_since[key]
 
     def _raise(self, t, assessment, risk, reason, alert_type, event_risk, duration, details, alarm) -> None:
         assessment.risk_level = risk
@@ -347,12 +370,7 @@ class PhoneMonitor:
     def _track_face(self, t: float, metrics) -> None:
         if not metrics.face_found:
             return
-        mar = getattr(metrics, "mar", None)
-        if mar is not None:
-            self._mar.append((t, mar))
-        while self._mar and self._mar[0][0] < t - TALKING_WINDOW_S:
-            self._mar.popleft()
-        in_use = self._episode_last is not None and t - self._episode_last <= 5.0
+        in_use =self._episode_last is not None and t - self._episode_last <= 5.0
         if not in_use and t >= self._next_reference:
             self._next_reference = t + REFERENCE_STEP_S
             if metrics.pitch is not None:
@@ -369,10 +387,6 @@ class PhoneMonitor:
         _, first_x, first_y, _ = self._phone_centers[0]
         return any(math.hypot(x - first_x, y - first_y) >= PHONE_MOVE_FACES * scale
                    for _, x, y, scale in self._phone_centers)
-
-    def _talking(self) -> bool:
-        values = [value for _, value in self._mar]
-        return len(values) >= 15 and statistics.pstdev(values) >= TALKING_MAR_STD
 
     def _submit(self, frame, t: float, face_box) -> None:
         with self._lock:

@@ -57,6 +57,33 @@ Contar quantas vezes a pessoa **coça ou esfrega os olhos** e **põe a mão no r
 - [ ] **Testes:** sequências sintéticas de mão e rosto, no estilo de `tests/test_celular.py` (grade de 21 pontos), cobrindo esfregar o olho, mão parada no rosto, celular no ouvido (não pode contar) e ajuste de óculos (não pode contar).
 - [ ] **Validação:** gravar vídeos com os gestos anotados à mão e medir precisão e sensibilidade com o `vision/evaluation.py`, do mesmo jeito que as piscadas.
 
+### 1c. Celular: calibrar com aparelhos reais (pedido de 10/09)
+
+Matheus viu no teste com a câmera que "celular no ouvido" disparava junto com "celular na mão" e que **mão vazia na orelha virava celular**. Corrigido em `vision/phone.py` no mesmo dia, com testes em `tests/test_celular.py`:
+- cada estado conta o próprio tempo;
+- mão vazia na orelha não conta, nem falando (a regra da boca mexendo saiu);
+- a mão só mantém "no ouvido" por 5 s depois de o aparelho ser visto na orelha;
+- celular à vista longe da orelha é "na mão";
+- a área do ouvido não pega mais a altura do queixo.
+
+Os limiares ainda são chute e precisam de dados:
+
+- [ ] **Teste de tamanho com vários celulares reais:** juntar aparelhos de tamanhos diferentes (compacto de uns 5,4", comum de 6,1", grande de 6,7" ou mais, dobrável), com e sem capinha, de cores diferentes, e um celular antigo pequeno.
+  - Gravar cada um na mão (na frente do peito, na altura do queixo, digitando), no ouvido, no colo e no suporte.
+  - Variar a distância da câmera e a luz (dia, noite com infravermelho).
+- [ ] **Medir em cada gravação:**
+  - confiança do EfficientDet;
+  - largura e altura da caixa divididas pela largura do rosto;
+  - proporção da caixa (alto/largo).
+  - Com isso, definir a faixa plausível de tamanho de um celular em relação ao rosto e descartar caixas pequenas ou grandes demais.
+- [ ] **Negativos, que não podem virar celular:**
+  - mão vazia na orelha, coçar a orelha, ajeitar o cabelo;
+  - fone de ouvido com fio e sem fio;
+  - carteira, controle remoto, maço de cigarro, copo;
+  - crachá pendurado, óculos na mão.
+- [ ] **Ajustar com os dados:** `PHONE_MIN_SCORE`, `PHONE_EAR_DX_FACES` e `PHONE_EAR_DY_FACES`, `EAR_RADIUS_FACES`, `PHONE_EAR_MEMORY_S`, `HAND_ON_PHONE_MARGIN` e `PHONE_MOVE_FACES`. Medir precisão e sensibilidade de cada estado (na mão, no ouvido, olhando) com anotação manual dos vídeos, como nas piscadas (`vision/evaluation.py`).
+- [ ] Criar um script de simulação (por exemplo `avaliar_celular.py`) que rode as gravações, gere a tabela de tamanhos e confianças por aparelho e mostre a matriz de confusão entre sem celular, na mão, no ouvido e olhando.
+
 ### 2. Modo teste com câmera no navegador (modo local)
 - [ ] Copiar `@mediapipe/tasks-vision` **1.0.1** (Apache-2.0; `vision_bundle.mjs` e a pasta `wasm/`) para `webapp/assets/vendor/` e `vision/models/face_landmarker.task` para `webapp/assets/models/`.
 - [ ] Portar o essencial de `vision/eyes.py` e `vision/drowsiness.py` para JS, com os mesmos limiares: piscada começa em abertura 0,50 e termina em 0,60; microssono 1 s; sono 3 s; sem resposta 6 s; fechamento longo 0,5 s; PERCLOS P80 contando só fechamentos acima de 250 ms; sonolência com PERCLOS 3 min ≥ 0,12; atenção com PERCLOS ≥ 0,08 ou 1,5× a base; bocejo com abertura da boca ≥ 0,45 por 2 s; cabeceio ≥ 15°; rosto ausente 10 s; intervalo entre avisos 300 s (atenção), 120 s (sonolência), 600 s (rosto).
