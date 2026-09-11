@@ -1,0 +1,253 @@
+@import "tailwindcss";
+
+/*
+ * RotaGuard · direção "Escalas"
+ * Neutros de concreto e asfalto (sem azul). O escuro só existe dentro das cenas fotográficas e do mapa noturno.
+ * A única cor saturada é a do alarme do produto. Contrastes calculados pela fórmula WCAG (erro 50 do vault):
+ *   asfalto/concreto 13,83 · grafite/concreto 6,89 · alarme/concreto 5,13 · alarme-noite/noite 6,57
+ *   noite-texto/noite 15,46 · noite-muted/noite 7,65
+ * Tokens e overrides ficam FORA de camada; regras de elemento em @layer base; primitivos em @layer components
+ * (erros 52 a 55 do vault: regra sem camada vence utilitário).
+ */
+
+:root {
+  --c-concreto: #e8e6e1;
+  --c-papel: #f3f2ee;
+  --c-fio: #c9c6bf;
+  --c-fio-forte: #9b988f;
+  --c-asfalto: #1b1b19;
+  --c-grafite: #4d4c48;
+  --c-noite: #131312;
+  --c-noite-2: #22221f;
+  --c-noite-fio: #3a3935;
+  --c-noite-texto: #eceae5;
+  --c-noite-muted: #a9a69f;
+  --c-alarme: #b0301a;
+  --c-alarme-noite: #ff6a4d;
+  --c-terra: #d6d3cc;
+  --c-terra-destaque: #8f8b82;
+  --c-veu-noite: rgb(19 19 18 / 0.4);
+
+  --gutter: clamp(1.25rem, 3.5vw, 3rem);
+  --rail: 0rem;
+  --header-h: 4rem;
+}
+
+@media (min-width: 80rem) {
+  :root {
+    --rail: 7.5rem;
+  }
+}
+
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+}
+
+@theme inline {
+  --color-concreto: var(--c-concreto);
+  --color-papel: var(--c-papel);
+  --color-fio: var(--c-fio);
+  --color-fio-forte: var(--c-fio-forte);
+  --color-asfalto: var(--c-asfalto);
+  --color-grafite: var(--c-grafite);
+  --color-noite: var(--c-noite);
+  --color-noite-2: var(--c-noite-2);
+  --color-noite-fio: var(--c-noite-fio);
+  --color-noite-texto: var(--c-noite-texto);
+  --color-noite-muted: var(--c-noite-muted);
+  --color-alarme: var(--c-alarme);
+  --color-alarme-noite: var(--c-alarme-noite);
+  --color-terra: var(--c-terra);
+
+  --font-titulo: var(--font-sofia-condensada), "Arial Narrow", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-texto: var(--font-sofia), system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-instrumento: var(--font-b612), ui-sans-serif, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: calc(var(--header-h) + 1rem);
+  }
+
+  body {
+    background-color: var(--c-concreto);
+    color: var(--c-asfalto);
+    font-family: var(--font-texto);
+    font-size: 1.0625rem;
+    line-height: 1.55;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-titulo);
+    font-weight: 700;
+    line-height: 0.94;
+    letter-spacing: -0.004em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background-color: var(--c-asfalto);
+    color: var(--c-concreto);
+  }
+
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .shell {
+    width: 100%;
+    max-width: 92rem;
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  .com-trilho {
+    padding-left: var(--rail);
+  }
+
+  .etiqueta {
+    font-family: var(--font-instrumento);
+    font-size: 0.75rem;
+    line-height: 1.35;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .numero {
+    font-family: var(--font-instrumento);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .titulo-ato {
+    font-family: var(--font-titulo);
+    font-weight: 800;
+    line-height: 0.88;
+    letter-spacing: -0.01em;
+  }
+
+  .texto-longo {
+    max-width: 38rem;
+    font-size: 1.125rem;
+    line-height: 1.6;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.25rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    font-family: var(--font-texto);
+    font-size: 1rem;
+    font-weight: 650;
+    line-height: 1.2;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease;
+  }
+
+  .btn-primario {
+    background-color: var(--c-asfalto);
+    color: var(--c-concreto);
+  }
+
+  .btn-primario:hover {
+    background-color: #34332f;
+  }
+
+  .btn-secundario {
+    border-color: var(--c-asfalto);
+    color: var(--c-asfalto);
+  }
+
+  .btn-secundario:hover {
+    background-color: var(--c-asfalto);
+    color: var(--c-concreto);
+  }
+
+  .btn-claro {
+    background-color: var(--c-noite-texto);
+    color: var(--c-noite);
+  }
+
+  .btn-claro:hover {
+    background-color: #ffffff;
+  }
+
+  .btn-contorno-claro {
+    border-color: var(--c-noite-texto);
+    color: var(--c-noite-texto);
+  }
+
+  .btn-contorno-claro:hover {
+    background-color: var(--c-noite-texto);
+    color: var(--c-noite);
+  }
+
+  .btn[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .link-sublinhado {
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+  }
+
+  .link-sublinhado:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .pular-conteudo {
+    position: absolute;
+    left: 1rem;
+    top: -10rem;
+    z-index: 100;
+    padding: 0.75rem 1rem;
+    background-color: var(--c-asfalto);
+    color: var(--c-concreto);
+  }
+
+  .pular-conteudo:focus {
+    top: 1rem;
+  }
+
+  .cena-noite {
+    background-color: var(--c-noite);
+    color: var(--c-noite-texto);
+  }
+
+  .revelar {
+    clip-path: inset(0 0 0 0);
+  }
+}

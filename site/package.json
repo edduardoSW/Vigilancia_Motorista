@@ -1,0 +1,42 @@
+{
+  "name": "rotaguard-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "node --test \"scripts/testes/*.test.mjs\"",
+    "mapas": "node scripts/mapas/gerar-mapas.mjs",
+    "prints": "node scripts/prints/tirar-prints.mjs"
+  },
+  "dependencies": {
+    "@gsap/react": "2.1.2",
+    "d3-geo": "3.1.1",
+    "gsap": "3.15.0",
+    "next": "16.3.4",
+    "next-intl": "4.14.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "topojson-client": "3.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/d3-geo": "3.1.1",
+    "@types/geojson": "7946.0.16",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/topojson-client": "3.1.5",
+    "@types/topojson-specification": "1.0.5",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
