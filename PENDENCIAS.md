@@ -191,16 +191,26 @@ decisão.
 - [ ] Filtros em Relatórios (período, categoria, motorista, veículo).
 - [ ] Conta → "dados de teste" no modo local: restaurar exemplo, ligar/desligar simulação de eventos.
 
-#### Site de apresentação (Next.js) — prévia estática pronta, aguardando aprovação
-- [x] **Prévia estática da página inicial (10/09, noite):** `site-drivesafe/previa/index.html`, com prints
-  `previa-desktop.png` (1440 px) e `previa-celular.png` (400 px). O "Diário de bordo" virou estrutura: cada seção
-  é uma hora do dia e o disco de 24 h é o gráfico de um dia de exemplo. Segue o feedback do app: papel claro,
-  grafite e um âmbar, IBM Plex Sans e Mono, **sem** grão, estrada, marcos de km, animação ou tela piscando (a
-  madrugada é só uma seção escura). Texto só com o que o código faz; dados do disco e da madrugada marcados como exemplo.
-- [ ] **Aprovar ou pedir ajustes na prévia antes de codar o Next.js.** Em aberto: número do WhatsApp (o botão está
-  sem link), texto final, versão em inglês e as fotos. O `prompts-imagens.md` ainda pede disco animado, tela
-  piscando e grão de filme, que o feedback cortou: revisar os prompts antes de gerar imagens.
-- [ ] Rodada de referências com URLs (regra do vault) antes do Next.js: a prévia usou só os padrões do vault.
+#### Site de apresentação (Next.js) — prévia v2 (página de produto) aguardando aprovação
+- [x] **Prévia v1 rejeitada (10/09, 21h):** "horrível, totalmente genérico" e "você só colocou texto". Era só texto
+  num esqueleto de landing, e o conceito aprovado tinha sido enfraquecido (erro 75 do vault). Fica em
+  `site-drivesafe/previa/index.html` só como histórico.
+- [x] **Prévia v2, página de produto (10/09, noite):** `site-drivesafe/previa/v2/index.html`, com prints
+  `previa-topo.png`, `previa-desktop.png` e `previa-celular.png` (400 px de verdade, via `iframe`). Mostra o produto:
+  - demonstração animada do que a câmera mede (rosto em pontos, olhos, curva de abertura, fechamento de 1,2 s e o
+    alarme de microssono), com as métricas mudando;
+  - tela de alarme da cabine e a escada 1 s / 3 s / 6 s;
+  - tela do painel da frota (veículos por risco, dia do motorista, eventos com a curva do olho);
+  - o que fica no veículo (pontos do olho) e o que sai dele (o evento em JSON);
+  - especificações e chamada para piloto.
+  Dados de demonstração, marcados na página. Geist e Geist Mono, grafite com âmbar e o vermelho só no alarme.
+  Com "movimento reduzido", a demonstração fica parada no quadro do alarme com os olhos abertos.
+- [x] **Rodada de referências** (10/09, noite): Nauto, Samsara, Motive, Seeing Machines, Netradyne, Lytx, Linear,
+  Teenage Engineering e Oura. Links e o que usar ou evitar estão na nota 08 do vault.
+- [ ] **Aprovar a v2 ou pedir ajustes.** Faltam: número do WhatsApp (botão sem link), versão EN, desenho técnico e
+  ficha do aparelho (precisa das medidas e dados reais: câmera, fps, alimentação, instalação), fotos e vídeo reais
+  da cabine com consentimento, e números só de piloto com fonte.
+- [ ] Revisar o `prompts-imagens.md` para a direção de produto (hoje pede papel de tacógrafo, disco animado e grão).
 - [ ] Depois da aprovação: Next.js + next-intl (PT e EN), versões conferidas no registro na hora, prova com build + lint.
 - Direção aprovada: **"Diário de bordo"**. O site é um dia de 24 h num disco de tacógrafo: começa de dia em papel claro, escurece na madrugada (a tela pisca no microssono) e amanhece no contato.
 - PT e EN com next-intl. Públicos: transportadoras, investidores e editais, universidades e pesquisa.

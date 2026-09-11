@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DriveSafe — prévia v2 (página de produto)</title>
+<!-- Prévia v2 (10/09/2026): página de produto que mostra o produto funcionando. Dados de demonstração. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0c0e;
+    --surface: #121417;
+    --surface-2: #181b1f;
+    --line: #262a31;
+    --line-soft: #1c1f24;
+    --text: #eceae4;
+    --muted: #a2a19a;
+    --dim: #6f6f69;
+    --amber: #ffb224;
+    --red: #ff5b4f;
+    --green: #46c17f;
+    --paper: #f1f0eb;
+    --ink: #111214;
+    --ink-muted: #5c5c57;
+    --paper-line: #d9d7cf;
+    --sans: "Geist", "Segoe UI", system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "Cascadia Mono", monospace;
+    --pad: clamp(1.25rem, 4vw, 3rem);
+    --max: 80rem;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 400 1rem/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  h1, h2, h3, p { margin: 0; }
+  .shell { max-width: var(--max); margin-inline: auto; padding-inline: var(--pad); }
+  .mono { font-family: var(--mono); }
+
+  /* Navegação */
+  .nav { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line-soft); }
+  .nav .shell { display: flex; align-items: center; gap: 2.25rem; height: 3.75rem; }
+  .logo { display: flex; align-items: center; gap: 0.55rem; font-weight: 600; letter-spacing: -0.01em; font-size: 1.05rem; }
+  .menu { display: none; gap: 1.75rem; color: var(--muted); font-size: 0.9rem; }
+  @media (min-width: 62rem) { .menu { display: flex; } }
+  .nav-end { margin-left: auto; display: flex; align-items: center; gap: 1rem; font-size: 0.9rem; }
+  .nav-end .lang { font-family: var(--mono); font-size: 0.78rem; color: var(--dim); }
+  .nav-end .login { color: var(--muted); display: none; }
+  @media (min-width: 40rem) { .nav-end .login { display: inline; } }
+  .btn { display: inline-flex; align-items: center; gap: 0.5rem; height: 2.5rem; padding-inline: 1rem; border-radius: 8px; font-weight: 500; font-size: 0.925rem; white-space: nowrap; }
+  .btn-primary { background: var(--amber); color: #1b1300; }
+  .btn-ghost { border: 1px solid var(--line); color: var(--text); }
+  .btn-lg { height: 3rem; padding-inline: 1.3rem; font-size: 1rem; }
+
+  /* Topo com a demonstração */
+  .hero { padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 6vw, 5rem); }
+  .hero .shell { display: grid; gap: 2.5rem; align-items: center; }
+  @media (min-width: 64rem) { .hero .shell { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 3.5rem; } }
+  .hero-copy { container-type: inline-size; }
+  .tag { display: inline-flex; gap: 0.5rem; align-items: center; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.3rem 0.75rem; }
+  .tag i { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--green); }
+  h1 { margin-top: 1.25rem; font-weight: 600; letter-spacing: -0.035em; line-height: 1.02; font-size: clamp(2.5rem, 12cqi, 4.75rem); }
+  h1 em { font-style: normal; color: var(--amber); }
+  .hero-copy > p { margin-top: 1.25rem; color: var(--muted); font-size: 1.125rem; max-width: 34rem; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
+  .proof { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 2.25rem; font-family: var(--mono); font-size: 0.8rem; color: var(--dim); }
+  .proof b { color: var(--text); font-weight: 500; }
+
+  .demo { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; }
+  .demo.is-alarm { border-color: var(--red); box-shadow: 0 0 0 1px var(--red), 0 20px 60px -20px rgb(255 91 79 / 0.35); }
+  .demo-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.65rem 1rem; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+  .live { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .live i { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--red); }
+  .feed { position: relative; aspect-ratio: 16 / 9; background: radial-gradient(ellipse 70% 80% at 50% 48%, #20242a 0%, #14171a 55%, #0d0e10 100%); }
+  .feed svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .status { position: absolute; left: 1rem; top: 1rem; font-family: var(--mono); font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid; }
+  .status.ok { color: var(--green); background: rgb(70 193 127 / 0.1); border-color: rgb(70 193 127 / 0.35); }
+  .status.warn { color: var(--amber); background: rgb(255 178 36 / 0.1); border-color: rgb(255 178 36 / 0.4); }
+  .status.alarm { color: #fff; background: var(--red); border-color: var(--red); }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line-soft); }
+  .metric { padding: 0.75rem 1rem; border-right: 1px solid var(--line-soft); }
+  .metric:last-child { border-right: 0; }
+  .metric span { display: block; font-family: var(--mono); font-size: 0.66rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric b { display: block; margin-top: 0.15rem; font-weight: 500; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+  .metric b.red { color: var(--red); }
+  .trace { height: 68px; border-top: 1px solid var(--line-soft); }
+  .trace svg { width: 100%; height: 100%; display: block; }
+  .demo-note { padding: 0.55rem 1rem; font-size: 0.72rem; color: var(--dim); border-top: 1px solid var(--line-soft); }
+  @media (max-width: 40rem) {
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metric:nth-child(2) { border-right: 0; }
+    .metric:nth-child(-n + 2) { border-bottom: 1px solid var(--line-soft); }
+  }
+
+  /* Seções */
+  .section { padding-block: clamp(4rem, 9vw, 7rem); border-top: 1px solid var(--line-soft); }
+  .head { container-type: inline-size; max-width: 52rem; }
+  .kicker { font-family: var(--mono); font-size: 0.78rem; color: var(--amber); }
+  h2 { margin-top: 0.75rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.06; font-size: clamp(2rem, 7.5cqi, 3.5rem); }
+  .head p { margin-top: 1rem; color: var(--muted); font-size: 1.0625rem; max-width: 40rem; }
+
+  /* Painel da frota */
+  .window { margin-top: 3rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; box-shadow: 0 40px 120px -40px rgb(0 0 0 / 0.9); }
+  .win-bar { display: flex; align-items: center; justify-content: space-between; height: 2.25rem; padding-inline: 0.9rem; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 0.75rem; color: var(--muted); }
+  .win-ctl { display: flex; gap: 1rem; color: var(--dim); font-family: var(--mono); }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 30rem; }
+  @media (min-width: 56rem) { .app { grid-template-columns: 17rem minmax(0, 1fr); } }
+  .side { display: none; border-right: 1px solid var(--line); background: #0f1114; }
+  @media (min-width: 56rem) { .side { display: block; } }
+  .side-head { padding: 0.9rem 1rem; border-bottom: 1px solid var(--line-soft); }
+  .side-head b { font-weight: 600; font-size: 0.9rem; }
+  .side-head span { display: block; font-family: var(--mono); font-size: 0.7rem; color: var(--dim); margin-top: 0.1rem; }
+  .filters { display: flex; gap: 0.35rem; padding: 0.6rem 1rem; border-bottom: 1px solid var(--line-soft); }
+  .chip { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 5px; border: 1px solid var(--line); color: var(--muted); }
+  .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .vehicles { list-style: none; margin: 0; padding: 0; }
+  .vehicles li { display: grid; grid-template-columns: 0.55rem minmax(0, 1fr) auto; gap: 0.65rem; align-items: center; padding: 0.7rem 1rem; border-bottom: 1px solid var(--line-soft); font-size: 0.8rem; }
+  .vehicles li.sel { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--amber); }
+  .dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; }
+  .dot.ok { background: var(--green); } .dot.warn { background: var(--amber); } .dot.crit { background: var(--red); } .dot.off { background: #3a3e45; }
+  .vehicles b { font-weight: 500; display: block; }
+  .vehicles small { color: var(--dim); font-size: 0.72rem; }
+  .vehicles time { font-family: var(--mono); font-size: 0.7rem; color: var(--dim); }
+  .main { padding: 1.25rem; display: grid; gap: 1rem; align-content: start; min-width: 0; }
+  .main-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; }
+  .plate { font-family: var(--mono); font-size: 0.8rem; padding: 0.2rem 0.5rem; border: 1px solid var(--line); border-radius: 5px; }
+  .main-head h3 { font-size: 1.15rem; font-weight: 600; }
+  .main-head .route { color: var(--dim); font-size: 0.8rem; }
+  .pill { margin-left: auto; font-size: 0.75rem; font-weight: 500; padding: 0.25rem 0.6rem; border-radius: 999px; background: rgb(255 91 79 / 0.14); color: var(--red); border: 1px solid rgb(255 91 79 / 0.4); }
+  .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  @media (min-width: 48rem) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .kpi { background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.7rem 0.8rem; }
+  .kpi span { display: block; font-size: 0.7rem; color: var(--dim); }
+  .kpi b { display: block; margin-top: 0.1rem; font-weight: 600; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .kpi b small { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+  .panel { background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.8rem; }
+  .panel-title { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.6rem; }
+  .panel-title span:last-child { font-family: var(--mono); color: var(--dim); }
+  .day svg { width: 100%; height: 3.25rem; display: block; }
+  .events { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .events td { padding: 0.55rem 0.5rem; border-top: 1px solid var(--line-soft); vertical-align: middle; }
+  .events tr:first-child td { border-top: 0; }
+  .events .t { font-family: var(--mono); color: var(--muted); width: 4.5rem; }
+  .events .type { font-weight: 500; }
+  .events .type.crit { color: var(--red); } .events .type.warn { color: var(--amber); }
+  .events .detail { color: var(--dim); }
+  .events .spark { width: 9rem; }
+  .events .spark svg { width: 9rem; height: 1.6rem; display: block; }
+  .events .act { text-align: right; }
+  .events .act span { font-size: 0.72rem; padding: 0.25rem 0.55rem; border: 1px solid var(--line); border-radius: 5px; color: var(--text); }
+  @media (max-width: 48rem) { .events .spark, .events .detail { display: none; } }
+  .caption { margin-top: 1rem; font-size: 0.8rem; color: var(--dim); }
+
+  /* Cabine */
+  .cab { display: grid; gap: 3rem; align-items: center; }
+  @media (min-width: 60rem) { .cab { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 4rem; } }
+  .ladder { list-style: none; margin: 2rem 0 0; padding: 0; border-top: 1px solid var(--line); }
+  .ladder li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 1rem; padding-block: 1rem; border-bottom: 1px solid var(--line); }
+  .ladder b { font-family: var(--mono); font-weight: 500; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .ladder li:nth-child(1) b { color: var(--amber); } .ladder li:nth-child(n + 2) b { color: var(--red); }
+  .ladder strong { display: block; font-weight: 600; }
+  .ladder span { color: var(--muted); font-size: 0.925rem; }
+  .device { background: linear-gradient(#1b1d21, #0e0f11); border: 1px solid #2c3037; border-radius: 22px; padding: 14px; box-shadow: 0 40px 100px -40px rgb(0 0 0 / 0.95), inset 0 1px 0 #3a3f47; }
+  .screen { position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: #1a0c0b; display: grid; grid-template-rows: auto 1fr auto; }
+  .screen-top { display: flex; justify-content: space-between; padding: 0.7rem 1rem; background: var(--red); color: #fff; font-family: var(--mono); font-size: 0.78rem; font-weight: 500; }
+  .screen-mid { display: grid; place-content: center; text-align: center; padding: 1rem; container-type: inline-size; }
+  .screen-mid .big { font-weight: 700; letter-spacing: -0.035em; line-height: 1; font-size: clamp(2rem, 13cqi, 4.5rem); color: #fff; }
+  .screen-mid .sub { margin-top: 0.6rem; color: #ffb3ad; font-size: clamp(0.9rem, 3.4cqi, 1.2rem); }
+  .screen-bot { display: flex; justify-content: space-between; gap: 1rem; padding: 0.7rem 1rem; border-top: 1px solid #3a1d1b; font-family: var(--mono); font-size: 0.72rem; color: #d6958f; }
+  .wave { display: inline-flex; gap: 3px; align-items: end; height: 0.9rem; }
+  .wave i { width: 3px; background: #ff8a80; border-radius: 1px; }
+
+  /* O que sai do veículo */
+  .flow { margin-top: 3rem; display: grid; gap: 1rem; align-items: stretch; }
+  @media (min-width: 60rem) { .flow { grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr); } }
+  .card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+  .card-top { display: flex; justify-content: space-between; padding: 0.7rem 1rem; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+  .card-body { padding: 1.25rem; }
+  .card-body svg { width: 100%; height: auto; display: block; }
+  .card-foot { padding: 0.8rem 1.25rem; border-top: 1px solid var(--line-soft); font-size: 0.85rem; color: var(--muted); }
+  .arrow { display: grid; place-items: center; color: var(--dim); font-family: var(--mono); }
+  .code { margin: 0; font-family: var(--mono); font-size: 0.9rem; line-height: 1.8; color: var(--text); white-space: pre; overflow-x: auto; }
+  .code .k { color: var(--muted); } .code .s { color: var(--amber); } .code .n { color: var(--green); }
+
+  /* Especificações (única seção clara) */
+  .specs { background: var(--paper); color: var(--ink); border-top: 0; }
+  .specs .kicker { color: #9a5b00; }
+  .specs .head p { color: var(--ink-muted); }
+  .spec-grid { margin-top: 3rem; display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--ink); }
+  @media (min-width: 52rem) { .spec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 3rem; } }
+  .spec { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 1rem; padding-block: 1rem; border-bottom: 1px solid var(--paper-line); }
+  .spec dt { font-family: var(--mono); font-size: 0.8rem; color: var(--ink-muted); padding-top: 0.1rem; }
+  .spec dd { margin: 0; font-size: 0.975rem; }
+
+  /* Chamada final */
+  .cta .shell { display: grid; gap: 2rem; align-items: end; }
+  @media (min-width: 60rem) { .cta .shell { grid-template-columns: minmax(0, 1fr) auto; } }
+  .cta .head p { margin-top: 1rem; }
+  .foot { border-top: 1px solid var(--line-soft); padding-block: 1.75rem; font-size: 0.8rem; color: var(--dim); }
+  .foot .shell { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem 2rem; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="shell">
+    <a class="logo" href="#">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9.5" fill="none" stroke="#eceae4" stroke-width="1.5"/><path d="M11 1.5 A9.5 9.5 0 0 1 19.2 6.2" fill="none" stroke="#ffb224" stroke-width="3"/><circle cx="11" cy="11" r="2.2" fill="#eceae4"/></svg>
+      DriveSafe
+    </a>
+    <nav class="menu" aria-label="Principal">
+      <a href="#cabine">Na cabine</a>
+      <a href="#painel">Painel da frota</a>
+      <a href="#privacidade">Privacidade</a>
+      <a href="#especificacoes">Especificações</a>
+    </nav>
+    <div class="nav-end">
+      <span class="lang">PT · EN</span>
+      <a class="login" href="#">Entrar</a>
+      <a class="btn btn-primary" href="#piloto">Pedir piloto</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="shell">
+      <div class="hero-copy">
+        <span class="tag"><i></i>Em piloto com transportadoras</span>
+        <h1>Microssono dura 1&nbsp;segundo. <em>O&nbsp;alarme também.</em></h1>
+        <p>Uma câmera na cabine mede os olhos do motorista a cada quadro, dispara o alarme quando eles fecham e envia o evento para a frota. Nenhuma imagem é gravada.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="#piloto">Pedir piloto</a>
+          <a class="btn btn-ghost btn-lg" href="#painel">Ver o painel</a>
+        </div>
+        <div class="proof">
+          <span><b>1 s</b> olhos fechados = alarme</span>
+          <span><b>0</b> imagens gravadas</span>
+          <span><b>offline</b> guarda e envia depois</span>
+        </div>
+      </div>
+
+      <div class="demo" id="demo" aria-label="Demonstração do que a câmera mede">
+        <div class="demo-bar">
+          <span>CÂMERA DA CABINE · OLHOS DO MOTORISTA</span>
+          <span class="live"><i></i>DEMONSTRAÇÃO</span>
+        </div>
+        <div class="feed">
+          <svg id="feed" viewBox="0 0 800 450" aria-hidden="true"></svg>
+          <span class="status ok" id="status">RISCO NORMAL · OLHOS ABERTOS</span>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span>Abertura do olho</span><b id="m-open">100%</b></div>
+          <div class="metric"><span>Olhos fechados</span><b id="m-closed">0,3 s</b></div>
+          <div class="metric"><span>PERCLOS 60 s</span><b id="m-perclos">4,1%</b></div>
+          <div class="metric"><span>Nível de risco</span><b id="m-risk">Normal</b></div>
+        </div>
+        <div class="trace"><svg id="trace" viewBox="0 0 800 68" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+        <p class="demo-note">Simulação do sinal que o sistema mede: duas piscadas normais e um fechamento de 1,2 s.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="cabine">
+    <div class="shell cab">
+      <div class="head">
+        <p class="kicker">Na cabine</p>
+        <h2>O aviso chega antes de o caminhão sair da faixa.</h2>
+        <p>O motorista não precisa tocar em nada. Cada motorista é comparado com ele mesmo descansado: os primeiros minutos da viagem calibram o jeito de piscar de cada pessoa.</p>
+        <ol class="ladder">
+          <li><b>1 s</b><div><strong>Microssono</strong><span>Olhos fechados por 1 segundo: alarme na hora.</span></div></li>
+          <li><b>3 s</b><div><strong>Sono</strong><span>O alarme continua e o evento sobe como crítico.</span></div></li>
+          <li><b>6 s</b><div><strong>Sem resposta</strong><span>O gestor é avisado no painel imediatamente.</span></div></li>
+        </ol>
+      </div>
+      <div class="device" role="img" aria-label="Tela da cabine mostrando o alarme de microssono">
+        <div class="screen">
+          <div class="screen-top"><span>RISCO CRÍTICO</span><span>02:14:07</span></div>
+          <div class="screen-mid">
+            <p class="big">Microssono</p>
+            <p class="sub">Olhos fechados por 1,2 s. Pare em local seguro.</p>
+          </div>
+          <div class="screen-bot">
+            <span class="wave" aria-hidden="true"><i style="height:40%"></i><i style="height:90%"></i><i style="height:60%"></i><i style="height:100%"></i><i style="height:50%"></i><i style="height:75%"></i></span>
+            <span>ALARME SONORO ATIVO</span>
+            <span>ABC-1D23</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="painel">
+    <div class="shell">
+      <div class="head">
+        <p class="kicker">Painel da frota</p>
+        <h2>A frota inteira ao vivo. E o que aconteceu às 02:14.</h2>
+        <p>O gestor vê o risco de cada veículo agora, o dia de cada motorista e a fila de eventos para revisar, com a curva do olho de cada um.</p>
+      </div>
+      <div class="window" aria-label="Tela do painel da frota com dados de demonstração">
+        <div class="win-bar"><span>DriveSafe · Frota</span><span class="win-ctl" aria-hidden="true"><span>—</span><span>▢</span><span>✕</span></span></div>
+        <div class="app">
+          <aside class="side">
+            <div class="side-head"><b>Frota</b><span>24 veículos · 21 rodando</span></div>
+            <div class="filters"><span class="chip on">Todos</span><span class="chip">Em risco 3</span><span class="chip">Parados</span></div>
+            <ul class="vehicles">
+              <li class="sel"><i class="dot crit"></i><div><b>ABC-1D23</b><small>João Pereira · Crítico</small></div><time>02:14</time></li>
+              <li><i class="dot warn"></i><div><b>FRT-4E56</b><small>Marcos Lima · Atenção</small></div><time>02:09</time></li>
+              <li><i class="dot warn"></i><div><b>BRA-7G89</b><small>Ana Souza · Atenção</small></div><time>01:47</time></li>
+              <li><i class="dot ok"></i><div><b>SPO-2K31</b><small>Carlos Reis · Normal</small></div><time>—</time></li>
+              <li><i class="dot ok"></i><div><b>CWB-9M02</b><small>Paulo Dias · Normal</small></div><time>—</time></li>
+              <li><i class="dot ok"></i><div><b>RIO-5P44</b><small>Rita Alves · Normal</small></div><time>—</time></li>
+              <li><i class="dot off"></i><div><b>POA-3R17</b><small>Parado · base Curitiba</small></div><time>18:32</time></li>
+            </ul>
+          </aside>
+          <div class="main">
+            <div class="main-head">
+              <span class="plate">ABC-1D23</span>
+              <h3>João Pereira</h3>
+              <span class="route">São Paulo → Curitiba · BR-116</span>
+              <span class="pill">Risco crítico</span>
+            </div>
+            <div class="kpis">
+              <div class="kpi"><span>Direção hoje</span><b>7 h 48 <small>min</small></b></div>
+              <div class="kpi"><span>Direção contínua</span><b>2 h 14 <small>min</small></b></div>
+              <div class="kpi"><span>Eventos hoje</span><b>3</b></div>
+              <div class="kpi"><span>PERCLOS 3 min</span><b>14 <small>%</small></b></div>
+            </div>
+            <div class="panel day">
+              <div class="panel-title"><span>Dia do motorista</span><span>00h — 24h</span></div>
+              <svg id="day" viewBox="0 0 800 52" preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
+            <div class="panel">
+              <div class="panel-title"><span>Eventos para revisar</span><span>curva do olho</span></div>
+              <table class="events">
+                <tr><td class="t">02:21</td><td class="type warn">Sonolência</td><td class="detail">Piscadas longas e cabeceio</td><td class="spark"><svg data-dip="0.45" viewBox="0 0 144 26" preserveAspectRatio="none"></svg></td><td class="act"><span>Revisar</span></td></tr>
+                <tr><td class="t">02:14</td><td class="type crit">Microssono</td><td class="detail">Olhos fechados por 1,2 s</td><td class="spark"><svg data-dip="1.2" viewBox="0 0 144 26" preserveAspectRatio="none"></svg></td><td class="act"><span>Revisar</span></td></tr>
+                <tr><td class="t">01:52</td><td class="type warn">Atenção</td><td class="detail">Olhos fechando acima do normal</td><td class="spark"><svg data-dip="0.3" viewBox="0 0 144 26" preserveAspectRatio="none"></svg></td><td class="act"><span>Revisar</span></td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">Tela com dados de demonstração.</p>
+    </div>
+  </section>
+
+  <section class="section" id="privacidade">
+    <div class="shell">
+      <div class="head">
+        <p class="kicker">Privacidade</p>
+        <h2>A imagem fica no caminhão. Só o evento sai dele.</h2>
+        <p>A câmera transforma cada quadro em pontos do olho e descarta a imagem. Para a empresa vai apenas o registro do evento, com o consentimento do motorista, conforme a LGPD.</p>
+      </div>
+      <div class="flow">
+        <div class="card">
+          <div class="card-top"><span>NO VEÍCULO · A CADA QUADRO</span><span>descartado</span></div>
+          <div class="card-body"><svg id="points" viewBox="0 0 480 200" aria-label="Pontos dos dois olhos medidos pela câmera"></svg></div>
+          <p class="card-foot">12 pontos por olho, abertura e direção do olhar. Nenhum pixel é salvo.</p>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="card">
+          <div class="card-top"><span>ENVIADO PARA A FROTA</span><span>1 evento</span></div>
+          <div class="card-body">
+<pre class="code">{
+  <span class="k">"tipo"</span>: <span class="s">"microssono"</span>,
+  <span class="k">"hora"</span>: <span class="s">"02:14:07"</span>,
+  <span class="k">"duracao_s"</span>: <span class="n">1.2</span>,
+  <span class="k">"risco"</span>: <span class="n">3</span>,
+  <span class="k">"veiculo"</span>: <span class="s">"ABC-1D23"</span>
+}</pre>
+          </div>
+          <p class="card-foot">Sem internet, fica na fila do aparelho e é enviado quando o sinal volta.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section specs" id="especificacoes">
+    <div class="shell">
+      <div class="head">
+        <p class="kicker">Especificações</p>
+        <h2>O que ele mede e onde roda.</h2>
+        <p>Limiares iniciais baseados em literatura e em calibração individual, em validação com gravações reais.</p>
+      </div>
+      <dl class="spec-grid">
+        <div class="spec"><dt>Críticos</dt><dd>Olhos fechados por 1 s (microssono), 3 s (sono) e 6 s (sem resposta)</dd></div>
+        <div class="spec"><dt>Sonolência</dt><dd>PERCLOS, piscadas mais longas que a calibração, bocejos e cabeceios</dd></div>
+        <div class="spec"><dt>Celular</dt><dd>Na mão, no ouvido ou olhando para ele. No suporte, não conta</dd></div>
+        <div class="spec"><dt>Contexto</dt><dd>Madrugada e mais de 5 h 30 min ao volante pesam no risco</dd></div>
+        <div class="spec"><dt>Câmera</dt><dd>Comum ou infravermelha; óculos escuros detectados</dd></div>
+        <div class="spec"><dt>Roda em</dt><dd>Raspberry Pi, Linux, Windows e macOS</dd></div>
+        <div class="spec"><dt>Conexão</dt><dd>Funciona sem internet; fila de eventos enviada depois</dd></div>
+        <div class="spec"><dt>Dados</dt><dd>Sem imagens; consentimento do motorista registrado</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section cta" id="piloto">
+    <div class="shell">
+      <div class="head">
+        <p class="kicker">Piloto</p>
+        <h2>Comece com cinco caminhões.</h2>
+        <p>Instalação acompanhada, calibração com os seus motoristas e relatório do período. Também atendemos universidades e editais de pesquisa.</p>
+      </div>
+      <a class="btn btn-primary btn-lg" href="#">Falar pelo WhatsApp</a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="shell"><span>DriveSafe AI · protótipo em piloto</span><span>PT · EN</span></div>
+</footer>
+
+<script>
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (parent, tag, attrs = {}) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent.appendChild(n); return n; };
+  const fmt = (v, d = 1) => v.toFixed(d).replace(".", ",");
+
+  // Geometria do olho: contorno em duas curvas e 6 pontos por olho (cantos, 2 em cima, 2 embaixo), como no Face Landmarker.
+  const bez = (p0, p1, p2, p3, t) => { const u = 1 - t; return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3; };
+  function eyeShape(cx, cy, w, open) {
+    const top = cy - (w * 0.72 * open + 2), bottom = cy + (w * 0.3 * open + 2);
+    const path = `M ${cx - w} ${cy} C ${cx - w * 0.5} ${top} ${cx + w * 0.5} ${top} ${cx + w} ${cy} C ${cx + w * 0.5} ${bottom} ${cx - w * 0.5} ${bottom} ${cx - w} ${cy} Z`;
+    const onTop = (t) => [bez(cx - w, cx - w * 0.5, cx + w * 0.5, cx + w, t), bez(cy, top, top, cy, t)];
+    const onBottom = (t) => [bez(cx + w, cx + w * 0.5, cx - w * 0.5, cx - w, t), bez(cy, bottom, bottom, cy, t)];
+    return { path, points: [[cx - w, cy], onTop(0.33), onTop(0.67), [cx + w, cy], onBottom(0.33), onBottom(0.67)] };
+  }
+
+  function buildEyes(svg, eyes, w, { labels = false } = {}) {
+    const defs = el(svg, "defs");
+    return eyes.map(([cx, cy, name], i) => {
+      const clip = el(defs, "clipPath", { id: `${svg.id}-clip-${i}` });
+      const clipPath = el(clip, "path");
+      const g = el(svg, "g");
+      const iris = el(g, "g", { "clip-path": `url(#${svg.id}-clip-${i})` });
+      el(iris, "circle", { cx, cy: cy - w * 0.08, r: w * 0.36, fill: "#1c2025", stroke: "#2d3239" });
+      el(iris, "circle", { cx, cy: cy - w * 0.08, r: w * 0.12, fill: "#060708" });
+      const outline = el(g, "path", { fill: "none", "stroke-width": 1.5 });
+      const dots = Array.from({ length: 6 }, () => el(g, "circle", { r: 4 }));
+      let label = null;
+      if (labels) label = el(g, "text", { x: cx, y: cy + w * 0.95, "text-anchor": "middle", "font-family": "Geist Mono, monospace", "font-size": 13, fill: "#6f6f69" });
+      return { cx, cy, name, clipPath, outline, dots, label };
+    });
+  }
+
+  function drawEyes(eyes, w, open, color) {
+    for (const eye of eyes) {
+      const shape = eyeShape(eye.cx, eye.cy, w, open);
+      eye.clipPath.setAttribute("d", shape.path);
+      eye.outline.setAttribute("d", shape.path);
+      eye.outline.setAttribute("stroke", color);
+      eye.dots.forEach((dot, i) => { dot.setAttribute("cx", shape.points[i][0]); dot.setAttribute("cy", shape.points[i][1]); dot.setAttribute("fill", color); });
+      if (eye.label) eye.label.textContent = `${eye.name} · EAR ${fmt(0.31 * open + 0.02, 2)}`;
+    }
+  }
+
+  // Demonstração do topo
+  const feed = document.getElementById("feed");
+  const corner = (x, y, dx, dy) => el(feed, "path", { d: `M ${x} ${y + dy} L ${x} ${y} L ${x + dx} ${y}`, fill: "none", stroke: "#3a3f47", "stroke-width": 2 });
+  corner(60, 60, 36, 36); corner(740, 60, -36, 36); corner(60, 390, 36, -36); corner(740, 390, -36, -36);
+  // Pontos do rosto bem apagados (contorno, sobrancelhas, nariz e boca): o Face Landmarker vê o rosto como pontos.
+  const faint = (px, py, r = 2.2) => el(feed, "circle", { cx: px, cy: py, r, fill: "#3b4047" });
+  for (let i = 0; i < 44; i++) { const a = (i / 44) * 2 * Math.PI; faint(400 + 238 * Math.cos(a), 248 + 206 * Math.sin(a)); }
+  for (const [bx, dir] of [[285, -1], [515, 1]]) for (let i = 0; i < 6; i++) { const u = i / 5 - 0.5; faint(bx + u * 150, 142 - 18 * Math.cos(u * Math.PI) + dir * u * 6); }
+  for (let i = 0; i < 5; i++) faint(400, 214 + i * 20);
+  for (const [nx, ny] of [[368, 318], [384, 326], [400, 329], [416, 326], [432, 318]]) faint(nx, ny);
+  for (let i = 0; i < 14; i++) { const a = (i / 14) * 2 * Math.PI; faint(400 + 66 * Math.cos(a), 382 + 15 * Math.sin(a)); }
+  const feedEyes = buildEyes(feed, [[285, 212, "OLHO DIREITO"], [515, 212, "OLHO ESQUERDO"]], 96, { labels: true });
+
+  const trace = document.getElementById("trace");
+  el(trace, "line", { x1: 0, y1: 34, x2: 800, y2: 34, stroke: "#2a2e35", "stroke-dasharray": "4 6" });
+  const traceArea = el(trace, "path", { fill: "rgb(70 193 127 / 0.08)" });
+  const traceLine = el(trace, "polyline", { fill: "none", stroke: "#46c17f", "stroke-width": 2, "vector-effect": "non-scaling-stroke" });
+
+  const CYCLE = 9.0;
+  const vee = (t, center, half) => { const x = Math.abs(t - center) / half; return x < 1 ? x : 1; };
+  function openness(t) {
+    let o = Math.min(vee(t, 1.6, 0.14), vee(t, 3.3, 0.15));
+    if (t >= 4.7 && t < 4.9) o = Math.min(o, 1 - (t - 4.7) / 0.2);
+    else if (t >= 4.9 && t < 6.1) o = 0;
+    else if (t >= 6.1 && t < 6.35) o = Math.min(o, (t - 6.1) / 0.25);
+    return Math.max(0.03, o);
+  }
+  const closedFor = (t) => (t >= 4.85 && t < 6.15 ? t - 4.85 : 0);
+  const alarmOn = (t) => t >= 5.85 && t < 8.3;
+
+  const demo = document.getElementById("demo");
+  const status = document.getElementById("status");
+  const mOpen = document.getElementById("m-open"), mClosed = document.getElementById("m-closed");
+  const mPerclos = document.getElementById("m-perclos"), mRisk = document.getElementById("m-risk");
+  const history = [];
+  const SAMPLES = 270;
+
+  function render(t) {
+    const o = openness(t), closed = closedFor(t), alarm = alarmOn(t);
+    drawEyes(feedEyes, 96, o, alarm ? "#ff5b4f" : closed > 0.25 ? "#ffb224" : "#46c17f");
+    demo.classList.toggle("is-alarm", alarm);
+    if (alarm) { status.className = "status alarm"; status.textContent = "MICROSSONO · 1,2 s · ALARME NA CABINE"; }
+    else if (closed > 0.25) { status.className = "status warn"; status.textContent = `OLHOS FECHADOS · ${fmt(closed)} s`; }
+    else { status.className = "status ok"; status.textContent = "RISCO NORMAL · OLHOS ABERTOS"; }
+    mOpen.textContent = `${Math.round(o * 100)}%`;
+    mClosed.textContent = closed > 0 ? `${fmt(closed)} s` : t >= 6.15 ? "1,2 s" : "0,3 s";
+    mPerclos.textContent = t >= 6.1 ? "6,2%" : "4,1%";
+    mRisk.textContent = alarm ? "Crítico" : "Normal";
+    mRisk.className = alarm ? "red" : "";
+  }
+
+  function renderTrace(values) {
+    const step = 800 / (SAMPLES - 1);
+    const pts = values.map((v, i) => `${(i * step).toFixed(1)},${(62 - v * 56).toFixed(1)}`);
+    traceLine.setAttribute("points", pts.join(" "));
+    traceArea.setAttribute("d", `M 0 68 L ${pts.join(" L ")} L ${((values.length - 1) * step).toFixed(1)} 68 Z`);
+  }
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) {
+    const frozen = 6.9; // olhos já abertos, alarme ainda ativo e o fechamento de 1,2 s visível na curva
+    for (let i = SAMPLES - 1; i >= 0; i--) history.push(openness(((frozen - i / 30) % CYCLE + CYCLE) % CYCLE));
+    render(frozen); renderTrace(history);
+  } else {
+    const start = performance.now();
+    let last = -1;
+    const tick = (now) => {
+      const t = ((now - start) / 1000) % CYCLE;
+      const sample = Math.floor((now - start) / (1000 / 30));
+      if (sample !== last) { last = sample; history.push(openness(t)); if (history.length > SAMPLES) history.shift(); renderTrace(history); }
+      render(t);
+      requestAnimationFrame(tick);
+    };
+    for (let i = SAMPLES; i > 0; i--) history.push(openness(((CYCLE - i / 30) % CYCLE + CYCLE) % CYCLE));
+    requestAnimationFrame(tick);
+  }
+
+  // Dia do motorista no painel
+  const day = document.getElementById("day");
+  const x = (h) => (h / 24) * 800;
+  for (let h = 0; h <= 24; h += 6) {
+    el(day, "line", { x1: x(h), y1: 0, x2: x(h), y2: 52, stroke: "#262a31" });
+    const label = el(day, "text", { x: Math.min(x(h) + 4, 780), y: 50, "font-family": "Geist Mono, monospace", "font-size": 10, fill: "#6f6f69" });
+    label.textContent = String(h).padStart(2, "0");
+  }
+  for (const [a, b, kind] of [[0, 2.67, "d"], [2.67, 7, "p"], [7, 11.5, "d"], [11.5, 12.5, "p"], [12.5, 16, "d"], [16, 24, "p"]]) {
+    el(day, "rect", { x: x(a), y: kind === "d" ? 12 : 20, width: x(b) - x(a) - 1, height: kind === "d" ? 18 : 2, rx: 2, fill: kind === "d" ? "#d9d6cc" : "#3a3e45" });
+  }
+  for (const [h, color] of [[1 + 52 / 60, "#ffb224"], [2 + 14 / 60, "#ff5b4f"], [2 + 21 / 60, "#ffb224"]]) {
+    el(day, "rect", { x: x(h) - 1.5, y: 4, width: 3, height: 34, fill: color });
+  }
+
+  // Curvas do olho nos eventos
+  for (const svg of document.querySelectorAll(".spark svg")) {
+    const dip = Number(svg.dataset.dip);
+    const pts = [];
+    for (let i = 0; i <= 72; i++) {
+      const t = (i / 72) * 4;
+      let o = 0.9 + 0.05 * Math.sin(i * 1.7);
+      if (Math.abs(t - 0.8) < 0.1) o = 0.2;
+      const c = 2.2, half = dip / 2;
+      if (t > c - half - 0.15 && t < c + half + 0.15) o = Math.abs(t - c) < half ? 0.05 : 0.45;
+      pts.push(`${(i * 2).toFixed(1)},${(24 - o * 22).toFixed(1)}`);
+    }
+    el(svg, "polyline", { points: pts.join(" "), fill: "none", stroke: dip >= 1 ? "#ff5b4f" : "#a2a19a", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" });
+  }
+
+  // Pontos do olho na seção de privacidade
+  const points = document.getElementById("points");
+  const privacyEyes = buildEyes(points, [[140, 100, ""], [340, 100, ""]], 70);
+  drawEyes(privacyEyes, 70, 0.85, "#46c17f");
+  for (const eye of privacyEyes) eye.label = null;
+</script>
+</body>
+</html>
