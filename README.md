@@ -1,4 +1,7 @@
-# DriveSafe AI
+# RotaGuard
+
+> O nome anterior do projeto era **DriveSafe AI**. Os identificadores no código (`DRIVESAFE_*`, `drivesafe.db`,
+> `~/.drivesafe`, serviço `drivesafe-monitor`) ainda não foram renomeados.
 
 Monitoramento de motoristas profissionais para frotas. Cada veículo tem um dispositivo (Raspberry Pi ou qualquer
 computador com câmera) que analisa o rosto do motorista e dispara o alarme no veículo. Os eventos vão para um
@@ -22,14 +25,14 @@ A partir disso, calcula um nível de risco de 0 a 3.
 ## Como funciona
 
 ```
-Veículo 1: câmera → dispositivo (run_monitor.py) ──┐
-Veículo 2: câmera → dispositivo                    ├── HTTP + token do dispositivo ──→ Servidor central ──→ Painel web
-Veículo N: câmera → dispositivo ───────────────────┘                                  (FastAPI + banco)    e CSV
+Veículo 1: câmera → dispositivo (caixa/run_monitor.py) ──┐
+Veículo 2: câmera → dispositivo                          ├── HTTP + token do dispositivo ──→ Servidor central ──→ Painel web
+Veículo N: câmera → dispositivo ─────────────────────────┘                                  (FastAPI + banco)    e CSV
                └─ fila local (SQLite): sem internet, guarda os eventos e reenvia quando a conexão volta
 ```
 
 - Cada dispositivo tem o **próprio token**. O servidor guarda só o hash, e um aparelho perdido é bloqueado
-  com `manage.py revogar-dispositivo` sem afetar os outros.
+  com `servidor/manage.py revogar-dispositivo` sem afetar os outros.
 - Reenviar o mesmo evento **não duplica** o registro.
 - Raspberry Pi sem relógio de bateria pode ligar com a data errada. O dispositivo manda há quantos segundos
   o evento aconteceu (relógio monotônico) e o **servidor corrige o horário**.
@@ -46,7 +49,8 @@ captura (camera.py) → rosto e olhos (face.py, pupil.py) → olhos visíveis? (
   → módulo 4: fusão, nível de risco e alertas (risk.py) → alarme e fila de eventos
 ```
 
-O `vision/engine.py` liga tudo. Avaliação fica em `analisar_video.py`, `avaliar_piscadas.py` e `avaliar_dataset.py`.
+O `caixa/vision/engine.py` liga tudo. Avaliação fica em `ferramentas/analisar_video.py`, `ferramentas/avaliar_piscadas.py`
+e `ferramentas/avaliar_dataset.py`.
 
 ## Módulo 1: sonolência
 
@@ -185,9 +189,11 @@ Hand Landmarker (21 pontos por mão). Rodam numa thread separada, ~4 vezes por s
 ```bash
 python -m venv .venv
 # Windows: .\.venv\Scripts\python.exe   |   macOS e Linux: .venv/bin/python
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python start_system.py --host 0.0.0.0
+.venv/bin/python -m pip install -r servidor/requirements.txt
+.venv/bin/python servidor/start_system.py --host 0.0.0.0
 ```
+
+Os comandos deste README rodam a partir da raiz do repositório. O banco continua em `data/`, na raiz.
 
 - O painel abre em `http://localhost:8000`.
 - `--host 0.0.0.0` deixa os dispositivos da rede enviarem dados. O terminal mostra o IP que eles devem usar.
@@ -197,26 +203,27 @@ python -m venv .venv
 ### Com Docker
 
 ```bash
+cd implantacao
 docker compose up -d --build
 docker compose exec servidor python manage.py criar-dispositivo --nome "Caminhão ABC-1234" --veiculo 1
 ```
 
 Para usar Postgres:
-1. Crie um arquivo `.env` com `POSTGRES_PASSWORD=...`.
-2. Descomente `DATABASE_URL` no `docker-compose.yml`.
-3. Suba com `docker compose --profile postgres up -d --build`.
+1. Crie um arquivo `implantacao/.env` com `POSTGRES_PASSWORD=...`.
+2. Descomente `DATABASE_URL` no `implantacao/docker-compose.yml`.
+3. Dentro de `implantacao/`, suba com `docker compose --profile postgres up -d --build`.
 
 ### Cadastros pela linha de comando
 
 | Comando | Para quê |
 |---|---|
-| `python manage.py criar-veiculo --placa ABC-1234 --modelo "Volvo FH" --tipo Caminhão` | Cadastra veículo |
-| `python manage.py criar-motorista --nome "Ana Lima" --cnh SP123456 --telefone 11999990000` | Cadastra motorista |
-| `python manage.py criar-dispositivo --nome "Caminhão ABC-1234" --veiculo 1 --motorista 1` | Cadastra dispositivo e **mostra o token uma única vez** |
-| `python manage.py vincular-dispositivo 1 --veiculo 2 --motorista 0` | Troca o veículo ou motorista do dispositivo (0 desliga) |
-| `python manage.py novo-token 1` | Gera token novo e invalida o anterior |
-| `python manage.py revogar-dispositivo 1` | Bloqueia o dispositivo; os alertas antigos ficam |
-| `python manage.py dispositivos` / `veiculos` / `motoristas` | Lista |
+| `python servidor/manage.py criar-veiculo --placa ABC-1234 --modelo "Volvo FH" --tipo Caminhão` | Cadastra veículo |
+| `python servidor/manage.py criar-motorista --nome "Ana Lima" --cnh SP123456 --telefone 11999990000` | Cadastra motorista |
+| `python servidor/manage.py criar-dispositivo --nome "Caminhão ABC-1234" --veiculo 1 --motorista 1` | Cadastra dispositivo e **mostra o token uma única vez** |
+| `python servidor/manage.py vincular-dispositivo 1 --veiculo 2 --motorista 0` | Troca o veículo ou motorista do dispositivo (0 desliga) |
+| `python servidor/manage.py novo-token 1` | Gera token novo e invalida o anterior |
+| `python servidor/manage.py revogar-dispositivo 1` | Bloqueia o dispositivo; os alertas antigos ficam |
+| `python servidor/manage.py dispositivos` / `veiculos` / `motoristas` | Lista |
 
 ### Variáveis do servidor
 
@@ -234,9 +241,9 @@ Para usar Postgres:
 
 ```bash
 python -m venv .venv
-.venv/bin/python -m pip install -r requirements-device.txt
+.venv/bin/python -m pip install -r caixa/requirements.txt
 export DRIVESAFE_DEVICE_TOKEN=dsk_...        # PowerShell: $env:DRIVESAFE_DEVICE_TOKEN="dsk_..."
-.venv/bin/python run_monitor.py --server-url http://192.168.0.10:8000
+.venv/bin/python caixa/run_monitor.py --server-url http://192.168.0.10:8000
 ```
 
 - Para rodar servidor e dispositivo no mesmo computador, instale os dois arquivos de requisitos no mesmo `.venv`.
@@ -259,8 +266,8 @@ Requisitos:
 sudo apt install python3-venv alsa-utils
 git clone <repositório> /opt/drivesafe && cd /opt/drivesafe
 python3 -m venv .venv
-.venv/bin/pip install -r requirements-device.txt
-.venv/bin/python run_monitor.py --no-window --server-url http://IP-DO-SERVIDOR:8000
+.venv/bin/pip install -r caixa/requirements.txt
+.venv/bin/python caixa/run_monitor.py --no-window --server-url http://IP-DO-SERVIDOR:8000
 ```
 
 - **Câmera USB:** `--camera 0`.
@@ -278,12 +285,12 @@ python3 -m venv .venv
   - um buzzer num pino GPIO (`--buzzer-pin 17`, pelo gpiozero do sistema);
   - uma caixa de som USB;
   - ou HDMI.
-- **Iniciar sozinho ao ligar:** siga as instruções em [`deploy/raspberry-pi/drivesafe-monitor.service`](deploy/raspberry-pi/drivesafe-monitor.service) e copie [`device.env.example`](deploy/raspberry-pi/device.env.example) para `/etc/drivesafe/device.env`.
-- **Com Docker, em Linux com webcam em `/dev/video0`:** `DRIVESAFE_DEVICE_TOKEN=dsk_... docker compose --profile dispositivo up -d --build`.
+- **Iniciar sozinho ao ligar:** siga as instruções em [`implantacao/raspberry-pi/drivesafe-monitor.service`](implantacao/raspberry-pi/drivesafe-monitor.service) e copie [`device.env.example`](implantacao/raspberry-pi/device.env.example) para `/etc/drivesafe/device.env`.
+- **Com Docker, em Linux com webcam em `/dev/video0`:** dentro de `implantacao/`, `DRIVESAFE_DEVICE_TOKEN=dsk_... docker compose --profile dispositivo up -d --build`.
 - **Posição da câmera:** de frente para o motorista, com o rosto ocupando boa parte da imagem. Com menos de ~30 px
   entre os olhos, a medida perde precisão.
 
-### Opções do `run_monitor.py`
+### Opções do `caixa/run_monitor.py`
 
 | Opção | Variável | Padrão |
 |---|---|---|
@@ -315,8 +322,8 @@ A cada minuto o log mostra o desempenho: fps e tempo por quadro (média, p95 e m
 ## 3. Analisar vídeos gravados
 
 ```bash
-.venv/bin/python analisar_video.py video.mp4 --saida resultados/
-.venv/bin/python analisar_video.py video.mp4 --saida resultados/ --celular --camera-ir nao
+.venv/bin/python ferramentas/analisar_video.py video.mp4 --saida resultados/
+.venv/bin/python ferramentas/analisar_video.py video.mp4 --saida resultados/ --celular --camera-ir nao
 ```
 
 - Calibra com o começo do vídeo: 5 min, ou um terço dele se for curto. Com `--perfil`, usa um perfil salvo no lugar.
@@ -334,7 +341,7 @@ A cada minuto o log mostra o desempenho: fps e tempo por quadro (média, p95 e m
 ### Piscadas contra anotação manual
 
 ```bash
-.venv/bin/python avaliar_piscadas.py resultados/video_piscadas.csv anotacao.csv --tolerancia 0.25
+.venv/bin/python ferramentas/avaliar_piscadas.py resultados/video_piscadas.csv anotacao.csv --tolerancia 0.25
 ```
 
 - A anotação é um CSV com `inicio_s` (e `fim_s`) por piscada, ou `tempo_s`, ou quadros com `--fps`.
@@ -343,10 +350,10 @@ A cada minuto o log mostra o desempenho: fps e tempo por quadro (média, p95 e m
 ### Dataset rotulado, com validação por sujeito
 
 ```bash
-.venv/bin/python avaliar_dataset.py extrair lista.csv --saida avaliacao/ --calibracao 300
-.venv/bin/python avaliar_dataset.py avaliar avaliacao/
-.venv/bin/python -m pip install -r requirements-eval.txt     # só para a opção abaixo
-.venv/bin/python avaliar_dataset.py avaliar avaliacao/ --classificador
+.venv/bin/python ferramentas/avaliar_dataset.py extrair lista.csv --saida avaliacao/ --calibracao 300
+.venv/bin/python ferramentas/avaliar_dataset.py avaliar avaliacao/
+.venv/bin/python -m pip install -r ferramentas/requirements.txt     # só para a opção abaixo
+.venv/bin/python ferramentas/avaliar_dataset.py avaliar avaliacao/ --classificador
 ```
 
 - **`lista.csv`:** colunas `video;sujeito;rotulo;calibracao`.
@@ -455,42 +462,63 @@ No Raspberry Pi ainda não foi medido.
 - Validar os limiares com vídeos reais da frota e montar um conjunto próprio de vídeos com consentimento dos
   motoristas (LGPD).
 - Revisão jurídica: LGPD (dado sensível e RIPD), CLT e as orientações de uso dos model cards.
-- `yolov8n.pt` é AGPL-3.0: não usar em produto fechado sem licença da Ultralytics (o código não usa).
+- `ferramentas/modelos/yolov8n.pt` é AGPL-3.0: não usar em produto fechado sem licença da Ultralytics (o código não usa).
 
 ## Estrutura
 
 ```
-backend/            API FastAPI, banco (SQLAlchemy), tokens, configuração
-dashboard/          painel web (HTML, CSS, JS)
-vision/             agente do dispositivo
-  camera.py         captura: webcam, arquivo, URL ou Pi Camera (com a luz informada pelo picamera2)
-  face.py           MediaPipe / YuNet: pontos do rosto, íris, olhar, luminância e medidas por quadro
-  eye_state.py      classificador de olho OCEC (OpenCV DNN)
-  pupil.py          razão pupila/íris em câmera infravermelha
-  visibility.py     óculos escuros e olhos fora da imagem
-  eyes.py           abertura relativa, perfil individual, piscadas, velocidade da pálpebra e AVR
-  calibration.py    calibração de 5 a 10 min
-  drowsiness.py     módulo 1: janelas, cabeceio, níveis de sonolência e eventos
-  activation.py     módulo 2: sinais compatíveis com ativação atípica
-  baseline.py       módulo 3: linha de base da viagem e acumulada, z-scores
-  context.py        tempo ao volante, madrugada e telemetria
-  phone.py          uso de celular
-  risk.py           módulo 4: fusão, histerese, rebote e eventos de risco
-  engine.py         liga os módulos a cada quadro
-  driver_monitor.py loop da câmera, desempenho e janela
-  evaluation.py     métricas de avaliação sem dependências
-  alarm.py          sirene (Windows, macOS, Linux, buzzer GPIO)
-  event_queue.py    fila local SQLite
-  sync.py           envio ao servidor com reenvio
-  models/           modelos (ver THIRD_PARTY_NOTICES.md)
-deploy/raspberry-pi serviço systemd e exemplo de configuração
-tests/              testes automáticos
-run_monitor.py      inicia o dispositivo
-analisar_video.py   analisa vídeos gravados
-avaliar_piscadas.py compara piscadas detectadas com anotação manual
-avaliar_dataset.py  avaliação em dataset rotulado, por sujeito
-manage.py           cadastros do servidor
-start_system.py     inicia o servidor
+caixa/                    software da caixa no veículo (Raspberry Pi + câmera)
+  run_monitor.py          inicia o dispositivo
+  requirements.txt        dependências da caixa (MediaPipe, OpenCV)
+  vision/                 agente do dispositivo (o modo teste do servidor também usa)
+    camera.py             captura: webcam, arquivo, URL ou Pi Camera (com a luz informada pelo picamera2)
+    face.py               MediaPipe / YuNet: pontos do rosto, íris, olhar, luminância e medidas por quadro
+    eye_state.py          classificador de olho OCEC (OpenCV DNN)
+    pupil.py              razão pupila/íris em câmera infravermelha
+    visibility.py         óculos escuros e olhos fora da imagem
+    eyes.py               abertura relativa, perfil individual, piscadas, velocidade da pálpebra e AVR
+    calibration.py        calibração de 5 a 10 min
+    drowsiness.py         módulo 1: janelas, cabeceio, níveis de sonolência e eventos
+    activation.py         módulo 2: sinais compatíveis com ativação atípica
+    baseline.py           módulo 3: linha de base da viagem e acumulada, z-scores
+    context.py            tempo ao volante, madrugada e telemetria
+    phone.py              uso de celular
+    risk.py               módulo 4: fusão, histerese, rebote e eventos de risco
+    engine.py             liga os módulos a cada quadro
+    driver_monitor.py     loop da câmera, desempenho e janela
+    evaluation.py         métricas de avaliação sem dependências
+    alarm.py              sirene (Windows, macOS, Linux, buzzer GPIO)
+    event_queue.py        fila local SQLite
+    sync.py               envio ao servidor com reenvio
+    models/               modelos (ver THIRD_PARTY_NOTICES.md)
+servidor/                 servidor central
+  backend/                API FastAPI, banco (SQLAlchemy), tokens, configuração, modo teste
+  manage.py               cadastros do servidor
+  start_system.py         inicia o servidor
+  requirements.txt        dependências do servidor
+painel/                   painel da empresa
+  webapp/                 app instalável (PWA), servido pelo servidor
+  legado/                 painel antigo (HTML, CSS, JS); o servidor não serve mais
+  servir_app_local.py     abre o webapp/ no modo de teste local, sem servidor e sem banco
+  abrir-app-local.cmd     o mesmo, com dois cliques no Windows
+ferramentas/              validação com gravações
+  analisar_video.py       analisa vídeos gravados (também chamado pelo modo teste do servidor)
+  avaliar_piscadas.py     compara piscadas detectadas com anotação manual
+  avaliar_gestos.py       compara gestos de sono (olhos esfregados, mão no rosto) com anotação manual
+  avaliar_celular.py      calibra a detecção de celular com gravações anotadas
+  avaliar_dataset.py      avaliação em dataset rotulado, por sujeito
+  teste_mediapipe.py      mostra a versão e a API do MediaPipe instalado
+  anotacoes/              modelos de planilha de anotação
+  modelos/yolov8n.pt      YOLOv8 (AGPL-3.0), não usado pelo código
+  requirements.txt        scikit-learn, só para avaliar_dataset.py --classificador
+implantacao/              Docker e Raspberry Pi
+  Dockerfile.servidor     imagem do servidor
+  Dockerfile.caixa        imagem do agente (Linux com webcam)
+  docker-compose.yml      servidor, Postgres opcional e agente (rode de dentro desta pasta)
+  raspberry-pi/           serviço systemd e exemplo de configuração
+tests/                    testes automáticos (ex.: python tests/test_detector.py)
+docs/                     documentação do site
+data/                     banco e análises do servidor (fora do git)
 ```
 
 ## Licenças e créditos

@@ -1,0 +1,33 @@
+# Serviço systemd do agente DriveSafe AI no Raspberry Pi.
+#
+# Instalação (projeto em /opt/drivesafe, com o .venv criado lá):
+#   sudo cp implantacao/raspberry-pi/drivesafe-monitor.service /etc/systemd/system/
+#   sudo mkdir -p /etc/drivesafe
+#   sudo cp implantacao/raspberry-pi/device.env.example /etc/drivesafe/device.env
+#   sudo nano /etc/drivesafe/device.env
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now drivesafe-monitor
+#   journalctl -u drivesafe-monitor -f
+
+[Unit]
+Description=DriveSafe AI - monitoramento de sonolência do motorista
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Troque pelo usuário que instalou o projeto: o Raspberry Pi OS atual não cria mais o usuário "pi".
+User=drivesafe
+SupplementaryGroups=video audio gpio
+WorkingDirectory=/opt/drivesafe
+Environment=DRIVESAFE_DATA_DIR=/var/lib/drivesafe
+EnvironmentFile=/etc/drivesafe/device.env
+StateDirectory=drivesafe
+ExecStart=/opt/drivesafe/.venv/bin/python caixa/run_monitor.py --no-window
+Restart=always
+RestartSec=5
+# Tempo para mandar os últimos eventos ao servidor antes de desligar.
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

@@ -3,7 +3,7 @@
 Banco antigo, login (e-mail ou celular) e papéis, acessos criados só pela equipe, escopo por empresa, tokens,
 reenvio, relógio, política de consentimento no heartbeat, revisão, tempo real, CSV e modo teste.
 
-Rode com o Python que tem as dependências do servidor (requirements.txt):
+Rode com o Python que tem as dependências do servidor (servidor/requirements.txt):
     python tests/test_server_sync.py
 """
 import http.cookiejar
@@ -22,7 +22,8 @@ import urllib.request
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT))
+SERVIDOR = PROJECT / "servidor"
+sys.path.insert(0, str(PROJECT / "caixa"))
 from vision.event_queue import EventStore  # noqa: E402
 from vision.sync import ServerClient, SyncWorker  # noqa: E402
 
@@ -121,7 +122,7 @@ def alerts(browser, **params):
 
 def manage(*args, password=None):
     run_env = dict(env, DRIVESAFE_SENHA_INICIAL=password) if password else env
-    result = subprocess.run([sys.executable, "manage.py", *args], cwd=PROJECT, env=run_env,
+    result = subprocess.run([sys.executable, "manage.py", *args], cwd=SERVIDOR, env=run_env,
                             capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, f"manage.py {args}: {result.stdout}\n{result.stderr}"
     return result.stdout
@@ -137,7 +138,7 @@ def db_value(sql, *params):
 
 log = open(work / "server.log", "w", encoding="utf-8")
 server = subprocess.Popen([sys.executable, "-m", "uvicorn", "backend.main:app", "--port", str(port)],
-                          cwd=PROJECT, env=env, stdout=log, stderr=subprocess.STDOUT)
+                          cwd=SERVIDOR, env=env, stdout=log, stderr=subprocess.STDOUT)
 store = None
 try:
     anon = Browser(csrf=False)

@@ -8,6 +8,9 @@ data/
 *.db-wal
 *.db-shm
 
+# Saídas das ferramentas de validação (ferramentas/analisar_video.py --saida resultados/)
+resultados/
+
 # Configuração local de dispositivo com token
 *.env
 !*.env.example

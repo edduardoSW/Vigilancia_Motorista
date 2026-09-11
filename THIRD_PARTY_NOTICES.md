@@ -2,7 +2,7 @@
 
 Este projeto usa software, modelos e dados de terceiros. Cada item mantém a sua própria licença.
 
-## Modelos incluídos em `vision/models/`
+## Modelos incluídos em `caixa/vision/models/`
 
 | Arquivo | Origem | Autor | Licença | SHA-256 |
 |---|---|---|---|---|
@@ -73,7 +73,7 @@ Instaladas pelo `pip`, não redistribuídas neste repositório. Versões testada
 | Dispositivo | mediapipe | 1.0.1 | Apache 2.0 |
 | Dispositivo | opencv-contrib-python | 5.0.0.93 | Apache 2.0 |
 | Dispositivo | numpy | 2.5.3 | BSD-3-Clause (e componentes 0BSD, MIT, Zlib, CC0) |
-| Dispositivo | matplotlib (dependência do MediaPipe; gráfico do `analisar_video.py`) | 3.11.1 | licença própria do matplotlib (estilo PSF) |
+| Dispositivo | matplotlib (dependência do MediaPipe; gráfico do `ferramentas/analisar_video.py`) | 3.11.1 | licença própria do matplotlib (estilo PSF) |
 | Dispositivo | sounddevice (dependência do MediaPipe) | 0.5.6 | MIT |
 | Dispositivo | absl-py, flatbuffers (dependências do MediaPipe) | 2.5.0, 25.12.19 | Apache 2.0 |
 | Avaliação (opcional) | scikit-learn | 1.9.0 | BSD-3-Clause |
@@ -137,9 +137,9 @@ O psycopg é LGPL-3.0:
 
 ## Arquivo existente com licença restritiva
 
-- `yolov8n.pt` (Ultralytics YOLOv8): AGPL-3.0. Uso em produto comercial fechado exige a licença Enterprise
+- `ferramentas/modelos/yolov8n.pt` (Ultralytics YOLOv8): AGPL-3.0. Uso em produto comercial fechado exige a licença Enterprise
   da Ultralytics. O código atual não usa esse arquivo; a detecção de celular usa o EfficientDet-Lite0 (Apache 2.0).
 
 Nenhum dataset de sonolência (NTHU-DDD, UTA-RLDD, DMD, YawDD, MRL Eye, DROZY) está incluído neste
 repositório nem foi usado para treinar os modelos acima. Esses datasets costumam ser liberados só para pesquisa:
-o `avaliar_dataset.py` serve para medir o detector, e usar os resultados em produto exige conferir cada licença.
+o `ferramentas/avaliar_dataset.py` serve para medir o detector, e usar os resultados em produto exige conferir cada licença.

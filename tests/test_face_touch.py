@@ -1,6 +1,6 @@
 """Gestos de sono com as mãos (coçar os olhos e mão no rosto) com um detector falso de mãos e celular.
 
-Precisa de numpy e opencv (requirements-device.txt):
+Precisa de numpy e opencv (caixa/requirements.txt):
     python tests/test_face_touch.py
 """
 import math
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "caixa"))
 from vision.drowsiness import Assessment, DrowsinessMonitor  # noqa: E402
 from vision.engine import DriverStateEngine  # noqa: E402
 from vision.eyes import Sample  # noqa: E402

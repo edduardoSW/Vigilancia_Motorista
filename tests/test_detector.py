@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "caixa"))
 from vision.calibration import Calibrator  # noqa: E402
 from vision.drowsiness import DrowsinessMonitor  # noqa: E402
 from vision.eyes import DriverProfile, OpennessModel, Sample  # noqa: E402

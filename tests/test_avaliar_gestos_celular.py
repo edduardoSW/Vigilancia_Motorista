@@ -11,7 +11,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 PROJECT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "caixa"))
+sys.path.insert(0, str(PROJECT / "ferramentas"))
 import analisar_video  # noqa: E402
 import avaliar_celular  # noqa: E402
 import avaliar_gestos  # noqa: E402

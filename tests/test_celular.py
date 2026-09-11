@@ -1,6 +1,6 @@
 """Celular: regras de tempo com um detector falso e, se o MediaPipe estiver instalado, os modelos reais.
 
-Precisa de numpy e opencv (requirements-device.txt):
+Precisa de numpy e opencv (caixa/requirements.txt):
     python tests/test_celular.py
 """
 import math
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "caixa"))
 from vision.eyes import Sample  # noqa: E402
 from vision.phone import (  # noqa: E402
     PhoneMonitor,

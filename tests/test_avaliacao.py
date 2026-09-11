@@ -10,7 +10,8 @@ import tempfile
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT / "caixa"))
+sys.path.insert(0, str(PROJECT / "ferramentas"))
 import avaliar_dataset  # noqa: E402
 import avaliar_piscadas  # noqa: E402
 from vision.evaluation import (  # noqa: E402
