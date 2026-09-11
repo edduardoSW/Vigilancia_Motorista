@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { B612, Sofia_Sans, Sofia_Sans_Extra_Condensed } from "next/font/google";
+import { Manrope, Space_Grotesk } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import { SiteFooter } from "@/components/site-footer";
@@ -9,15 +9,9 @@ import { site } from "@/content/site";
 import { routing } from "@/i18n/routing";
 import "../globals.css";
 
-// Sofia Sans: sistema tipográfico de uma cidade, com larguras para título enorme e texto corrido.
-// B612: desenhada pela Airbus com a ENAC para telas de cabine; aqui é a "voz do instrumento" (escalas, dados).
-const sofia = Sofia_Sans({ subsets: ["latin"], variable: "--font-sofia", display: "swap" });
-const sofiaCondensada = Sofia_Sans_Extra_Condensed({
-  subsets: ["latin"],
-  variable: "--font-sofia-condensada",
-  display: "swap",
-});
-const b612 = B612({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-b612", display: "swap" });
+// Technical display typography paired with a quieter face for short reading.
+const bodyFont = Manrope({ subsets: ["latin"], variable: "--font-body", display: "swap" });
+const displayFont = Space_Grotesk({ subsets: ["latin"], variable: "--font-display", display: "swap" });
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -43,6 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title: t("titulo"),
       description: t("descricao"),
       locale: idiomaDe(locale).htmlLang.replace("-", "_"),
+      images: [{url: "/midia/rotaguard/onibus-rodoviario.webp", width: 1536, height: 1024}],
     },
     robots: site.indexar ? undefined : { index: false, follow: false },
   };
@@ -55,7 +50,7 @@ export default async function LocaleLayout({ children }: { children: React.React
   return (
     <html
       lang={idiomaDe(locale).htmlLang}
-      className={`${sofia.variable} ${sofiaCondensada.variable} ${b612.variable}`}
+      className={`${bodyFont.variable} ${displayFont.variable}`}
     >
       <body>
         <NextIntlClientProvider>

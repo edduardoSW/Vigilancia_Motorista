@@ -1,357 +1,168 @@
 {
-  "meta": {
-    "titulo": "RotaGuard · Sono e celular ao volante, avisados na cabine e registrados na caixa",
-    "descricao": "Caixa com câmera para caminhões e ônibus: avisa o motorista na hora, registra a viagem e grava só trechos curtos quando um sinal se repete. Na chegada, o relatório sai ao conectar a caixa.",
-    "tituloCurto": "RotaGuard"
-  },
-  "comum": {
-    "pularConteudo": "Pular para o conteúdo",
-    "estagio": "Protótipo em testes · piloto aberto para as primeiras frotas",
-    "fotoProvisoria": "Foto provisória",
-    "exemplo": "Exemplo com dados fictícios",
-    "emDefinicao": "em definição"
-  },
-  "nav": {
-    "rotulo": "Principal",
-    "comoFunciona": "Como funciona",
-    "chegada": "Relatório",
-    "motoristas": "Motoristas",
-    "piloto": "Piloto",
-    "perguntas": "Perguntas",
-    "entrar": "Já é cliente? Entrar",
-    "whatsapp": "Falar no WhatsApp",
-    "menu": "Menu",
-    "fechar": "Fechar",
-    "idioma": "Idioma",
-    "inicio": "RotaGuard, início"
-  },
-  "escalas": {
-    "rotulo": "Escala da página",
-    "mundo": "Mundo",
-    "brasil": "Brasil",
-    "rota": "Rota",
-    "rodovia": "Rodovia",
-    "cabine": "Cabine",
-    "olho": "Olho",
-    "garagem": "Garagem",
-    "relatorio": "Relatório",
-    "fronteira": "imagem"
-  },
-  "hero": {
-    "ato": "Ato I · A malha",
-    "titulo": "Sono e celular ao volante: avisados na cabine, registrados na caixa.",
-    "texto": "RotaGuard é uma caixa com câmera para caminhões e ônibus. Quando o motorista fecha os olhos por 1 segundo ou pega o celular, o alarme toca. Tudo vai para o registro da viagem, e a câmera só guarda um trecho curto quando um sinal se repete. Na chegada, a caixa entrega o relatório.",
-    "ctaPrincipal": "Falar no WhatsApp",
-    "ctaSecundario": "Ver como funciona",
-    "mapaTitulo": "A noite agora",
-    "mapaLegenda": "A área escura é a noite neste instante, calculada pela posição do Sol.",
-    "mapaRegra": "Das 00h às 6h59, sinais leves de sono pesam mais no risco.",
-    "agora": "Agora em Brasília",
-    "portasTitulo": "Escolha a sua frota",
-    "portas": {
-      "carga": {
-        "titulo": "Carga e logística",
-        "texto": "Carretas, trucks e VUCs"
-      },
-      "fretamento": {
-        "titulo": "Fretamento e rodoviário",
-        "texto": "Viagens noturnas com passageiros"
-      },
-      "urbano": {
-        "titulo": "Ônibus urbano",
-        "texto": "Corredores, garagens e turnos longos"
-      }
-    }
-  },
-  "brasil": {
-    "titulo": "A malha é do tamanho do Brasil. O risco cabe numa cabine.",
-    "texto": "Carga e passageiros rodam dia e noite pelas rodovias federais. Em qualquer uma delas, 1 segundo de olhos fechados a 90 km/h são 25 metros sem ninguém olhando a estrada.",
-    "numeroRotulo": "quilômetros de rodovias federais neste mapa",
-    "legendaMalha": "Rodovias federais",
-    "legendaRota": "BR-116, São Paulo–Curitiba: viagem de demonstração",
-    "fonte": "Fonte: Sistema Nacional de Viação (DNIT); divisas: IBGE."
-  },
-  "rota": {
-    "titulo": "Uma noite na BR-116, de São Paulo a Curitiba.",
-    "aviso": "Viagem de demonstração. O RotaGuard não registra localização: cada anotação tem hora, não posição.",
-    "distancia": "{km} km",
-    "paradas": {
-      "saida": {
-        "hora": "22:40",
-        "titulo": "Saída",
-        "texto": "A caixa liga com o veículo e passa os primeiros 5 a 10 minutos aprendendo o jeito de piscar do motorista. O alarme de olhos fechados já funciona nesse período."
-      },
-      "madrugada": {
-        "hora": "00:00",
-        "titulo": "Começa a madrugada",
-        "texto": "Até as 6h59, sinais leves de sono levam o risco a subir mais cedo."
-      },
-      "alarme": {
-        "hora": "02:14",
-        "titulo": "Olhos fechados por 1,2 segundo",
-        "texto": "O alarme toca na cabine. O registro anota o tipo, a hora e a duração."
-      },
-      "semSinal": {
-        "hora": "02:31",
-        "titulo": "Sem sinal de celular",
-        "texto": "Nada muda. O alarme e o registro funcionam dentro da caixa, sem internet."
-      },
-      "trecho": {
-        "hora": "03:10",
-        "titulo": "Terceiro microssono em 30 minutos",
-        "texto": "O sinal se repetiu. A caixa guarda um trecho de 20 segundos, cifrado, e anota no registro."
-      },
-      "jornada": {
-        "hora": "04:10",
-        "titulo": "5 h 30 ao volante",
-        "texto": "O limite de direção contínua do CTB, art. 67-C. O risco sobe e o registro anota."
-      },
-      "chegada": {
-        "hora": "06:50",
-        "titulo": "Chegada a Curitiba",
-        "texto": "A empresa recolhe a caixa."
-      },
-      "relatorio": {
-        "hora": "07:05",
-        "titulo": "Relatório",
-        "texto": "Ao conectar a caixa, o sistema reconhece o equipamento, confere o registro e monta o relatório da noite."
-      }
-    }
-  },
-  "rodovia": {
-    "titulo": "02:14. Na cabine, só o motorista e a estrada.",
-    "texto": "É nessa hora que a caixa trabalha: sem tela, sem distrair, pronta para tocar o alarme."
-  },
-  "cabine": {
-    "ato": "Ato II · A cabine",
-    "titulo": "Uma caixa no painel. Um alarme que o motorista ouve.",
-    "seletor": "Tipo de veículo",
-    "caminhao": "Caminhão",
-    "onibus": "Ônibus",
-    "itens": {
-      "camera": "Câmera voltada para o rosto do motorista",
-      "processa": "A imagem é analisada dentro da caixa, sem internet",
-      "semTela": "Sem tela: o aviso é sonoro",
-      "liga": "Liga sozinha quando recebe energia do veículo"
-    },
-    "prototipo": "Protótipo: Raspberry Pi com câmera. A caixa final está em definição."
-  },
-  "alarme": {
-    "titulo": "O que faz o alarme tocar.",
-    "sono": {
-      "titulo": "Sono",
-      "um": "olhos fechados: alarme",
-      "tres": "o alarme continua e o registro marca sono",
-      "seis": "sem resposta: o evento mais grave",
-      "extra": "Piscadas mais longas que as do próprio motorista, bocejos e cabeceios também somam no risco."
-    },
-    "celular": {
-      "titulo": "Celular",
-      "texto": "Na mão, no ouvido ou olhando para ele por mais de 2 segundos. Parado no suporte não conta como celular na mão."
-    },
-    "contexto": {
-      "titulo": "Hora e jornada",
-      "texto": "De madrugada e depois de 5 h 30 seguidas ao volante (CTB, art. 67-C), sinais leves de sono pesam mais."
-    },
-    "nota": "Limites iniciais, baseados no protocolo Euro NCAP e na calibração de cada motorista. Em validação com gravações reais."
-  },
-  "olho": {
-    "titulo": "A viagem não é filmada. É registrada.",
-    "texto": "A câmera olha o rosto a cada quadro, e a imagem é descartada na hora. O que fica é o registro: cada evento com hora, duração e nível. Imagem, só um trecho curto quando um sinal se repete muito, como sonolência frequente por muito tempo.",
-    "faixaTitulo": "Viagem de 8 horas",
-    "faixaRegistro": "Registro: a noite inteira",
-    "faixaTrechos": "Trechos guardados: 2 × 20 s",
-    "faixaResumo": "{porcentagem} do tempo com imagem guardada",
-    "cifrado": "Os trechos ficam cifrados dentro da caixa e só abrem no sistema da empresa.",
-    "ativacao": "Sinais compatíveis com ativação atípica, como a causada por estimulantes, também entram no registro e podem gerar um trecho. É um alerta para revisão humana, não diagnóstico nem exame toxicológico.",
-    "pontos": "6 pontos por olho medem a abertura"
-  },
-  "garagem": {
-    "ato": "Ato III · A chegada",
-    "titulo": "Na garagem, a caixa sai do veículo e entrega a noite.",
-    "passos": {
-      "recolher": {
-        "titulo": "Recolher",
-        "texto": "Quando o motorista chega, a empresa recolhe a caixa."
-      },
-      "conectar": {
-        "titulo": "Conectar",
-        "texto": "Ligada por cabo ao computador ou à rede do escritório, a caixa é reconhecida pelo sistema."
-      },
-      "conferir": {
-        "titulo": "Conferir",
-        "texto": "O sistema confere se o registro está completo e sem alteração."
-      },
-      "relatorio": {
-        "titulo": "Relatório",
-        "texto": "O relatório da viagem fica pronto para revisão."
-      }
-    },
-    "nota": "Enviar os eventos pela internet durante a viagem é opcional."
-  },
-  "relatorio": {
-    "titulo": "A noite inteira numa página.",
-    "texto": "Cada evento passa por uma pessoa: confirmado, alarme falso ou motorista orientado. Quem revisou fica anotado. O relatório sai em PDF e planilha.",
-    "ficha": {
-      "cabecalho": "Relatório da viagem",
-      "veiculo": "Veículo",
-      "veiculoValor": "Carreta 12",
-      "periodo": "Período",
-      "periodoValor": "22:40 → 06:50",
-      "direcao": "Maior direção contínua",
-      "direcaoValor": "5 h 30",
-      "madrugada": "Na madrugada",
-      "madrugadaValor": "6 h 50",
-      "eventos": "Eventos",
-      "microssono": "Microssono",
-      "celular": "Celular",
-      "jornada": "Jornada",
-      "trechos": "Trechos guardados",
-      "trechosValor": "1 × 20 s",
-      "integridade": "Registro",
-      "integridadeValor": "Completo · assinado pela caixa",
-      "revisao": "Revisão",
-      "confirmado": "Confirmado",
-      "falso": "Alarme falso",
-      "orientado": "Motorista orientado"
-    }
-  },
-  "motoristas": {
-    "titulo": "Para quem dirige: o alarme é seu.",
-    "itens": {
-      "filmagem": "A viagem não é filmada. A câmera só guarda trechos curtos quando um sinal se repete muito.",
-      "alarme": "O alarme existe para você parar em segurança, não para punir.",
-      "dados": "Você autoriza o uso dos seus dados e pode ver e baixar o que foi registrado.",
-      "revisao": "Todo evento passa por uma pessoa antes de qualquer conversa. Alarme falso fica marcado.",
-      "oculos": "Com óculos escuros, a caixa avisa que não vê os olhos e não conta isso como sono."
-    },
-    "compartilhar": "Enviar esta explicação aos motoristas",
-    "mensagemCompartilhar": "Como funciona o RotaGuard para quem dirige: {url}"
-  },
-  "piloto": {
-    "titulo": "Um piloto do tamanho da sua operação.",
-    "passos": {
-      "conversa": "Conversa sobre frota, rotas e turnos",
-      "instalacao": "Instalação na garagem",
-      "viagens": "Viagens reais, com relatório a cada chegada",
-      "resultado": "Revisão dos resultados com a sua equipe"
-    },
-    "nota": "Número de veículos, prazo e preço são combinados na conversa."
-  },
-  "perguntas": {
-    "titulo": "Perguntas diretas.",
-    "itens": {
-      "filma": {
-        "pergunta": "A caixa filma a viagem?",
-        "resposta": "Não. A imagem é analisada e descartada a cada quadro. Só um trecho curto (hoje, até 20 segundos) é guardado quando um sinal se repete muito, e ele fica cifrado."
-      },
-      "drogas": {
-        "pergunta": "Detecta uso de drogas?",
-        "resposta": "Não faz diagnóstico nem exame. A caixa aponta sinais compatíveis com ativação atípica, que vão para revisão humana. O exame toxicológico previsto em lei continua sendo outro processo."
-      },
-      "oculos": {
-        "pergunta": "Óculos escuros ou sol atrapalham?",
-        "resposta": "Com óculos escuros, a caixa avisa que não vê os olhos e não conta isso como sono. A câmera infravermelha, que enxerga através de muitos óculos e à noite, está em teste."
-      },
-      "internet": {
-        "pergunta": "Funciona sem internet?",
-        "resposta": "Sim. O alarme e o registro funcionam dentro da caixa. O relatório sai quando a caixa é conectada na chegada."
-      },
-      "gps": {
-        "pergunta": "Precisa de rastreador ou GPS?",
-        "resposta": "Não. O RotaGuard funciona sozinho e não registra localização."
-      },
-      "custo": {
-        "pergunta": "Quanto custa?",
-        "resposta": "Depende do tamanho da frota e do piloto. Fale com a gente pelo WhatsApp."
-      },
-      "acidentes": {
-        "pergunta": "Quanto reduz de acidentes?",
-        "resposta": "Ainda não publicamos percentual, porque não há piloto concluído. O piloto mede isso na sua frota."
-      },
-      "lgpd": {
-        "pergunta": "E a LGPD?",
-        "resposta": "A caixa guarda o mínimo: o registro dos eventos e trechos curtos cifrados, com a autorização do motorista registrada. A análise jurídica do produto está em andamento."
-      }
-    }
-  },
-  "ficha": {
-    "titulo": "Ficha técnica",
-    "colunaItem": "Item",
-    "colunaValor": "Como é",
-    "colunaSituacao": "Situação",
-    "situacoes": {
-      "testado": "testado em computador",
-      "validacao": "limites em validação",
-      "desenvolvimento": "em desenvolvimento",
-      "prototipo": "protótipo",
-      "teste": "em teste"
-    },
-    "linhas": {
-      "caixa": { "item": "Caixa", "valor": "Raspberry Pi 4 (4 GB) com câmera" },
-      "sono": { "item": "Sono", "valor": "Olhos fechados (1, 3 e 6 s), PERCLOS, piscadas, bocejo, cabeceio" },
-      "celular": { "item": "Celular", "valor": "Na mão, no ouvido, olhando por mais de 2 s" },
-      "alarme": { "item": "Aviso", "valor": "Alarme sonoro na cabine" },
-      "registro": { "item": "Registro da viagem", "valor": "Encadeado e assinado pela caixa" },
-      "trechos": { "item": "Trechos", "valor": "Até 20 s, só quando um sinal se repete, cifrados" },
-      "coleta": { "item": "Chegada", "valor": "Cabo ou rede; relatório em PDF e planilha" },
-      "internet": { "item": "Internet", "valor": "Não precisa durante a viagem" },
-      "camera": { "item": "Câmera", "valor": "Comum; infravermelha em teste" },
-      "local": { "item": "Localização", "valor": "Não registra" }
-    }
-  },
-  "contato": {
-    "titulo": "Vamos testar na sua frota.",
-    "texto": "Conte o tamanho da frota e as rotas. A gente responde pelo WhatsApp.",
-    "carga": "Carga e logística",
-    "fretamento": "Fretamento e rodoviário",
-    "urbano": "Ônibus urbano",
-    "ligar": "Ligar",
-    "semNumero": "Número de WhatsApp ainda não configurado.",
-    "mensagens": {
-      "carga": "Olá! Vim pelo site do RotaGuard [C1]. Tenho uma frota de carga e quero entender o piloto.",
-      "fretamento": "Olá! Vim pelo site do RotaGuard [F1]. Tenho ônibus de fretamento ou rodoviário e quero entender o piloto.",
-      "urbano": "Olá! Vim pelo site do RotaGuard [U1]. Opero ônibus urbanos e quero entender o piloto.",
-      "geral": "Olá! Vim pelo site do RotaGuard e quero entender como funciona."
-    }
-  },
-  "rodape": {
-    "marca": "RotaGuard · protótipo em testes",
-    "mapas": "Mapas: Natural Earth (domínio público); malha federal: DNIT/SNV; divisas: IBGE.",
-    "fotos": "Créditos das fotos provisórias",
-    "direitos": "© 2026 RotaGuard"
-  },
-  "entrar": {
-    "titulo": "Área do cliente",
-    "texto": "Digite o PIN que a equipe RotaGuard enviou para baixar o app.",
-    "pin": "PIN",
-    "botao": "Entrar",
-    "erroPin": "PIN incorreto.",
-    "erroBloqueio": "Muitas tentativas. Tente de novo em 15 minutos.",
-    "erroConfig": "O acesso ainda não foi configurado neste servidor.",
-    "semPin": "Não tem PIN? Fale com a gente pelo WhatsApp."
-  },
-  "app": {
-    "titulo": "Baixar o app RotaGuard",
-    "texto": "Painel da empresa e do motorista, com relatórios das viagens e modo de teste com a câmera do aparelho.",
-    "baixar": "Baixar",
-    "emPreparacao": "Em preparação",
-    "sair": "Sair",
-    "plataformas": {
-      "windows": { "nome": "Windows", "formato": "Instalador .exe" },
-      "macos": { "nome": "macOS", "formato": "Arquivo .dmg" },
-      "linux": { "nome": "Linux", "formato": ".AppImage ou .deb" },
-      "android": { "nome": "Android", "formato": "Arquivo .apk" },
-      "ios": { "nome": "iPhone e iPad", "formato": "No Safari: Compartilhar → Adicionar à Tela de Início" }
-    }
-  },
-  "creditos": {
-    "titulo": "Créditos",
-    "fotos": "Fotos provisórias",
-    "aviso": "Estas fotos são provisórias, de bancos com licença livre, e serão trocadas pela série própria do RotaGuard.",
-    "mapas": "Dados de mapa",
-    "autor": "Autor",
-    "licenca": "Licença",
-    "fonte": "Fonte"
-  }
+    "meta":  {
+                 "titulo":  "RotaGuard — 每段旅程，都值得平安抵达。",
+                 "descricao":  "面向城际客运与物流的驾驶员监测。了解 RotaGuard 设备、驾驶室提醒及行程记录方案。",
+                 "tituloCurto":  "RotaGuard"
+             },
+    "comum":  {
+                  "pularConteudo":  "跳转到正文"
+              },
+    "nav":  {
+                "rotulo":  "主导航",
+                "inicio":  "RotaGuard 首页",
+                "produto":  "产品",
+                "operacao":  "工作方式",
+                "frotas":  "适用车队",
+                "entrar":  "客户专区",
+                "contato":  "联系我们",
+                "menu":  "打开菜单",
+                "fechar":  "关闭菜单",
+                "idioma":  "语言"
+            },
+    "rodape":  {
+                   "marca":  "科技随行，每一公里都用心守护。",
+                   "topo":  "返回顶部",
+                   "viagem":  "一路平安",
+                   "estagio":  "在巴西研发中的产品",
+                   "fotos":  "图片与来源"
+               },
+    "home":  {
+                 "eyebrow":  "以科技守护每一位驾驶者",
+                 "headline1":  "每段旅程",
+                 "headline2":  "都值得",
+                 "headline3":  "平安抵达。",
+                 "intro":  "驾驶室内的细心关注，车队运营的行程记录。RotaGuard 为客运与货运而设计。",
+                 "discover":  "了解 RotaGuard",
+                 "heroFoot":  "公路客运与货运",
+                 "scroll":  "探索产品",
+                 "deviceMini":  "小巧随行。",
+                 "conceptShort":  "设计概念",
+                 "promise0":  "驾驶室声音提醒",
+                 "promise1":  "离线处理",
+                 "promise2":  "以行程记录为核心",
+                 "productLabel":  "01 / 产品",
+                 "productTitle1":  "小巧置于仪表台。",
+                 "productTitle2":  "每段旅程始终相伴。",
+                 "productIntro":  "摄像头、处理与提醒集于一体。关怀从车内开始。",
+                 "deviceLabel":  "驾驶员监测",
+                 "explore":  "探索设备功能",
+                 "concept":  "设备概念图。最终外壳与部件有待验证。",
+                 "featureTitle0":  "关注驾驶员",
+                 "featureText0":  "摄像头关注困倦与手机使用迹象。分析在设备内完成，无需网络连接。",
+                 "featureTitle1":  "在驾驶室发出提醒",
+                 "featureText1":  "声音提醒引起驾驶员注意，无需额外屏幕分散对道路的关注。",
+                 "featureTitle2":  "留下行程记录",
+                 "featureText2":  "产品计划记录事件的时间与背景，并通过重复迹象触发的短片辅助行程复核。",
+                 "operationLink":  "查看行程流程",
+                 "fleetLabel":  "02 / 适用场景",
+                 "fleetTitle1":  "目的地各不相同。",
+                 "fleetTitle2":  "每程关怀始终如一。",
+                 "fleetIntro":  "从搭载乘客到运输货物，以公路运输的日常运营为设计出发点。",
+                 "fleetSelector":  "选择车队类型",
+                 "busTitle":  "客运",
+                 "truckTitle":  "货运与物流",
+                 "busLabel":  "长途城际客车",
+                 "truckLabel":  "承运企业与物流运营商",
+                 "busHeadline":  "每一位乘客，都有人在等候。",
+                 "truckHeadline":  "货物运载的不只是经济。",
+                 "busText":  "长途、夜班，以及运送生命的责任。从出发到抵达，始终关注驾驶员。",
+                 "truckText":  "对跨越全国的车队而言，每程都很重要。设备旨在关照驾驶员，并支持返回基地后的行程复核。",
+                 "fleetCta":  "讨论我的车队",
+                 "busCaption":  "城际 · 长途 · 包车",
+                 "truckCaption":  "长途货运 · 配送 · 物流",
+                 "operationLabel":  "03 / 从出发到抵达",
+                 "operationTitle1":  "道路有终点。",
+                 "operationTitle2":  "记录会延续。",
+                 "operationIntro":  "为车场日常设计的流程：关注、收集、理解。",
+                 "journeyLabel":  "行程阶段",
+                 "stageTitle0":  "驾驶室内",
+                 "stageTitle1":  "行驶途中",
+                 "stageTitle2":  "抵达之后",
+                 "stageHeadline0":  "关怀从驾驶员开始。",
+                 "stageHeadline1":  "网络可以中断，关注始终在线。",
+                 "stageHeadline2":  "连接设备，了解行程。",
+                 "stageText0":  "摄像头朝向驾驶员，设备分析迹象并发出本地声音提醒。阈值正通过真实录像进行验证。",
+                 "stageText1":  "分析与提醒在设备内运行。事件记录及重复迹象短片属于正在开发的流程。实时传输为可选功能。",
+                 "stageText2":  "在规划的收集流程中，团队取回并连接设备。应用将识别设备、导入记录，并汇总事件供人工复核。",
+                 "stageStatus0":  "本地分析 · 声音提醒",
+                 "stageStatus1":  "网络可选 · 行程记录",
+                 "stageStatus2":  "数据收集与报告 · 开发中",
+                 "development":  "产品开发中。完整行程记录、重复事件短片、自动收集与报告为规划功能，仍需实车验证。",
+                 "reportLabel":  "行程报告",
+                 "reportTitle":  "一段旅程，完整背景。",
+                 "reportExample":  "演示行程 · 虚构数据",
+                 "reportEvent0":  "行程开始",
+                 "reportEvent1":  "困倦迹象",
+                 "reportEvent2":  "返回车场",
+                 "reportNote":  "报告概念 · 需人工复核",
+                 "humanLabel":  "04 / 关照驾驶员",
+                 "humanTitle1":  "货物之前，",
+                 "humanTitle2":  "先是生命。",
+                 "humanIntro":  "支持驾驶员，为企业提供背景信息。项目坚持关怀、透明与人工复核。",
+                 "humanPoint0":  "以提醒支持安全停车",
+                 "humanPoint1":  "规划以重复迹象触发短片",
+                 "humanPoint2":  "带有背景信息并经人工复核的事件",
+                 "faqLabel":  "解答疑问",
+                 "faqTitle":  "您的团队需要了解的事。",
+                 "faqIntro":  "关于产品、运营及开发进度的直接解答。",
+                 "question0":  "行驶途中需要网络吗？",
+                 "answer0":  "摄像头分析与声音提醒在本地运行。规划的记录与收集流程在抵达后进行，不依赖实时传输。",
+                 "question1":  "摄像头会录制整个行程吗？",
+                 "answer1":  "设计优先记录事件。规划的视频仅限于迹象重复时的短片，供授权复核。该机制仍在开发中。",
+                 "question2":  "这是定位或诊断设备吗？",
+                 "answer2":  "RotaGuard 不记录位置，也不提供医疗诊断或毒理检测。观察到的迹象需要结合背景并由人工复核。",
+                 "question3":  "产品已经可以部署了吗？",
+                 "answer3":  "产品是开发中的原型。检测与提醒已在项目中实现；完整记录、收集及应用尚有待完成。性能与安装仍需真实硬件及车辆验证。",
+                 "question4":  "如何访问应用？",
+                 "answer4":  "本预览使用本地 PIN 访问客户区。该区域列出规划的平台，并在安装包可用后提供下载。计划支持 Windows、macOS、Linux、Android 及 iPhone PWA。",
+                 "contactLabel":  "聊聊您的运营需求",
+                 "contactTitle1":  "下一步",
+                 "contactTitle2":  "从您的车队开始。",
+                 "contactIntro":  "介绍您的企业如何运营，一起探讨 RotaGuard 如何参与您的行程。",
+                 "whatsapp":  "通过 WhatsApp 联系",
+                 "phone":  "致电团队",
+                 "contactSoon":  "商务联系渠道筹备中",
+                 "contactMissing":  "联系方式将在本页公布。目前可探索产品与演示区域。",
+                 "clientAccess":  "已有访问权限？进入应用",
+                 "messageBus":  "您好！我想了解面向长途城际客运车队的 RotaGuard。",
+                 "messageTruck":  "您好！我想了解面向货运与物流车队的 RotaGuard。",
+                 "busAlt":  "白色城际客车行驶在青山间的公路上。AI 生成图片。",
+                 "truckAlt":  "白色半挂车行驶在巴西山间公路上。AI 生成图片。",
+                 "deviceAlt":  "石墨色铝制 RotaGuard 设备概念图，配有前置摄像头与散热片。",
+                 "driverAlt":  "系着安全带、专注驾驶的城际客车驾驶员。AI 生成图片。",
+                 "arrivalAlt":  "客车车场内，笔记本电脑旁的 RotaGuard 设备收集概念场景。AI 生成图片。",
+                 "engineeringTitle":  "观看 3D 旋转与装配",
+                 "engineeringNote":  "工程研究：360° 旋转与部件装配。概念几何形状与展示图片有所不同。无声视频。"
+             },
+    "entrar":  {
+                   "titulo":  "您的运营，触手可及。",
+                   "texto":  "输入 PIN，访问应用及可用下载。",
+                   "rotulo":  "客户区 / 本地访问",
+                   "pin":  "PIN",
+                   "botao":  "访问应用",
+                   "enviando":  "验证中…",
+                   "erroPin":  "PIN 不正确，请检查后重试。",
+                   "erroBloqueio":  "尝试次数过多，请等待 15 分钟后重试。",
+                   "erroStorage":  "请允许浏览器本地存储后登录。",
+                   "nota":  "此浏览器中的演示访问有效期为 12 小时。该区域不包含真实驾驶员数据。",
+                   "voltar":  "返回网站"
+               },
+    "app":  {
+                "titulo":  "RotaGuard 助力您的运营。",
+                "texto":  "选择平台。应用版本发布后，将启用安装包下载。",
+                "sair":  "退出登录",
+                "baixar":  "下载应用",
+                "abrir":  "在 Safari 中打开并安装",
+                "emPreparacao":  "筹备中",
+                "carregando":  "检查访问权限…",
+                "windows":  "Windows 安装包 · 64 位",
+                "macos":  "macOS 应用 · 通用版本",
+                "linux":  "Linux AppImage 安装包 · x86_64",
+                "android":  "Android 应用 · APK",
+                "ios":  "iPhone：Safari → 分享 → 添加到主屏幕"
+            },
+    "creditos":  {
+                     "titulo":  "有设计方向的图片。",
+                     "texto":  "本预览图片由 AI 为 RotaGuard 生成。人物、车辆和场景仅作示意。设备为概念图，并非已制造硬件的照片。"
+                 }
 }

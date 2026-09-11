@@ -1,47 +1,19 @@
 "use client";
-
-import { useActionState } from "react";
-import { entrar, type EstadoEntrar } from "./actions";
-
-export function PinForm({
-  locale,
-  rotuloPin,
-  rotuloBotao,
-  erros,
-}: {
-  locale: string;
-  rotuloPin: string;
-  rotuloBotao: string;
-  erros: { pin: string; bloqueio: string; config: string };
-}) {
-  const [estado, acao, enviando] = useActionState<EstadoEntrar, FormData>(entrar, { erro: null });
-
-  return (
-    <form action={acao} className="mt-10 grid max-w-sm gap-4">
-      <input type="hidden" name="locale" value={locale} />
-      <label htmlFor="pin" className="etiqueta">
-        {rotuloPin}
-      </label>
-      <input
-        id="pin"
-        name="pin"
-        type="password"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        pattern="[0-9]*"
-        minLength={4}
-        maxLength={12}
-        required
-        aria-invalid={estado.erro ? "true" : undefined}
-        aria-describedby="pin-erro"
-        className="numero min-h-14 border border-asfalto bg-papel px-4 text-[1.6rem] tracking-[0.3em] focus:outline-2 focus:outline-asfalto"
-      />
-      <p id="pin-erro" aria-live="polite" className="min-h-6 text-alarme">
-        {estado.erro ? erros[estado.erro] : ""}
-      </p>
-      <button type="submit" disabled={enviando} className="btn btn-primario">
-        {rotuloBotao}
-      </button>
-    </form>
-  );
+import {useState, type FormEvent} from "react";
+import {useTranslations} from "next-intl";
+import {useRouter} from "@/i18n/navigation";
+import {signIn} from "@/lib/acesso-local";
+import {Arrow} from "@/components/icons";
+export function PinForm() {
+const t=useTranslations("entrar"); const router=useRouter();
+const [error,setError]=useState(""); const [busy,setBusy]=useState(false);
+async function submit(e:FormEvent<HTMLFormElement>) {
+e.preventDefault(); if(busy)return;setBusy(true);setError("");
+const form=e.currentTarget;const pin=String(new FormData(form).get("pin")??"");
+try {const result=await signIn(pin,window.localStorage);
+if(result==="ok"){form.reset();window.dispatchEvent(new Event("rotaguard-acesso"));router.replace("/app");}
+else setError(t(result==="blocked"?"erroBloqueio":result==="storage"?"erroStorage":"erroPin"));
+}catch{setError(t("erroStorage"));}finally{setBusy(false);}
+}
+return <form onSubmit={submit} className="pin-form"><label htmlFor="pin">{t("pin")}</label><input id="pin" name="pin" type="password" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{4,12}" minLength={4} maxLength={12} required aria-invalid={!!error} aria-describedby="pin-error pin-note"/><p id="pin-error" className="pin-error" role="status">{error}</p><button type="submit" className="action action-dark" disabled={busy}>{t(busy?"enviando":"botao")}<span><Arrow diagonal/></span></button><p id="pin-note" className="pin-note">{t("nota")}</p></form>;
 }

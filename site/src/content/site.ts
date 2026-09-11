@@ -1,4 +1,4 @@
-export type Segmento = "carga" | "fretamento" | "urbano" | "geral";
+export type Segmento = "carga" | "rodoviario" | "geral";
 
 export interface SiteConfig {
   /** Domínio público do site (canonical, Open Graph). Trocar quando o domínio for definido. */

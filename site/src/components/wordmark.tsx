@@ -1,14 +1,3 @@
-// Marca provisória: o nome em Sofia Sans Extra Condensed com uma barra de escala gráfica (a convenção dos mapas),
-// que é o recurso estrutural do site. Trocar quando houver símbolo definitivo.
-export function Wordmark({ className }: { className?: string }) {
-  return (
-    <span className={`inline-flex items-center gap-2.5 ${className ?? ""}`}>
-      <svg viewBox="0 0 30 8" className="h-[0.42em] w-auto" aria-hidden="true" focusable="false">
-        <rect x="0.5" y="0.5" width="29" height="7" fill="none" stroke="currentColor" />
-        <rect x="0.5" y="0.5" width="7.25" height="7" fill="currentColor" />
-        <rect x="15" y="0.5" width="7.25" height="7" fill="currentColor" />
-      </svg>
-      <span className="font-titulo text-[1.7em] leading-none font-extrabold tracking-[-0.01em]">RotaGuard</span>
-    </span>
-  );
+export function Wordmark({ className = "" }: { className?: string }) {
+return <span className={`wordmark ${className}`}><svg width="34" height="37" viewBox="0 0 34 37" fill="none" aria-hidden="true"><path d="M17 2 31 8v12c0 7-14 15-14 15S3 27 3 20V8L17 2Z" stroke="currentColor" strokeWidth="2.4" /><path d="m10 25 5-14h5l4 14M12 20h10" stroke="currentColor" strokeWidth="2.8" strokeLinejoin="round" /><path d="M17 12v4m0 5v4" stroke="currentColor" strokeWidth="1.5" /></svg><span>rota<span className="wordmark-light">guard</span></span></span>;
 }
