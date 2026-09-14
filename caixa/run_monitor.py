@@ -12,15 +12,20 @@ import logging
 import os
 import re
 import signal
-import socket
 import sys
 from pathlib import Path
 
 # Reduz o log interno do MediaPipe / TensorFlow Lite; precisa vir antes de importá-los.
 os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+# Windows (Media Foundation): com as transformações de hardware ligadas a webcam levava ~16 s para abrir e ajustar
+# 640x480; sem elas, ~1 s e os mesmos 30 fps (medido em 14/09). Precisa vir antes de abrir a câmera.
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
 logger = logging.getLogger("drivesafe")
+
+# Código de saída quando a câmera não abre ou fica sem imagem além de --espera-camera (a tela do app de teste explica).
+SAIDA_SEM_CAMERA = 3
 
 ACTIVATION_LOG = {
     "desligado": "Sinais de ativação atípica desligados.",
@@ -53,14 +58,21 @@ def safe_key(value: str) -> str:
 def parse_args(argv=None):
     from vision.engine import ACTIVATION_MODES
 
-    parser = argparse.ArgumentParser(description="DriveSafe AI: monitoramento de sonolência e distração do motorista.")
+    parser = argparse.ArgumentParser(description="RotaGuard: monitoramento de sonolência e distração do motorista.")
     parser.add_argument("--server-url", "--api-url", dest="server_url",
                         default=env("DRIVESAFE_SERVER_URL", "http://localhost:8000"),
                         help="endereço do servidor central (DRIVESAFE_SERVER_URL)")
+    parser.add_argument("--sem-servidor", action="store_true", default=env_bool("DRIVESAFE_SEM_SERVIDOR"),
+                        help="não conecta a servidor: os eventos ficam só na fila deste computador "
+                             "(DRIVESAFE_SEM_SERVIDOR; usado no app de teste)")
     parser.add_argument("--token", default=env("DRIVESAFE_DEVICE_TOKEN", ""),
                         help="token do dispositivo; prefira a variável DRIVESAFE_DEVICE_TOKEN")
     parser.add_argument("--camera", default=env("DRIVESAFE_CAMERA", "0"),
-                        help="índice da webcam (0), /dev/video0, arquivo de vídeo, URL ou 'picamera2'")
+                        help="índice da webcam (0), 'auto' (primeira que responder), /dev/video0, arquivo de vídeo, "
+                             "URL ou 'picamera2'")
+    parser.add_argument("--espera-camera", type=float, default=float(env("DRIVESAFE_ESPERA_CAMERA", "0")),
+                        help="segundos sem imagem até desistir com código 3; 0 = tenta de novo para sempre (padrão da "
+                             "caixa; o app de teste usa 15) (DRIVESAFE_ESPERA_CAMERA)")
     parser.add_argument("--width", type=int, default=int(env("DRIVESAFE_WIDTH", "640")))
     parser.add_argument("--height", type=int, default=int(env("DRIVESAFE_HEIGHT", "480")))
     parser.add_argument("--camera-ir", choices=("auto", "sim", "nao"), default=env("DRIVESAFE_CAMERA_IR", "auto"),
@@ -97,6 +109,11 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+def deve_sincronizar(args) -> bool:
+    """Com --sem-servidor não há sincronização nem política remota: tudo fica neste computador."""
+    return not getattr(args, "sem_servidor", False)
+
+
 def resolve_window(args) -> bool:
     if args.window is not None:
         return args.window
@@ -125,7 +142,7 @@ def main(argv=None) -> int:
     from vision.alarm import Alarm
     from vision.baseline import BaselineStore
     from vision.calibration import Calibrator
-    from vision.camera import open_camera
+    from vision.camera import CameraIndisponivel, open_camera
     from vision.context import DrivingContext
     from vision.driver_monitor import DriverMonitor
     from vision.drowsiness import DrowsinessMonitor
@@ -138,8 +155,11 @@ def main(argv=None) -> int:
 
     data_dir = Path(args.data_dir).expanduser()
     data_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("DriveSafe AI %s em %s. Dados locais em %s.", __version__, socket.gethostname(), data_dir)
-    if not args.token:
+    # Sem o nome do computador no registro (pedido de 14/09): o registro pode ir para quem avalia o teste.
+    logger.info("RotaGuard %s. Dados locais em %s.", __version__, data_dir)
+    if not deve_sincronizar(args):
+        logger.info("Modo sem servidor: os eventos ficam só na fila deste computador.")
+    elif not args.token:
         logger.warning("Sem token do dispositivo: os eventos ficam na fila local até configurar DRIVESAFE_DEVICE_TOKEN.")
 
     store = EventStore(data_dir / "eventos.db")
@@ -196,25 +216,35 @@ def main(argv=None) -> int:
         monitor = DriverMonitor(analyzer, engine, alarm, store, calibrator_factory=new_calibrator)
 
         policy = None
-        if args.token:
+        if args.token and deve_sincronizar(args):
             from vision.remote_policy import RemotePolicy
 
             # Com servidor, motorista vinculado, consentimento e modo dos sinais de ativação vêm do app.
             policy = RemotePolicy(engine, data_dir, fallback_key=args.driver_key, calibrator_factory=new_calibrator)
             monitor.policy = policy
             logger.info("Consentimentos e motorista vinculado passam a seguir o cadastro no app do servidor.")
-        sync = SyncWorker(store, ServerClient(args.server_url, args.token),
-                          status_provider=lambda: {"camera_ok": monitor.camera_ok, "status": monitor.live_status()},
-                          heartbeat_interval=float(env("DRIVESAFE_HEARTBEAT_S", "15")),
-                          policy_handler=policy.submit if policy is not None else None)
-        sync.start()
+        if deve_sincronizar(args):
+            sync = SyncWorker(store, ServerClient(args.server_url, args.token),
+                              status_provider=lambda: {"camera_ok": monitor.camera_ok, "status": monitor.live_status()},
+                              heartbeat_interval=float(env("DRIVESAFE_HEARTBEAT_S", "15")),
+                              policy_handler=policy.submit if policy is not None else None)
+            sync.start()
         if hasattr(signal, "SIGTERM"):
             signal.signal(signal.SIGTERM, lambda *_: monitor.stop())
 
         camera = open_camera(args.camera, args.width, args.height)
-        monitor.run(camera, resolve_window(args))
+        if args.espera_camera > 0 and getattr(camera, "aberta", True) is False:
+            camera.release()
+            raise CameraIndisponivel(f"A câmera {args.camera} não abriu. Confira se ela está conectada e se outro "
+                                     "programa (Teams, Zoom, navegador) não está usando, ou use a câmera automática.")
+        monitor.run(camera, resolve_window(args), espera_camera_s=args.espera_camera or None)
+        if monitor.sem_imagem:
+            return SAIDA_SEM_CAMERA
     except KeyboardInterrupt:
         logger.info("Interrompido pelo usuário.")
+    except CameraIndisponivel as exc:
+        logger.error("%s", exc)
+        return SAIDA_SEM_CAMERA
     except RuntimeError as exc:
         logger.error("%s", exc)
         return 1

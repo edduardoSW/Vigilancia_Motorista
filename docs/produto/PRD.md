@@ -40,7 +40,8 @@
    importa o registro e os trechos e **gera o relatório da viagem**.
 3. **O app instalável**, com painel da empresa e do motorista (relatórios, revisão, autorizações) e um modo de teste
    que usa a câmera do próprio aparelho com as mesmas regras da caixa.
-   - Distribuição: instaladores para Windows, macOS, Linux e Android; PWA no iPhone.
+   - Distribuição: instaladores para Windows, Linux e Android; PWA no iPhone. Sem Mac (14/09/2026). Windows no
+     futuro pela Microsoft Store (pacote MSIX).
 4. **O site** de divulgação. Quem entra com o PIN vê as opções de download do app.
 
 ## 4. Objetivos e métricas de sucesso
@@ -65,6 +66,7 @@
 - Saída de faixa (ADAS) e colisão.
 - Substituir o controle legal de jornada.
 - App nativo de iPhone (fica o PWA até existir conta de desenvolvedor Apple).
+- Versão para Mac: "deixe download apenas para Windows e Linux, pois não terá para Mac" (14/09/2026).
 
 ## 6. Requisitos funcionais
 
@@ -73,7 +75,7 @@
 | ID | Requisito | Situação | Spec |
 |---|---|---|---|
 | RF-01 | Sonolência: olhos fechados por 1 s (microssono), 3 s (sono) e 6 s (sem resposta); PERCLOS; piscadas mais longas que a calibração individual; bocejo; cabeceio; olhos esfregados como sinal leve | Existe (`caixa/vision/drowsiness.py`, `face_touch.py`) | 009 |
-| RF-02 | Celular na mão, no ouvido ou olhando por mais de 2 s; no suporte não conta como na mão | Existe, com limiares a validar (`caixa/vision/phone.py`) | 009 |
+| RF-02 | Celular na mão, no ouvido ou olhando por mais de 2 s; no suporte não conta como na mão | Existe, com limiares a validar (`caixa/vision/phone.py`); mão vazia na orelha corrigida em 14/09 (CEL-01), falta calibrar com gravações | 009 |
 | RF-03 | Contexto: madrugada (00:00 a 06:59); direção contínua acima de 5 h 30; descanso por tipo de veículo (carga: 30 min a cada 6 h; passageiros: 30 min a cada 4 h) | Parcial: falta a regra de passageiros (`caixa/vision/context.py`) | 006 |
 | RF-04 | Alarme sonoro local sem internet, com autoteste de saída de som ao ligar e aviso claro se não houver som | Parcial (`caixa/vision/alarm.py`) | 005 |
 | RF-05 | Sinais compatíveis com ativação atípica (piscadas, olhar; pupila só com câmera infravermelha), sempre como "não é diagnóstico" | Existe (`caixa/vision/activation.py`) | 002 |
@@ -94,8 +96,9 @@
 | RF-22 | Revisão de eventos e trechos (confirmado, alarme falso, motorista orientado), com quem revisou e quando | Existe no servidor (`servidor/backend/routes/alerts.py`) | 004 |
 | RF-23 | Área do motorista: os próprios dados, autorizações e exportação | Existe (`painel/webapp`) | 007 |
 | RF-24 | Modo de teste com a câmera do aparelho, com as mesmas regras de detecção da caixa | Novo | 007 |
-| RF-25 | Instaladores para Windows, macOS, Linux e Android gerados no GitHub Actions (Tauri 2) e PWA no iPhone | Novo | 007 |
+| RF-25 | Instaladores para Windows, Linux e Android gerados no GitHub Actions (Tauri 2) e PWA no iPhone; sem Mac; Windows no futuro pela Microsoft Store (MSIX) | Novo | 007 |
 | RF-26 | Logins criados só pela equipe; modo local de demonstração com PIN e dados fictícios | Existe | 007 |
+| RF-27 | **App de teste do script**: o script da caixa empacotado para Windows e Linux, baixado na área do PIN do site, que roda a detecção e o alarme com a câmera do computador, sem servidor e sem instalar Python; com seção de privacidade, LGPD e termos, sem aceite obrigatório | Novo (14/09/2026) | 010 |
 
 ### 6.3 Site
 
@@ -180,6 +183,32 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 - App: "Painel + teste de câmera"; "Instaladores + PWA".
 - Método: SDD, PRD, specs, TDD e hooks de guardrail (regra global).
 
+### 14/09/2026
+
+- Site "Boa chegada" pronto para revisão ("o site já está pronto").
+- Prioridade: "quero que faça a questão de download agora para eu poder testar em outros computadores; a parte do
+  dashboard da empresa e a conexão com esse script faça depois" → RF-27 e spec 010. O painel (spec 007) e a conexão
+  com o script vêm depois.
+- **Teste do app no computador:**
+  - "quando eu selecionei uma câmera e abri o app fechou, isso não tem lógica"; "a câmera deve ser reconhecida
+    automaticamente" → câmera automática, aviso claro sem câmera e X da janela encerrando o teste (spec 010, APT-13 a
+    APT-18).
+  - "o celular no ouvido ainda não está 100 por cento funcional, pois quando eu coloco a mão no ouvido reconhece como
+    celular ainda" → spec 009 (CEL-01).
+  - "seria legal reconhecer bocejo e um pouco mais das olheiras e expressões próximas do olho, pois pode ser um
+    indicativo também; se a pessoa movimenta muito a cabeça etc., tudo isso ajuda" → spec 011 (rascunho).
+- **Download e nome:**
+  - "coloque o download desse RotaGuard Teste dentro do site da RotaGuard" → arquivos servidos pelo site em
+    `/downloads` (spec 010, decisão 11).
+  - "como propriedade coloque RotaGuard, não quero que deixe o nome do meu desktop" → propriedades RotaGuard no
+    executável e registro sem o nome do computador (spec 010, decisão 10).
+- **Plataformas:** "futuramente irei fazer esse Microsoft Store (pacote MSIX); deixe download apenas para Windows e
+  Linux, pois não terá para Mac" → sem macOS nos downloads (app de teste e instaladores do painel); Windows pela
+  Microsoft Store no futuro.
+- **Privacidade:** "coloque política de privacidade, LGPD e os termos dentro do script RotaGuard para ficar dentro da
+  lei, porém não quero ter que aprovar nada para que comece a usar; apenas deixe lá em uma seção" → seção no app de
+  teste, sem aceite obrigatório (spec 010, decisão 13). Os textos precisam de revisão de advogado antes de clientes.
+
 ## 12. Specs
 
 | Spec | Cobre |
@@ -193,3 +222,5 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 | `docs/specs/007-app-instalavel.md` | RF-23 a RF-26 |
 | `docs/specs/008-site.md` | RF-30 a RF-34, RNF-09 |
 | `docs/specs/009-pendencias-da-deteccao.md` | RF-01, RF-02 (pendências da etapa 1 que dão para fechar sem gravação) |
+| `docs/specs/010-app-de-teste-do-script.md` | RF-27 (download do script empacotado para testar em outros computadores) |
+| `docs/specs/011-sinais-complementares-de-fadiga.md` | RF-13 a RF-15 propostos (bocejo visível, sinais ao redor dos olhos, movimento da cabeça); rascunho de 14/09/2026 |

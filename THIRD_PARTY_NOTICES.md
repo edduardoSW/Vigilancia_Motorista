@@ -66,7 +66,9 @@ Contém informação do banco de dados **closed-open-eyes**, de Michał Młodaws
 
 ## Bibliotecas Python
 
-Instaladas pelo `pip`, não redistribuídas neste repositório. Versões testadas e licença declarada no pacote:
+Instaladas pelo `pip`, não redistribuídas neste repositório. O RotaGuard Teste (`implantacao/app-teste`) redistribui as
+de uso "Dispositivo" dentro do pacote, junto com as pastas `*.dist-info` e os textos de licença de cada uma. Versões
+testadas e licença declarada no pacote:
 
 | Uso | Pacote | Versão | Licença |
 |---|---|---|---|
@@ -85,6 +87,9 @@ Instaladas pelo `pip`, não redistribuídas neste repositório. Versões testada
 | Servidor | pydantic, pydantic-core | 2.13.5, 2.46.5 | MIT |
 | Servidor | pytz | 2026.3.post1 | MIT |
 | Servidor | psycopg, psycopg-binary | 3.3.5 | LGPL-3.0-only |
+
+A opencv-contrib-python inclui a FFmpeg (`opencv_videoio_ffmpeg`), sob LGPL 2.1. O aviso completo está no
+`LICENSE-3RD-PARTY.txt` que acompanha o pacote.
 
 O psycopg é LGPL-3.0:
 - Usá-lo como biblioteca instalada é permitido em software fechado.

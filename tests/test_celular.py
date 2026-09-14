@@ -142,6 +142,27 @@ shaking = run(after(5.0)(lambda t: ([(300.0 + 12 * math.sin(3 * t), 330.0, 340.0
 assert shaking[-1].state == "celular_na_mao"
 ok("celular parado sem mão (suporte) não conta; celular se mexendo conta mesmo sem achar a mão")
 
+def hand_mistaken_for_phone(every):
+    """Mão vazia na orelha; o detector chama a mão de celular em 1 de cada `every` detecções (teste de 14/09)."""
+    calls = [0]
+
+    def script(t):
+        if t < 5.0:
+            return [], []
+        calls[0] += 1
+        return ([HAND_AS_PHONE] if calls[0] % every == 1 else []), [hand_at(262, 175)]
+    return script
+
+
+HAND_AS_PHONE = (249.0, 162.0, 276.0, 190.0, 0.42)  # caixa do tamanho da mão, em cima da orelha
+assert phone_near_ear(HAND_AS_PHONE, EARS, 100.0)
+for every in (5, 4):
+    mistaken = run(hand_mistaken_for_phone(every), seconds=20.0)
+    phone_events = [e for e in events(mistaken) if e in ("celular_no_ouvido", "celular_na_mao", "olhando_celular")]
+    assert not phone_events, (every, events(mistaken))
+    assert all(r.state == "sem_celular" for r in mistaken), (every, {r.state for r in mistaken})
+ok("CEL-01 mão vazia na orelha confundida com celular de vez em quando não vira 'no ouvido' nem 'na mão'")
+
 flicker = run(lambda t: ([PHONE_IN_HAND], [hand_at(320, 370)]) if 5.0 <= t < 5.2 else ([], []))
 assert all(r.state == "sem_celular" for r in flicker)
 parked = run(after(5.0)(lambda t: ([PHONE_IN_HAND], [hand_at(320, 370)])), pitch=lambda t: 25.0, moving=False)

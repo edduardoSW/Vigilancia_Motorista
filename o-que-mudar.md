@@ -23,14 +23,41 @@ Conferido no código e rodando as provas, não de memória.
 | Site | **Refeito na direção "Boa chegada"** (outra IA): Space Grotesk + Manrope, verde profundo, branco e lima, foto de estrada e ônibus interestadual no topo, caixa em destaque com pontos clicáveis, seletor ônibus ou carga, etapas da viagem, relatório de exemplo, FAQ e contato. Régua lateral, mapa-múndi e "escalas" saíram. **Falta o Matheus aprovar o visual.** | `npm run build`: 23 páginas, sem erro · `npm run lint`: 0 erros, 1 aviso (`site/scripts/testes/navegador.mjs:38`) · `npm test`: **49 de 49 passando** |
 | Idiomas | pt-BR, en, es, fr, zh-CN **traduzidos** (o teste que acusava cópia do português passa) | `site/scripts/testes/i18n.test.mjs` |
 | PIN | **Em `localStorage`**, como o Matheus pediu: hash SHA-256 com sal em `site/src/lib/acesso-local.ts`, sessão de 12 h, pausa de 15 min após 5 erros. O PIN não está em nenhum arquivo (conferido por busca). É barreira de demonstração, não segurança de produção. | `site/scripts/testes/acesso-local.test.mjs` |
-| Downloads do app | Página pronta, mas **sem instaladores**: aparece "em preparação" porque o app não existe | `site/src/components/download-area.tsx` |
+| Downloads do app | **Atualizado em 14/09:** oferece o RotaGuard Teste (script empacotado) servido pelo próprio site em `/downloads`. O Windows `.zip` sai do build local; o Linux só do CI e aparece "em preparação" enquanto não houver arquivo. **Sem Mac** (14/09) | `site/src/components/download-area.tsx`, spec 010 |
 | Imagens | 5 ilustrações de IA (ônibus na serra, carreta, motorista, coleta na garagem, caixa conceitual), originais em `docs/site/midia/originais/`, WebP no site. **Nenhum crédito do Magnific foi gasto.** | `docs/site/midia/README.md` |
 | Vídeo do produto | **Parcial:** estudo local no Blender com giro e montagem (`site/public/midia/rotaguard/estudo-engenharia.mp4`, 10 s, 800 × 500). **Faltam as tomadas da caixa dentro do caminhão e do ônibus** e uma versão em resolução maior. A geometria do Blender não é idêntica à caixa da imagem de IA. | `docs/produto/3d/render_site.py` |
 | Prompts | Direção atual em `docs/site/midia/05-direcao-boa-chegada.md`. Os arquivos `00` a `04` são **histórico** da direção rejeitada (ainda citam mapas e ônibus urbano). O `prompts-imagens.md` obsoleto foi apagado. | `docs/site/midia/README.md` |
 | Script da caixa | **Sem mudança desde a reorganização.** A detecção existente funciona; nada do registro, dos trechos, da coleta ou do Pi 4 foi implementado. | 8 scripts, 93 verificações (rodados na reorganização) |
 | Specs | 001 (registro) e 002 (trechos) **aprovadas**; 003 (identidade e coleta) **rascunho incompleto**; 007 (app) rascunho; 008 (site) atualizada pela outra IA; 004, 005, 006 e 009 **não escritas** | `docs/specs/` |
-| App instalável e painel | **Nada feito:** sem Tauri, sem workflow de build, sem modo de teste de câmera; o painel continua o PWA antigo com visual rejeitado | `painel/webapp/` |
+| App instalável e painel | **App de teste do script feito em 14/09** (spec 010, seção 0.1). **Painel: nada feito** (sem Tauri; o painel continua o PWA antigo com visual rejeitado), e a conexão do script com ele fica para depois, como o Matheus pediu | `caixa/app_teste.py`, `painel/webapp/` |
 | Skill claude-watch | **Não instalada** (`~/.claude/skills/watch` não existe) | busca no disco |
+
+### 0.1 Atualização de 14/09/2026 (app de teste do script)
+
+- **Pedido:** "quero que faça a questão de download agora para eu poder testar em outros computadores; a parte do
+  dashboard da empresa e a conexão com esse script faça depois".
+- **Feito:**
+  - **RotaGuard Teste** (spec 010): o script da caixa empacotado com PyInstaller, com tela de início.
+    - Câmera automática; aviso claro sem câmera; X/Esc/Q encerram.
+    - Propriedades RotaGuard no `.exe`; registro sem o nome do computador.
+    - Atalho na área de trabalho deste computador.
+  - O site serve o pacote em `/downloads`: `site/public/downloads/`, fora do git pelo limite de 100 MB do GitHub.
+  - Seção **Privacidade, LGPD e termos** no app, sem aceite obrigatório, com botões para abrir e apagar os dados do
+    teste e a aba de licenças de terceiros. Falta revisão de advogado, razão social, CNPJ e canal de privacidade.
+  - **Sem Mac** nos downloads; Windows no futuro pela Microsoft Store (MSIX).
+  - Workflow `.github/workflows/app-teste.yml` para Windows e Linux (sem Mac): **ainda não enviado nem rodado**.
+- **Retorno do teste do Matheus** e o que virou:
+  - "a câmera deve ser reconhecida automaticamente" → feito.
+  - "o app fechou" → na primeira vez a janela foi fechada por comando na conferência. Corrigidos também os casos reais:
+    câmera inexistente esperava para sempre, o X reabria a janela e a câmera levava ~16 s para abrir.
+  - Mão vazia na orelha virando celular → spec 009, CEL-01 corrigido. Falta calibrar com gravações.
+  - Bocejo, olheiras, expressões dos olhos e movimento da cabeça → spec 011 em rascunho.
+    - Bocejo e cabeceio **já existiam**, mas não apareciam na janela.
+    - Olheiras: recomendação de ficar fora (luz, câmera infravermelha, tom de pele).
+- **Provas de 14/09:**
+  - suíte Python com 110 verificações e 0 falhas;
+  - site com build ok, lint com 0 erros, 53 de 53 testes e `tsc` sem erro;
+  - pacote Windows com teste de fumaça e teste sem câmera (`implantacao/app-teste/build.py`).
 
 ---
 
@@ -109,7 +136,7 @@ Conferido no código e rodando as provas, não de memória.
 | Produto | Caixa com Raspberry Pi e câmera no veículo. **O principal é o registro (log) da viagem.** Grava **só trechos curtos** quando algo se repete muito (sonolência frequente por muito tempo; sinais compatíveis com uso de anfetamina, sempre "não é diagnóstico"). Na chegada, a empresa **recolhe a caixa, conecta, o sistema reconhece o equipamento e gera o relatório**. Envio ao vivo é secundário. |
 | Hardware | Pi 3 "eu não sei" → recomendado **Raspberry Pi 4 de 4 GB**: CPU ~3× mais rápida, 4× memória, USB-C como dispositivo (ligar por cabo e ser reconhecida), codificador H.264 no chip. Cuidados: fonte 5 V/3 A a partir de 12/24 V, desligamento seguro, calor, **relógio com bateria (RTC DS3231)**, porque o Pi não guarda a hora sem internet. |
 | Futuro (não agora) | Pupila medida no **celular do motorista**; pulseira de frequência cardíaca |
-| App | "Painel + teste de câmera" (mesmas regras do script), instalável: **instaladores Windows, macOS, Linux e Android (Tauri 2, GitHub Actions) + PWA no iPhone**. Download no site para quem entra com o PIN. |
+| App | "Painel + teste de câmera" (mesmas regras do script), instalável: **instaladores Windows, Linux e Android (Tauri 2, GitHub Actions) + PWA no iPhone**. Download no site para quem entra com o PIN. **Sem Mac**; Windows no futuro pela Microsoft Store (MSIX) (14/09). |
 | PIN no site | **Por enquanto em `localStorage`** (conferência no navegador). Guardar só hash no código, nunca o PIN. |
 | Idiomas do site | pt-BR, en, es, fr, zh-CN, com dropdown de bandeira + país no nav |
 | Fotos | O Matheus gera no **ChatGPT** com os prompts de `docs/site/midia/` |
@@ -176,7 +203,9 @@ Worktrees locais (fora do repositório, em `Downloads/Vigilancia_Motorista-main/
 - [ ] **Logo:** hoje é o nome em texto (`wordmark.tsx`). Falta um símbolo aprovado.
 - [ ] **Contato:** número de WhatsApp e telefone, domínio, preço e oferta de piloto (variáveis vazias em
   `site/.env.example`; o site mostra "contato em preparação").
-- [ ] **Downloads:** links reais dos instaladores. Depende do app, que não existe (4.5).
+- [x] **Downloads:** RotaGuard Teste servido em `/downloads` (14/09, spec 010).
+- [ ] **Downloads no site publicado:** decidir onde ficam os arquivos de 130 MB ou mais (release do GitHub ou
+  armazenamento de arquivos). O painel instalável continua pendente (4.5).
 - [ ] **Imagens:** as 5 são ilustrações de IA e a caixa é conceito. Trocar por fotos reais e pelo design final quando
   houver. As fotos que o Matheus gerar no ChatGPT entram em `docs/site/midia/originais/` e são convertidas por
   `site/scripts/preparar-midia.mjs`.
@@ -252,16 +281,28 @@ Worktrees locais (fora do repositório, em `Downloads/Vigilancia_Motorista-main/
 
 ### 4.5 App instalável
 
+- [x] **App de teste do script** (spec 010, 14/09):
+  - pacote Windows local com testes de fumaça e sem câmera;
+  - site servindo o `.zip`.
+- [ ] **App de teste, o que falta:**
+  - enviar o workflow `app-teste.yml` e rodar com a tag `teste-v0.1.0` (gera o Linux e o instalador do Windows);
+  - decidir a hospedagem dos arquivos no site publicado;
+  - assinatura: futuramente publicar na Microsoft Store (pacote MSIX), que assina e tira o aviso do Windows;
+  - revisão de advogado dos textos de privacidade, LGPD e termos do app.
+- [ ] **Spec 009, CEL-03:** gravações de mão vazia na orelha e de celular real na orelha para calibrar
+  `EAR_CONFIRM_HITS`.
+- [ ] **Spec 011** (rascunho): aprovar os sinais de bocejo visível, olhos e cabeça, e responder se bocejo sozinho
+  pode continuar tocando alarme.
 - [ ] Spec 004 (importação e relatório): não escrita.
   - O app reconhece a caixa, confere o registro, decifra os trechos e gera PDF e CSV.
 - [ ] Spec 007 (rascunho pronto em `docs/specs/007-app-instalavel.md`):
   - casca Tauri 2 para `painel/webapp`;
-  - workflow `.github/workflows/app.yml` (Windows, macOS, Linux, Android);
+  - workflow `.github/workflows/app.yml` (Windows, Linux, Android; sem Mac);
   - PWA do iPhone;
   - modo de teste de câmera em JS com arquivos-ouro comparando com o Python.
   - Não há Rust nem `gh` neste computador: build só no GitHub Actions. O repositório é público e sem workflows.
 - [ ] Redesenho visual do painel (o "Cabine noturna" continua rejeitado), com prévia aprovada antes.
-- Perguntas abertas: identificador do app, onde publicar os instaladores, assinatura (Apple/Windows/keystore Android),
+- Perguntas abertas: identificador do app, onde publicar os instaladores, assinatura (Windows pela Microsoft Store no futuro; keystore Android),
   permissão `workflow` no token.
 
 ### 4.6 Regras globais e ferramentas

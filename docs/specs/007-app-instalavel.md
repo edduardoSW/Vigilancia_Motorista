@@ -23,11 +23,11 @@ O painel existe como PWA em HTML, CSS e JS sem build (`painel/webapp/`), com mod
    que carrega esses arquivos empacotados (funciona sem internet).
    - Rust só existe na casca e nas funções nativas: descoberta da caixa na rede, arquivo e impressão.
 2. **Plataformas:**
-   - Windows: instalador NSIS `.exe`;
-   - macOS: `.dmg` universal;
+   - Windows: instalador NSIS `.exe`; no futuro, também pela Microsoft Store (pacote MSIX), que assina o app;
    - Linux: `.AppImage` e `.deb`;
    - Android: `.apk`;
    - iPhone e iPad: **PWA pelo Safari**. A Apple não permite instalar fora da App Store sem conta de desenvolvedor.
+   - **Sem Mac:** "deixe download apenas para Windows e Linux, pois não terá para Mac" (14/09/2026).
 3. **Build só no GitHub Actions** (`tauri-apps/tauri-action` e o CLI do Tauri para Android).
    - Este computador não tem Rust nem Android SDK, e não é do Matheus: nada de toolchain pesada instalada aqui.
    - Os arquivos vão para uma release de rascunho quando houver tag `app-v*`.
@@ -54,7 +54,7 @@ O painel existe como PWA em HTML, CSS e JS sem build (`painel/webapp/`), com mod
   - Dado um iPhone, quando a pessoa abre o link do app no Safari, então aparece a instrução "Compartilhar → Adicionar à
     Tela de Início" e o app abre em tela cheia.
 - **Release**
-  - Dada uma tag `app-v0.1.0`, quando o workflow roda, então a release de rascunho recebe os 5 arquivos com nomes
+  - Dada uma tag `app-v0.1.0`, quando o workflow roda, então a release de rascunho recebe os 4 arquivos com nomes
     fixos e checksums SHA-256.
 
 ## Critérios de aceite
@@ -62,7 +62,7 @@ O painel existe como PWA em HTML, CSS e JS sem build (`painel/webapp/`), com mod
 | ID | Critério | Como provar |
 |---|---|---|
 | APP-01 | `painel/app/src-tauri/tauri.conf.json` válido: identificador `br.com.rotaguard.app` (a confirmar), janela sem barra de endereço, CSP sem `unsafe-inline` para script, arquivos do `painel/webapp` empacotados | teste que valida o JSON com o schema do Tauri 2 |
-| APP-02 | Workflow `app.yml` com matriz Windows, macOS, Linux e job Android; artefatos com os nomes que o site espera (`RotaGuard-windows-x64-setup.exe`, `RotaGuard-macos-universal.dmg`, `RotaGuard-linux-x86_64.AppImage`, `RotaGuard-android.apk`) e `SHA256SUMS.txt` | teste que lê o YAML e confere matriz e nomes; execução real no GitHub |
+| APP-02 | Workflow `app.yml` com matriz Windows e Linux e job Android, sem macOS; artefatos com os nomes que o site espera (`RotaGuard-windows-x64-setup.exe`, `RotaGuard-linux-x86_64.AppImage`, `RotaGuard-linux-x86_64.deb`, `RotaGuard-android.apk`) e `SHA256SUMS.txt` | teste que lê o YAML e confere matriz e nomes; execução real no GitHub |
 | APP-03 | PWA: `manifest.webmanifest` com nome RotaGuard, ícones 192, 512 e maskable, `display: standalone`; service worker que guarda só a casca, nunca dados; página de instrução do iPhone | teste de manifesto e do service worker |
 | APP-04 | Ícones e nome RotaGuard em todas as plataformas (sem "DriveSafe" visível ao usuário) | busca automatizada nas strings visíveis |
 | APP-05 | Modo de teste no JS: abertura do olho, piscada (começa em 0,50, termina em 0,60), microssono 1 s, sono 3 s, sem resposta 6 s, PERCLOS P80 (só fechamentos acima de 250 ms), bocejo (boca ≥ 0,45 por 2 s), cabeceio ≥ 15°, rosto ausente 10 s | testes JS com as mesmas sequências dos testes Python |
@@ -74,8 +74,9 @@ O painel existe como PWA em HTML, CSS e JS sem build (`painel/webapp/`), com mod
 ## Fora de escopo agora
 
 - App nativo de iPhone na App Store.
-- Assinatura de código paga (Windows EV, notarização Apple): sem ela, o Windows SmartScreen e o macOS Gatekeeper
-  mostram aviso na primeira abertura.
+- Versão para Mac (decisão de 14/09/2026).
+- Assinatura de código paga no Windows: sem ela, o SmartScreen mostra aviso na primeira abertura. O caminho escolhido
+  para o futuro é publicar na Microsoft Store (pacote MSIX), que assina o app (14/09/2026).
 - Redesenho visual completo: vem depois da prévia aprovada pelo Matheus. Até lá, só troca de nome, ícone e tokens
   básicos.
 
@@ -84,14 +85,14 @@ O painel existe como PWA em HTML, CSS e JS sem build (`painel/webapp/`), com mod
 1. Identificador do app (padrão reverso de domínio, por exemplo `br.com.rotaguard.app`), que depende do domínio.
 2. Onde publicar os arquivos: release do GitHub neste repositório (o dono é edduardoSW) ou outro lugar?
 3. Assinatura:
-   - conta de desenvolvedor Apple para notarizar o macOS (e, no futuro, publicar no iPhone)?
-   - certificado de código para Windows?
+   - conta de desenvolvedor Apple só se um dia houver app nativo de iPhone?
+   - Windows: Microsoft Store (MSIX) no futuro; até lá, instalador sem assinatura?
    - quem guarda a keystore do Android?
 4. O token usado no push tem permissão para criar workflows (`workflow`) e o repositório tem Actions habilitado?
 
 ## Riscos
 
 - **Push do workflow:** sem permissão `workflow` no token, o push é recusado.
-- **Build de macOS e Android** só é verificável rodando no GitHub.
+- **Build de Android** só é verificável rodando no GitHub.
 - **Modo de teste no celular:** o desempenho do MediaPipe no navegador de celulares antigos pode ser baixo; medir.
 - **Divergência entre Python e JS:** mitigada pelos arquivos-ouro (APP-06).

@@ -58,9 +58,13 @@ MIN_HAND_POINTS = 3
 EVIDENCE_S = 1.5
 CONFIRM_WINDOW_S = 2.0
 CONFIRM_HITS = 2
-# Mão na orelha só mantém "no ouvido" se o próprio aparelho foi visto na orelha há pouco (a mão costuma tapá-lo).
+# Mão na orelha só mantém "no ouvido" se o próprio aparelho foi confirmado na orelha há pouco (a mão costuma tapá-lo).
 # Mão vazia na orelha não conta, nem com a boca mexendo: dava falso positivo (teste de 10/09).
 PHONE_EAR_MEMORY_S = 5.0
+# Na orelha sem ter sido visto antes fora dela, o aparelho precisa aparecer em 3 detecções em 2 s. O detector às vezes
+# chama a mão vazia de celular; uma detecção solta + a memória acima faziam a mão na orelha virar "no ouvido"
+# (teste de 14/09). Limiar inicial: calibrar com gravações de mão vazia e de aparelho real (ferramentas/avaliar_celular.py).
+EAR_CONFIRM_HITS = 3
 # O model card do Hand Landmarker põe fora do escopo a mão segurando objetos: os pontos da mão podem falhar justo
 # com o celular na mão. Por isso o aparelho se mexendo também conta. Celular preso num suporte fica parado em
 # relação à câmera (os dois estão presos ao veículo) e não conta. Hipótese: 8% da largura do rosto em 2 s.
@@ -210,9 +214,11 @@ class PhoneMonitor:
         self._result = None
         self._busy = False
         self._failures = 0
-        self._phone_hits = deque()
-        self._phone_centers = deque()  # (t, x, y, escala) de cada celular detectado
-        self._last = dict.fromkeys(("phone", "hand_on_phone", "hand_ear", "phone_ear", "phone_away"), -math.inf)
+        self._ear_hits = deque()  # momentos com celular detectado perto da orelha
+        self._away_hits = deque()  # momentos com celular longe da orelha (ou sem rosto para saber)
+        self._phone_centers = deque()  # (t, x, y, escala) de cada celular detectado longe da orelha
+        self._last = dict.fromkeys(("phone", "hand_on_phone", "hand_ear", "phone_ear", "phone_away", "ear_confirmed"),
+                                   -math.inf)
         self._state_since = {}
         self._state_last = {}
         self._pitch_reference = deque()
@@ -255,18 +261,26 @@ class PhoneMonitor:
         phones = [phone for phone in observation.phones if phone[4] >= PHONE_MIN_SCORE]
         if phones:
             self._last["phone"] = t
-            self._phone_hits.append(t)
         box = getattr(metrics, "face_box", None) if metrics.face_found else None
         ears = getattr(metrics, "ear_points", None) if box is not None else None
         face_width = box[2] - box[0] if box is not None else None
+        at_ear = away = False
         for phone in phones:
+            if ears is not None and phone_near_ear(phone, ears, face_width):
+                at_ear = True
+                continue
+            # Longe da orelha (ou sem rosto para saber): é o que confirma o aparelho na mão e o movimento dele.
+            away = True
             self._phone_centers.append((t, (phone[0] + phone[2]) / 2.0, (phone[1] + phone[3]) / 2.0,
                                         face_width or (phone[2] - phone[0])))
             if any(hand_touches_phone(hand, phone) for hand in observation.hands):
                 self._last["hand_on_phone"] = t
-            if ears is not None and phone_near_ear(phone, ears, face_width):
-                self._last["phone_ear"] = t
-            elif ears is not None:
+        if at_ear:
+            self._last["phone_ear"] = t
+            self._ear_hits.append(t)
+        if away:
+            self._away_hits.append(t)
+            if ears is not None:
                 self._last["phone_away"] = t
         if ears is not None and any(hand_near_ear(hand, ears, face_width) for hand in observation.hands):
             self._last["hand_ear"] = t
@@ -283,11 +297,12 @@ class PhoneMonitor:
         self.detector.close()
 
     def _assess(self, t: float, metrics, moving: bool) -> PhoneAssessment:
-        while self._phone_hits and self._phone_hits[0] < t - CONFIRM_WINDOW_S:
-            self._phone_hits.popleft()
+        for hits in (self._ear_hits, self._away_hits):
+            while hits and hits[0] < t - CONFIRM_WINDOW_S:
+                hits.popleft()
         while self._phone_centers and self._phone_centers[0][0] < t - CONFIRM_WINDOW_S:
             self._phone_centers.popleft()
-        confirmed = len(self._phone_hits) >= CONFIRM_HITS
+        confirmed = len(self._away_hits) >= CONFIRM_HITS  # aparelho confirmado longe da orelha
 
         def seen(key, window=EVIDENCE_S):
             return t - self._last[key] <= window
@@ -295,8 +310,12 @@ class PhoneMonitor:
         in_hand = confirmed and (seen("hand_on_phone") or self._phone_moving())
         # Aparelho à vista agora longe da orelha (na mão, no colo): outra mão encostada na orelha não vira "no ouvido".
         phone_away = seen("phone_away") and not seen("phone_ear")
-        at_ear = (confirmed and seen("phone_ear")) or (
-            seen("hand_ear") and not phone_away and seen("phone_ear", PHONE_EAR_MEMORY_S))
+        # "No ouvido" direto: aparelho visto na orelha em várias detecções, ou levado à orelha logo depois de confirmado
+        # fora dela (pegou e atendeu). Depois disso, a mão na orelha segura o estado por PHONE_EAR_MEMORY_S.
+        ear_now = seen("phone_ear") and (len(self._ear_hits) >= EAR_CONFIRM_HITS or confirmed)
+        if ear_now:
+            self._last["ear_confirmed"] = t
+        at_ear = ear_now or (seen("hand_ear") and not phone_away and seen("ear_confirmed", PHONE_EAR_MEMORY_S))
         looking = self._looking_down(metrics, in_hand)
         if looking and (in_hand or confirmed):
             state = "olhando_celular"

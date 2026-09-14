@@ -22,6 +22,9 @@ out/
 
 *.log
 
+# Saídas do PyInstaller e dos pacotes do app de teste (implantacao/app-teste/build.py)
+build/
+
 # Quadros de trabalho e backups do Blender (o vídeo final fica em site/public/midia)
 docs/site/midia/video-local/frame-*.png
 *.blend1

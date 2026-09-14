@@ -11,7 +11,7 @@ from vision.engine import DriverState, DriverStateEngine
 
 logger = logging.getLogger("drivesafe.monitor")
 
-WINDOW_TITLE = "DriveSafe AI - Monitoramento"
+WINDOW_TITLE = "RotaGuard - Monitoramento"
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 CAMERA_REOPEN_AFTER_FAILURES = 30
 CAMERA_OK_WINDOW_S = 5.0
@@ -123,7 +123,7 @@ def draw_overlay(frame, state: DriverState, latency: dict | None = None):
         cv2.rectangle(display, (10, height - 58), (width - 10, height - 48), (40, 40, 40), -1)
         cv2.rectangle(display, (10, height - 58), (10 + filled, height - 48), (0, 200, 255), -1)
 
-    draw_text_block(display, [("q: sair   c: recalibrar", 0.45, 1, (220, 220, 220))], x=8, y=height - 36)
+    draw_text_block(display, [("q ou Esc: sair   c: recalibrar", 0.45, 1, (220, 220, 220))], x=8, y=height - 36)
     return display
 
 
@@ -142,6 +142,9 @@ class DriverMonitor:
         self.last_state: DriverState | None = None
         self._running = False
         self._last_frame_at = None
+        # True quando run() desistiu por falta de imagem (espera_camera_s); run_monitor sai com código 3.
+        self.sem_imagem = False
+        self._window_seen = False
         self._created_at = time.monotonic()
         self._next_performance_log = self._created_at + PERFORMANCE_LOG_S
         self._listener_failures = 0
@@ -206,17 +209,30 @@ class DriverMonitor:
             status["activation_confidence"] = state.activation.confidence_label
         return status
 
-    def run(self, camera, show_window: bool) -> None:
+    def run(self, camera, show_window: bool, espera_camera_s: float | None = None) -> None:
+        """espera_camera_s: sem imagem por esse tempo (nunca chegou ou parou), desiste com sem_imagem=True.
+        None mantém o comportamento da caixa: tenta reabrir para sempre."""
         self._running = True
+        self.sem_imagem = False
+        self._window_seen = False
         failures = 0
-        logger.info("Monitoramento iniciado%s.", " (janela: q sai, c recalibra)" if show_window else " sem janela")
+        last_image = time.monotonic()
+        logger.info("Monitoramento iniciado%s.", " (janela: q ou Esc sai, c recalibra)" if show_window else " sem janela")
         try:
             while self._running:
                 ok, frame = camera.read()
                 if not ok or frame is None:
+                    if getattr(camera, "terminou", False):
+                        logger.info("Fim do vídeo %s.", camera.describe())
+                        break
                     failures += 1
                     if failures == 1:
                         logger.warning("Sem imagem da câmera %s.", camera.describe())
+                    if espera_camera_s and time.monotonic() - last_image >= espera_camera_s:
+                        logger.error("Nenhuma imagem da câmera %s em %.0f s. Confira se ela está conectada e se outro "
+                                     "programa (Teams, Zoom, navegador) não está usando.", camera.describe(), espera_camera_s)
+                        self.sem_imagem = True
+                        break
                     if failures % CAMERA_REOPEN_AFTER_FAILURES == 0:
                         logger.warning("Tentando reabrir a câmera...")
                         camera.open()
@@ -225,7 +241,7 @@ class DriverMonitor:
                 if failures:
                     logger.info("Imagem da câmera voltou.")
                 failures = 0
-                self._last_frame_at = time.monotonic()
+                self._last_frame_at = last_image = time.monotonic()
 
                 if self.policy is not None:
                     self.policy.apply_pending()
@@ -269,11 +285,25 @@ class DriverMonitor:
         except cv2.error as exc:
             logger.warning("Janela indisponível (%s). Seguindo sem janela.", exc)
             return False
-        if key == ord("q"):
+        if key in (ord("q"), ord("Q"), 27) or self._window_closed():
             self._running = False
-        elif key == ord("c"):
+        elif key in (ord("c"), ord("C")):
             self.recalibrate()
         return True
+
+    def _window_closed(self) -> bool:
+        """Fechar no X encerra. Só vale depois de o backend dizer que a janela estava visível: onde a propriedade não
+        existe (pode ser o caso no macOS) ela volta -1 sempre, e aí só q ou Esc encerram."""
+        try:
+            visible = cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE)
+        except cv2.error:
+            return self._window_seen
+        if visible >= 1:
+            self._window_seen = True
+            return False
+        if self._window_seen:
+            logger.info("Janela da câmera fechada: encerrando o monitoramento.")
+        return self._window_seen
 
 
 if __name__ == "__main__":

@@ -10,3 +10,5 @@ npm-debug.log*
 dev.stdout.log
 dev.stderr.log
 .vercel
+# Pacotes do app de teste (spec 010): servidos em /downloads, grandes demais para o git (limite de 100 MB do GitHub).
+public/downloads/
