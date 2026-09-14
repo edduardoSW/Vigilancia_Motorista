@@ -44,7 +44,9 @@ Na pasta de dados do app:
 • eventos.db: eventos do teste (tipo, nível, duração e horário) e medidas em números, como piscadas por minuto, tempo \
 de olho fechado, confiança da detecção de celular e a calibração do olho feita no teste;
 • registro-teste.log: registro técnico (início e fim, pasta de dados, câmera usada, desempenho e eventos);
-• sirene.wav: o som do alarme.
+• sirene.wav: o som do alarme;
+• em_execucao.json, só enquanto o teste está aberto: número do processo, horário de início, câmera usada e último \
+sinal, para o painel da empresa neste computador reconhecer que o teste está aberto. É apagado quando o teste termina.
 A calibração não é reaproveitada: cada teste calibra de novo, e nenhum perfil do rosto fica guardado.
 
 4. O que sai deste computador

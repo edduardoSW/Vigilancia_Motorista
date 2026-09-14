@@ -61,12 +61,14 @@ def numeros_versao(texto: str) -> tuple[int, int, int, int]:
     return tuple(partes + [0] * (4 - len(partes)))
 
 
-def texto_versao_windows(numero: str) -> str:
-    """Propriedades do RotaGuardTeste.exe (Detalhes no Windows): empresa e produto RotaGuard, nada do computador do build."""
+def texto_versao_windows(numero: str, produto: str = "RotaGuard Teste", executavel: str = PASTA_APP) -> str:
+    """Propriedades do .exe (Detalhes no Windows): empresa RotaGuard e o produto, nada do computador do build.
+
+    O padrão é o RotaGuardTeste.exe. O painel (implantacao/painel/build.py, spec 013) usa produto "RotaGuard Painel"."""
     versao_tupla = numeros_versao(numero)
-    campos = (("CompanyName", "RotaGuard"), ("FileDescription", "RotaGuard Teste"), ("FileVersion", numero),
-              ("InternalName", "RotaGuardTeste"), ("LegalCopyright", "© 2026 RotaGuard"),
-              ("OriginalFilename", "RotaGuardTeste.exe"), ("ProductName", "RotaGuard Teste"), ("ProductVersion", numero))
+    campos = (("CompanyName", "RotaGuard"), ("FileDescription", produto), ("FileVersion", numero),
+              ("InternalName", executavel), ("LegalCopyright", "© 2026 RotaGuard"),
+              ("OriginalFilename", f"{executavel}.exe"), ("ProductName", produto), ("ProductVersion", numero))
     tabela = ",\n".join(f"        StringStruct({chave!r}, {valor!r})" for chave, valor in campos)
     return (
         "VSVersionInfo(\n"

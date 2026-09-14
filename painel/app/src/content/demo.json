@@ -1,0 +1,128 @@
+{
+  "aviso": "Empresa, pessoas, veículos e viagens fictícios, para demonstrar o painel.",
+  "empresa": { "nome": "Viação Demonstração", "garagem": "Garagem central" },
+  "agora": "2026-09-14T07:26",
+  "motoristas": [
+    { "id": "m-01", "nome": "Carlos M.", "iniciais": "CM", "consentimento": "registrado" },
+    { "id": "m-02", "nome": "Juliana P.", "iniciais": "JP", "consentimento": "registrado" },
+    { "id": "m-03", "nome": "Rogério L.", "iniciais": "RL", "consentimento": "registrado" },
+    { "id": "m-04", "nome": "Aline C.", "iniciais": "AC", "consentimento": "registrado" },
+    { "id": "m-05", "nome": "Marcos T.", "iniciais": "MT", "consentimento": "pendente" }
+  ],
+  "veiculos": [
+    { "prefixo": "3302", "tipo": "caminhao", "descricao": "Cavalo mecânico", "caixa": "RG-0129", "situacao": "atencao", "detalhe": "A caixa esquentou demais na última viagem (passou de 70 °C). Vale conferir a instalação.", "viagem": null },
+    { "prefixo": "2258", "tipo": "onibus", "descricao": "Rodoviário executivo", "caixa": "RG-0139", "situacao": "importando", "detalhe": "Lendo a viagem de ontem (64%)", "viagem": null },
+    { "prefixo": "2240", "tipo": "onibus", "descricao": "Rodoviário 2 andares", "caixa": "RG-0142", "situacao": "coletada", "detalhe": "Chegou hoje às 05:48 · 4 momentos para verificar", "viagem": "v-2240" },
+    { "prefixo": "3310", "tipo": "caminhao", "descricao": "Cavalo mecânico", "caixa": "RG-0133", "situacao": "coletada", "detalhe": "Chegou hoje às 06:55 · 2 momentos para verificar", "viagem": "v-3310" },
+    { "prefixo": "2251", "tipo": "onibus", "descricao": "Rodoviário 2 andares", "caixa": "RG-0150", "situacao": "em_viagem", "detalhe": "Em viagem, chega hoje às 18:40", "viagem": null },
+    { "prefixo": "2263", "tipo": "onibus", "descricao": "Rodoviário leito", "caixa": "RG-0147", "situacao": "pronta", "detalhe": "Caixa conferida e pronta para a próxima saída", "viagem": null },
+    { "prefixo": "1187", "tipo": "onibus", "descricao": "Rodoviário executivo", "caixa": "RG-0118", "situacao": "revisada", "detalhe": "Verificada por Marina (gestora) hoje às 06:58", "viagem": "v-1187" }
+  ],
+  "coletas": [
+    {
+      "caixa": "RG-0139",
+      "veiculo": "2258",
+      "motorista": "m-04",
+      "saida": "2026-09-13T23:00",
+      "chegada": "2026-09-14T06:40",
+      "conectadaEm": "2026-09-14T07:24",
+      "progresso": 64,
+      "etapas": [
+        { "nome": "Caixa reconhecida", "detalhe": "É uma caixa da Viação Demonstração.", "feita": true },
+        { "nome": "Lendo o registro da viagem", "detalhe": "O registro de tudo o que a caixa viu na viagem.", "feita": false },
+        { "nome": "Conferindo se nada foi alterado", "detalhe": "A caixa assina o registro; o painel confere a assinatura.", "feita": false },
+        { "nome": "Separando os vídeos curtos", "detalhe": "A caixa só grava vídeo quando um sinal se repete.", "feita": false }
+      ]
+    }
+  ],
+  "viagens": [
+    {
+      "id": "v-3310",
+      "veiculo": "3310",
+      "tipo": "caminhao",
+      "motorista": "m-03",
+      "linha": "Campinas → Uberlândia",
+      "saida": "2026-09-13T20:40",
+      "chegada": "2026-09-14T06:55",
+      "caixa": "RG-0133",
+      "revisao": "pendente",
+      "integridade": { "situacao": "conferida", "blocos": 470, "detalhe": "Cadeia de hash íntegra e assinatura da caixa válida" },
+      "saudeCaixa": { "temperaturaMaxC": 58, "quedasEnergia": 1, "semVisaoRostoMin": 1, "relogio": "Sincronizado na saída" },
+      "jornada": [
+        { "inicio": "2026-09-13T20:40", "fim": "2026-09-14T02:20", "tipo": "direcao" },
+        { "inicio": "2026-09-14T02:20", "fim": "2026-09-14T03:00", "tipo": "pausa" },
+        { "inicio": "2026-09-14T03:00", "fim": "2026-09-14T06:55", "tipo": "direcao" }
+      ],
+      "eventos": [
+        { "id": "e-301", "hora": "2026-09-13T21:02", "tipo": "calibracao_concluida", "risco": 1, "duracaoS": 121 },
+        { "id": "e-302", "hora": "2026-09-14T02:10", "tipo": "direcao_continua", "risco": 2, "duracaoS": 0 },
+        { "id": "e-303", "hora": "2026-09-14T05:37", "tipo": "celular_na_mao", "risco": 3, "duracaoS": 6.0 }
+      ],
+      "episodios": []
+    },
+    {
+      "id": "v-1187",
+      "veiculo": "1187",
+      "tipo": "onibus",
+      "motorista": "m-02",
+      "linha": "Rio de Janeiro → Belo Horizonte",
+      "saida": "2026-09-13T23:30",
+      "chegada": "2026-09-14T06:20",
+      "caixa": "RG-0118",
+      "revisao": "concluida",
+      "integridade": { "situacao": "conferida", "blocos": 411, "detalhe": "Cadeia de hash íntegra e assinatura da caixa válida" },
+      "saudeCaixa": { "temperaturaMaxC": 55, "quedasEnergia": 0, "semVisaoRostoMin": 0, "relogio": "Sincronizado na saída" },
+      "jornada": [
+        { "inicio": "2026-09-13T23:30", "fim": "2026-09-14T03:10", "tipo": "direcao" },
+        { "inicio": "2026-09-14T03:10", "fim": "2026-09-14T03:35", "tipo": "pausa" },
+        { "inicio": "2026-09-14T03:35", "fim": "2026-09-14T06:20", "tipo": "direcao" }
+      ],
+      "eventos": [
+        { "id": "e-201", "hora": "2026-09-13T23:48", "tipo": "calibracao_concluida", "risco": 1, "duracaoS": 97 },
+        { "id": "e-202", "hora": "2026-09-14T02:26", "tipo": "celular_no_ouvido", "risco": 3, "duracaoS": 3.4, "revisao": { "resultado": "alarme_falso", "por": "Marina (gestora)", "em": "2026-09-14T06:58", "nota": "Mão na orelha, sem celular." } },
+        { "id": "e-203", "hora": "2026-09-14T05:15", "tipo": "atencao", "risco": 2, "duracaoS": 0, "revisao": { "resultado": "orientado", "por": "Marina (gestora)", "em": "2026-09-14T06:58", "nota": "Pausa extra combinada para a próxima escala." } }
+      ],
+      "episodios": []
+    },
+    {
+      "id": "v-2240",
+      "veiculo": "2240",
+      "tipo": "onibus",
+      "motorista": "m-01",
+      "linha": "São Paulo → Curitiba",
+      "saida": "2026-09-13T22:10",
+      "chegada": "2026-09-14T05:48",
+      "caixa": "RG-0142",
+      "revisao": "pendente",
+      "integridade": { "situacao": "conferida", "blocos": 462, "detalhe": "Cadeia de hash íntegra e assinatura da caixa válida" },
+      "saudeCaixa": { "temperaturaMaxC": 61, "quedasEnergia": 0, "semVisaoRostoMin": 3, "relogio": "Sincronizado na saída" },
+      "jornada": [
+        { "inicio": "2026-09-13T22:10", "fim": "2026-09-14T01:35", "tipo": "direcao" },
+        { "inicio": "2026-09-14T01:35", "fim": "2026-09-14T02:05", "tipo": "pausa" },
+        { "inicio": "2026-09-14T02:05", "fim": "2026-09-14T05:48", "tipo": "direcao" }
+      ],
+      "eventos": [
+        { "id": "e-101", "hora": "2026-09-13T22:31", "tipo": "calibracao_concluida", "risco": 1, "duracaoS": 108 },
+        { "id": "e-102", "hora": "2026-09-13T23:41", "tipo": "olhando_celular", "risco": 4, "duracaoS": 4.2 },
+        { "id": "e-103", "hora": "2026-09-14T00:58", "tipo": "mao_no_rosto", "risco": 1, "duracaoS": 7.5 },
+        { "id": "e-104", "hora": "2026-09-14T01:12", "tipo": "atencao", "risco": 2, "duracaoS": 0 },
+        { "id": "e-105", "hora": "2026-09-14T03:52", "tipo": "sonolencia", "risco": 3, "duracaoS": 0, "episodio": "ep-1" },
+        { "id": "e-106", "hora": "2026-09-14T04:03", "tipo": "microssono", "risco": 3, "duracaoS": 1.3, "episodio": "ep-1" },
+        { "id": "e-107", "hora": "2026-09-14T04:11", "tipo": "olhos_esfregados", "risco": 1, "duracaoS": 3.1, "episodio": "ep-1" },
+        { "id": "e-108", "hora": "2026-09-14T04:18", "tipo": "microssono", "risco": 3, "duracaoS": 1.1, "episodio": "ep-1" },
+        { "id": "e-109", "hora": "2026-09-14T04:40", "tipo": "celular_no_ouvido", "risco": 3, "duracaoS": 3.0 },
+        { "id": "e-110", "hora": "2026-09-14T05:02", "tipo": "rosto_nao_detectado", "risco": 1, "duracaoS": 10 }
+      ],
+      "episodios": [
+        {
+          "id": "ep-1",
+          "titulo": "Sonolência recorrente",
+          "inicio": "2026-09-14T03:52",
+          "fim": "2026-09-14T04:18",
+          "resumo": "Sinal de sonolência seguido de dois microssonos em 26 min, na madrugada.",
+          "trecho": { "duracaoS": 20, "situacao": "Aguardando revisão autorizada" }
+        }
+      ]
+    }
+  ]
+}

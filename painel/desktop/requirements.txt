@@ -1,0 +1,16 @@
+# RotaGuard Painel no computador (spec 013): janela nativa (pywebview + WebView2 do Windows) e empacotamento.
+# Versões estáveis mais recentes conferidas com `pip index versions` em 14/09/2026, testadas no Python 3.14.5.
+# Instalar só no .venv do projeto:
+#   .venv\Scripts\python.exe -m pip install -r painel/desktop/requirements.txt
+pywebview==6.2.1
+bottle==0.13.4
+proxy_tools==0.1.0
+typing_extensions==4.16.0
+# No Windows, o pywebview abre a janela WinForms com o WebView2 pelo .NET Framework (pythonnet)
+pythonnet==3.1.0 ; sys_platform == "win32"
+clr_loader==0.3.1 ; sys_platform == "win32"
+cffi==2.1.1 ; sys_platform == "win32"
+pycparser==3.0 ; sys_platform == "win32"
+# Empacotamento (implantacao/painel/build.py); os ganchos do pywebview e do pythonnet vêm no hooks-contrib
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.7

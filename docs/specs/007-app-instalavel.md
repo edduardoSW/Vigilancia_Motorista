@@ -21,6 +21,11 @@ O painel existe como PWA em HTML, CSS e JS sem build (`painel/webapp/`), com mod
 
 1. **Um código de interface só.** `painel/webapp/` continua sendo a interface. O app nativo é uma casca **Tauri 2**
    que carrega esses arquivos empacotados (funciona sem internet).
+   - **Mudou em 14/09/2026, por escolha do Matheus ("Python + janela nativa"):**
+     - a interface passa a ser `painel/app/` (Next.js + Tailwind, exportação estática; spec 012);
+     - a janela é um app em Python com pywebview e o WebView2 do Windows, empacotado com PyInstaller e instalador
+       (spec 013);
+     - o Tauri 2 e o `painel/webapp` saem.
    - Rust só existe na casca e nas funções nativas: descoberta da caixa na rede, arquivo e impressão.
 2. **Plataformas:**
    - Windows: instalador NSIS `.exe`; no futuro, também pela Microsoft Store (pacote MSIX), que assina o app;

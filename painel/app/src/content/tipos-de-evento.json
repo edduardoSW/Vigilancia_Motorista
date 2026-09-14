@@ -1,0 +1,16 @@
+{
+  "calibracao_concluida": { "rotulo": "Calibração concluída", "categoria": "sistema" },
+  "rosto_nao_detectado": { "rotulo": "Câmera sem visão do rosto", "categoria": "sistema" },
+  "atencao": { "rotulo": "Atenção: sinais iniciais de sonolência", "categoria": "sonolencia" },
+  "sonolencia": { "rotulo": "Sonolência", "categoria": "sonolencia" },
+  "microssono": { "rotulo": "Microssono (olhos fechados 1 s)", "categoria": "sonolencia" },
+  "sono": { "rotulo": "Sono (olhos fechados 3 s)", "categoria": "sonolencia" },
+  "nao_responsivo": { "rotulo": "Sem resposta (olhos fechados 6 s)", "categoria": "sonolencia" },
+  "olhos_esfregados": { "rotulo": "Olhos esfregados ou coçados (sinal leve de sono)", "categoria": "sonolencia" },
+  "mao_no_rosto": { "rotulo": "Mão no rosto por mais de 1 s (sinal leve de sono)", "categoria": "sonolencia" },
+  "celular_na_mao": { "rotulo": "Celular na mão", "categoria": "celular" },
+  "celular_no_ouvido": { "rotulo": "Celular no ouvido", "categoria": "celular" },
+  "olhando_celular": { "rotulo": "Olhando o celular (mais de 2 s)", "categoria": "celular" },
+  "direcao_continua": { "rotulo": "Direção contínua acima de 5 h 30 min", "categoria": "jornada" },
+  "ativacao_atipica": { "rotulo": "Sinais compatíveis com ativação atípica (não é diagnóstico)", "categoria": "ativacao" }
+}

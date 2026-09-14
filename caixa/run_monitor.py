@@ -146,6 +146,7 @@ def main(argv=None) -> int:
     from vision.context import DrivingContext
     from vision.driver_monitor import DriverMonitor
     from vision.drowsiness import DrowsinessMonitor
+    from vision.em_execucao import AnuncioExecucao, descrever_camera, nome_do_programa
     from vision.engine import DriverStateEngine
     from vision.event_queue import EventStore
     from vision.eyes import DriverProfile
@@ -163,6 +164,9 @@ def main(argv=None) -> int:
         logger.warning("Sem token do dispositivo: os eventos ficam na fila local até configurar DRIVESAFE_DEVICE_TOKEN.")
 
     store = EventStore(data_dir / "eventos.db")
+    # Spec 018: o painel da empresa reconhece que o script está aberto por em_execucao.json na pasta de dados.
+    anuncio = AnuncioExecucao(data_dir, nome_do_programa())
+    anuncio.iniciar()
     analyzer = sync = engine = None
     try:
         alarm = Alarm(data_dir / "sirene.wav", buzzer_pin=args.buzzer_pin, muted=args.mute)
@@ -237,6 +241,7 @@ def main(argv=None) -> int:
             camera.release()
             raise CameraIndisponivel(f"A câmera {args.camera} não abriu. Confira se ela está conectada e se outro "
                                      "programa (Teams, Zoom, navegador) não está usando, ou use a câmera automática.")
+        anuncio.definir_camera(descrever_camera(camera, args.camera))
         monitor.run(camera, resolve_window(args), espera_camera_s=args.espera_camera or None)
         if monitor.sem_imagem:
             return SAIDA_SEM_CAMERA
@@ -249,6 +254,7 @@ def main(argv=None) -> int:
         logger.error("%s", exc)
         return 1
     finally:
+        anuncio.parar()
         if sync is not None:
             sync.stop()
             sync.join(timeout=15)

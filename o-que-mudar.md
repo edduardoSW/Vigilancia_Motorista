@@ -59,6 +59,13 @@ Conferido no código e rodando as provas, não de memória.
   - site com build ok, lint com 0 erros, 53 de 53 testes e `tsc` sem erro;
   - pacote Windows com teste de fumaça e teste sem câmera (`implantacao/app-teste/build.py`).
 
+### 0.2 Painel da empresa: parado em 14/09/2026 às 15:00 (trabalho pela metade)
+
+- A construção de todas as telas do painel (app de janela própria, spec 012 a 018) foi interrompida: a janela do
+  Claude fechou às 14:40 com 2 dos 5 agentes ainda trabalhando (núcleo Python e casca da interface).
+- **Onde parou, o que está pronto, o que falta e a ordem para continuar:** `docs/painel/onde-parou-2026-09-14.md`.
+- Contrato comum dos agentes (nomes, tipos, permissões): `docs/painel/contrato-painel.md`.
+
 ---
 
 ## 1. Reclamações do Matheus (palavras dele, em ordem)
@@ -293,6 +300,18 @@ Worktrees locais (fora do repositório, em `Downloads/Vigilancia_Motorista-main/
   `EAR_CONFIRM_HITS`.
 - [ ] **Spec 011** (rascunho): aprovar os sinais de bocejo visível, olhos e cabeça, e responder se bocejo sozinho
   pode continuar tocando alarme.
+- [x] **Painel da empresa como app de computador** (specs 012 e 013, 14/09):
+  - **Primeira prévia rejeitada:** aberta no navegador ("não deve ser web") e visual "com muita cara de IA e confuso".
+  - **Segunda prévia aprovada ("gostei"):** mistura de lista + detalhe, passo a passo e relatório em página.
+    - Telas: caixa conectada, viagem com resumo em frases, momentos para verificar (vídeo e decisão na linha) e
+      veículos e caixas.
+    - Construída em `painel/app`, com dados fictícios.
+  - **App de janela própria:** Python + pywebview/WebView2 (`painel/desktop`), com pacote em
+    `build/painel/pacotes/RotaGuard-Painel-windows-x64.zip`. O instalador (Inno Setup) só sai no CI.
+  - **Falta:**
+    - ligar à caixa de verdade (specs 001, 003 e 004);
+    - versão Linux;
+    - responder as perguntas das specs 012 e 013.
 - [ ] Spec 004 (importação e relatório): não escrita.
   - O app reconhece a caixa, confere o registro, decifra os trechos e gera PDF e CSV.
 - [ ] Spec 007 (rascunho pronto em `docs/specs/007-app-instalavel.md`):

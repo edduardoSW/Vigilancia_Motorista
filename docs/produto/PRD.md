@@ -25,6 +25,7 @@
 | Quem | Papel | Detalhe |
 |---|---|---|
 | Gestor(a) de segurança e frota (P1), dono de fretamento (P2), CCO urbano (P3), financeiro (P4) | Compra e lê o relatório | `docs/site/personas.md` |
+| Funcionário da empresa no painel | Administrador, Supervisor ou Consulta (spec 014) | Login criado pelo administrador da empresa depois da ativação |
 | Motorista (P5) | Usa, autoriza e vê os próprios dados | Não pode ser tratado como suspeito |
 | Técnico RotaGuard | Instala, pareia a caixa e cadastra | Acesso de equipe |
 | Equipe RotaGuard (admin) | Cria empresas e logins | Sem cadastro aberto |
@@ -96,7 +97,7 @@
 | RF-22 | Revisão de eventos e trechos (confirmado, alarme falso, motorista orientado), com quem revisou e quando | Existe no servidor (`servidor/backend/routes/alerts.py`) | 004 |
 | RF-23 | Área do motorista: os próprios dados, autorizações e exportação | Existe (`painel/webapp`) | 007 |
 | RF-24 | Modo de teste com a câmera do aparelho, com as mesmas regras de detecção da caixa | Novo | 007 |
-| RF-25 | Instaladores para Windows, Linux e Android gerados no GitHub Actions (Tauri 2) e PWA no iPhone; sem Mac; Windows no futuro pela Microsoft Store (MSIX) | Novo | 007 |
+| RF-25 | Painel instalável no computador: app de janela própria em Python + WebView2 (pywebview, PyInstaller e instalador), escolhido pelo Matheus em 14/09/2026, para Windows e Linux; Android e PWA no iPhone depois; sem Mac; Windows no futuro pela Microsoft Store (MSIX) | Em construção (Windows) | 007, 013 |
 | RF-26 | Logins criados só pela equipe; modo local de demonstração com PIN e dados fictícios | Existe | 007 |
 | RF-27 | **App de teste do script**: o script da caixa empacotado para Windows e Linux, baixado na área do PIN do site, que roda a detecção e o alarme com a câmera do computador, sem servidor e sem instalar Python; com seção de privacidade, LGPD e termos, sem aceite obrigatório | Novo (14/09/2026) | 010 |
 
@@ -109,6 +110,26 @@
 | RF-32 | "Já é cliente? Entrar": PIN conferido no servidor → página de download do app por plataforma | Novo | 008 |
 | RF-33 | Nenhuma afirmação sem fonte ou sem base no código | Regra | 008 |
 | RF-34 | Estradas e mapa-múndi com dado real (Natural Earth, IBGE, DNIT); nunca pino de veículo ou evento | Em construção | 008 |
+
+### 6.4 Painel da empresa: acesso, cadastros, configurações e guia
+
+Pedido de 14/09/2026: "ainda falta bastante coisa nesse painel: a parte de fazer login, uma parte de configuração, uma
+parte de coisas separadas, registro de veículos e motoristas, registros de funcionários, guia de uso de tudo etc.".
+"Coisas separadas" foi lido como cada assunto na sua própria área do menu (RF-40); confirmar com o Matheus.
+
+| ID | Requisito | Situação | Spec |
+|---|---|---|---|
+| RF-40 | Menu fixo com Início, Viagens, Motoristas, Veículos e caixas, Equipe, Configurações e Guia de uso; itens sem permissão não aparecem | Novo (rascunho) | 014 |
+| RF-41 | Entrar com usuário e senha guardados no computador; primeiro uso ativado pelo arquivo da empresa entregue pela RotaGuard; código de recuperação; bloqueio por tempo sem uso. Se aprovado, substitui a primeira parte do RF-26 | Novo (rascunho) | 014 |
+| RF-42 | Equipe: funções Administrador, Supervisor e Consulta; adicionar, trocar função, senha temporária e desativar sem apagar | Novo (rascunho) | 014 |
+| RF-43 | Registro de atividades só por acréscimo e encadeado: entradas, vídeos abertos, decisões, cadastros, configurações, cópias e exportações | Novo (rascunho) | 014 |
+| RF-44 | Cadastro de motoristas: dados, CNH com aviso de vencimento, termo de ciência (vídeo trancado sem termo), histórico e exportação dos dados do motorista | Novo (rascunho) | 015 |
+| RF-45 | Cadastro de veículos: número, placa, tipo, carga ou passageiros (regra de descanso) e situação; importação por planilha | Novo (rascunho) | 015 |
+| RF-46 | Caixas vindas do arquivo da empresa, vinculadas a veículos com histórico; caixa bloqueada não importa | Novo (rascunho) | 015 |
+| RF-47 | Configurações do administrador: empresa, regras da viagem (sem passar da lei), guarda dos dados, acesso, impressão, texto maior e sobre | Novo (rascunho) | 016 |
+| RF-48 | Cópia de segurança cifrada com senha, lembrete semanal e restauração com confirmação | Novo (rascunho) | 016 |
+| RF-49 | Guia de uso dentro do app, com 10 capítulos, busca, imagens das telas reais, "Como funciona?" em cada tela e Primeiros passos no Início | Em construção | 017 |
+| RF-50 | Script local no painel: reconhecer quando o RotaGuard Teste ou o monitor está aberto neste computador (anúncio `em_execucao.json` ou nome do processo) e capturar os eventos dele só para leitura, sem duplicar e separados por sessão, na tela "Teste neste computador" | Em construção (14/09/2026) | 018 |
 
 ## 7. Requisitos não funcionais
 
@@ -125,6 +146,8 @@
 | RNF-09 | Site: contraste AA, `prefers-reduced-motion`, LCP de até 2,5 s | Em construção |
 | RNF-10 | Licenças: nada AGPL no produto (o `yolov8n.pt` fica só em `ferramentas/`); MediaPipe Apache-2.0 | Existe |
 | RNF-11 | Qualidade: toda regra com teste automatizado; prova com testes, build e lint | Regra |
+| RNF-12 | Senha e sessão do painel: senha só como hash `scrypt` (N 2^17, r 8, p 1); espera crescente depois de 5 erros; sessão só na memória do app, pela ponte do pywebview e sem rota HTTP; permissão conferida no Python (spec 014) | Novo (rascunho) |
+| RNF-13 | Dados do painel no computador: pasta do usuário, prazos de guarda que apagam sozinhos e registram, cópia de segurança cifrada com senha (spec 016) | Novo (rascunho) |
 
 ## 8. Restrições
 
@@ -208,6 +231,34 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 - **Privacidade:** "coloque política de privacidade, LGPD e os termos dentro do script RotaGuard para ficar dentro da
   lei, porém não quero ter que aprovar nada para que comece a usar; apenas deixe lá em uma seção" → seção no app de
   teste, sem aceite obrigatório (spec 010, decisão 13). Os textos precisam de revisão de advogado antes de clientes.
+- **Painel da empresa:**
+  - "faça o dashboard teste para eu ver como vai ser mais ou menos" → prévia com dados fictícios em `painel/app`
+    (spec 012).
+  - "o script ficará dentro do Raspberry no veículo; após acabar o trajeto, a empresa irá pegar esse dispositivo,
+    conectar no computador e, com esse app, exportar a log/vídeo etc. para visualizar e continuar o processo" → confirma
+    a coleta local na chegada (RF-09, RF-20, RF-21), sem depender de envio ao vivo.
+  - Prévia 1, aberta no navegador: "esse dashboard não deve ser web… mas sim um app instalável para usar no computador"
+    e "o visual está com muita cara de IA e confuso de se entender".
+  - Escolhas: "mesclar todas as opções" de estrutura (passo a passo, lista + detalhe, relatório em página) e tecnologia
+    "Python + janela nativa" (spec 013, no lugar do Tauri 2).
+  - Prévia 2 em imagem: "gostei" → interface construída em `painel/app` e empacotada na janela do app.
+  - Depois de ver o app: "ainda falta bastante coisa nesse painel: a parte de fazer login, uma parte de configuração,
+    uma parte de coisas separadas, registro de veículos e motoristas, registros de funcionários, guia de uso de tudo
+    etc. Falta muita, muita coisa" → seção 6.4 (RF-40 a RF-49), specs 014 a 017 em rascunho e prévia em imagem das
+    telas novas em `docs/painel/previa-2026-09-14-parte-2/`, esperando aprovação.
+  - Prévia da parte 2: "gostei, pode fazer, mas deixe um pouco menos com cara de IA e quero algo mais dinâmico […] acabe
+    isso em no máximo 1 hora e meia"; "caso não dê para fazer em 1 hora e meia, faça uma parte, depois pare para
+    continuar depois" → specs 014 a 017 aprovadas; construção com tabela densa, painel lateral, atalhos de teclado e
+    movimento curto.
+  - "lembre-se: por enquanto local, e caso eu inicie o script no computador, deve reconhecer que ele está aberto e
+    capturar as logs" → contas e dados só neste computador (pergunta 1 da spec 014 respondida) e spec 018 (script local
+    no painel).
+  - "futuramente tudo isso vai estar conectado a uma VPS e depois vamos ter o Raspberry Pi etc." → registros com `uid` e
+    datas de criação e alteração, e regras em módulos Python puros, para sincronizar com a VPS depois sem refazer as telas.
+  - Pergunta dele: "qual escolher, Raspberry Pi 3, 4 ou 5, quantos GB de RAM e quantos GB de cartão microSD" →
+    recomendação revista: **Pi 5 com 4 GB e microSD de 64 GB high endurance**, com amplificador ou placa de som (o Pi 5
+    não tem saída de 3,5 mm), fonte de 5 V e 5 A, Active Cooler e bateria do relógio. Esperando confirmação para
+    trocar a seção 8 e a spec 005, que ainda falam do Pi 4.
 
 ## 12. Specs
 
@@ -224,3 +275,10 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 | `docs/specs/009-pendencias-da-deteccao.md` | RF-01, RF-02 (pendências da etapa 1 que dão para fechar sem gravação) |
 | `docs/specs/010-app-de-teste-do-script.md` | RF-27 (download do script empacotado para testar em outros computadores) |
 | `docs/specs/011-sinais-complementares-de-fadiga.md` | RF-13 a RF-15 propostos (bocejo visível, sinais ao redor dos olhos, movimento da cabeça); rascunho de 14/09/2026 |
+| `docs/specs/012-previa-do-painel-da-empresa.md` | RF-20 a RF-22 (interface do painel: caixa conectada, viagem como relatório e momentos para verificar); prévia 2 aprovada em 14/09/2026 |
+| `docs/specs/013-app-do-painel-no-computador.md` | RF-25 (janela própria em Python + WebView2, pacote e instalador do painel) |
+| `docs/specs/014-entrar-equipe-e-permissoes.md` | RF-40 a RF-43, RNF-12 (menu, entrar, equipe e funções, registro de atividades); rascunho de 14/09/2026 |
+| `docs/specs/015-cadastro-de-motoristas-veiculos-e-caixas.md` | RF-44 a RF-46, RF-12 (motoristas com CNH e termo, veículos, caixas e planilha); rascunho de 14/09/2026 |
+| `docs/specs/016-configuracoes-do-painel.md` | RF-47, RF-48, RNF-13 (configurações, guarda dos dados e cópia de segurança); rascunho de 14/09/2026 |
+| `docs/specs/017-guia-de-uso-do-painel.md` | RF-49 (guia de uso com busca, ajuda em cada tela e Primeiros passos); aprovada em 14/09/2026 |
+| `docs/specs/018-script-local-no-painel.md` | RF-50 (reconhecer o script aberto neste computador e capturar os eventos); pedido de 14/09/2026 |

@@ -1,0 +1,332 @@
+@import "tailwindcss";
+
+/* Fontes: utilitários com nomes diferentes das variáveis do next/font (erro 52 do vault). */
+@theme inline {
+  --font-sans: var(--fonte-texto), ui-sans-serif, system-ui, sans-serif;
+  --font-titulo: var(--fonte-titulo), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Cores da prévia 2 aprovada em 14/09/2026 (docs/painel/previa-2026-09-14), na família do site "Boa chegada". */
+@theme {
+  --color-verde: #103e31;
+  --color-tinta: #173b30;
+  --color-papel: #fbfcf8;
+  --color-lateral: #f1f4ee;
+  --color-grafite: #5d6b62;
+  --color-fio: #e0e6dc;
+  --color-lima: #d5f669;
+  --color-alarme: #a72d38;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-papel);
+    color: var(--color-tinta);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-verde);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 40px;
+    padding-inline: 16px;
+    border: 1px solid var(--color-fio);
+    border-radius: 9px;
+    background-color: #fff;
+    color: var(--color-tinta);
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  }
+
+  .btn:hover {
+    border-color: rgb(23 59 48 / 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    border-color: var(--color-verde);
+    background-color: var(--color-verde);
+    color: #fff;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 8px 18px -10px rgb(16 62 49 / 0.6);
+  }
+
+  .btn-small {
+    height: 34px;
+    padding-inline: 11px;
+    font-size: 13px;
+  }
+
+  .btn:disabled {
+    border-color: #e7ece4;
+    background-color: #e7ece4;
+    color: #8b978f;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-quiet {
+    border-color: transparent;
+    background-color: transparent;
+  }
+
+  .btn-quiet:hover {
+    border-color: transparent;
+    background-color: var(--color-lateral);
+    transform: none;
+  }
+
+  /* Campos de formulário (painel parte 2). */
+  .input,
+  .select {
+    display: block;
+    width: 100%;
+    height: 40px;
+    padding-inline: 12px;
+    border: 1px solid var(--color-fio);
+    border-radius: 9px;
+    background-color: #fff;
+    color: var(--color-tinta);
+    font-size: 14px;
+    transition: border-color 160ms var(--ease-painel), box-shadow 160ms var(--ease-painel);
+  }
+
+  .input::placeholder {
+    color: #8b978f;
+  }
+
+  .input:hover,
+  .select:hover {
+    border-color: rgb(23 59 48 / 0.3);
+  }
+
+  .input:focus-visible,
+  .select:focus-visible {
+    outline: none;
+    border-color: var(--color-verde);
+    box-shadow: 0 0 0 3px rgb(16 62 49 / 0.12);
+  }
+
+  .input[aria-invalid="true"],
+  .select[aria-invalid="true"] {
+    border-color: var(--color-alarme);
+  }
+
+  .input:disabled,
+  .select:disabled {
+    background-color: #f3f5f0;
+    color: #8b978f;
+    cursor: not-allowed;
+  }
+
+  textarea.input {
+    height: auto;
+    min-height: 88px;
+    padding-block: 10px;
+    resize: vertical;
+  }
+
+  .select {
+    appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%235d6b62' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+
+  .tab-bar {
+    transition: transform 200ms var(--ease-painel), width 200ms var(--ease-painel);
+  }
+
+  .count {
+    transition: color 200ms var(--ease-painel);
+  }
+}
+
+/* Movimento com intenção (160 a 220 ms). Some com prefers-reduced-motion. */
+:root {
+  --ease-painel: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes painel-entra {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes painel-gaveta {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes painel-gaveta-sai {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes painel-dialogo {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes painel-dialogo-sai {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes painel-aviso {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes painel-linha {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes painel-veu {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes painel-veu-sai {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes painel-pulso {
+  0% {
+    box-shadow: 0 0 0 0 rgb(16 62 49 / 0.38);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgb(16 62 49 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(16 62 49 / 0);
+  }
+}
+
+.anim-enter {
+  animation: painel-entra 200ms var(--ease-painel) both;
+}
+
+.anim-drawer {
+  animation: painel-gaveta 220ms var(--ease-painel) both;
+}
+
+.anim-drawer-out {
+  animation: painel-gaveta-sai 160ms var(--ease-painel) both;
+}
+
+.anim-dialog {
+  animation: painel-dialogo 180ms var(--ease-painel) both;
+}
+
+.anim-dialog-out {
+  animation: painel-dialogo-sai 140ms var(--ease-painel) both;
+}
+
+.anim-toast {
+  animation: painel-aviso 200ms var(--ease-painel) both;
+}
+
+.anim-row {
+  animation: painel-linha 180ms var(--ease-painel) both;
+}
+
+.anim-fade {
+  animation: painel-veu 160ms var(--ease-painel) both;
+}
+
+.anim-fade-out {
+  animation: painel-veu-sai 160ms var(--ease-painel) both;
+}
+
+.pulse-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--color-verde);
+  animation: painel-pulso 1.8s var(--ease-painel) infinite;
+}
+
+.menu-bar {
+  transition: transform 200ms var(--ease-painel), height 200ms var(--ease-painel), opacity 160ms var(--ease-painel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-enter,
+  .anim-drawer,
+  .anim-drawer-out,
+  .anim-dialog,
+  .anim-dialog-out,
+  .anim-toast,
+  .anim-row,
+  .anim-fade,
+  .anim-fade-out,
+  .pulse-dot {
+    animation: none !important;
+  }
+
+  .tab-bar,
+  .menu-bar,
+  .count {
+    transition: none !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body,
+  .app-shell {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  main {
+    overflow: visible;
+  }
+}
