@@ -100,6 +100,7 @@ Os caminhos da tela são relativos a `painel/app/src/components/`.
 ## Git e vault
 
 - Esta rodada e a anterior do mesmo dia vão num commit na branch `app-instalavel-em-andamento`, com push, como o
-  Matheus pediu ("apos acabar faça o push"). A `main` continua em `18918ef`.
+  Matheus pediu ("apos acabar faça o push"). A `main` do GitHub está em `b058e0a`, por um push de 14/09 às 15:05,
+  anterior a esta sessão, e não foi mexida aqui.
 - Vault: os erros 127 (foco que rola a janela) e 128 (demonstração e Python diferentes) estão em
   `erros-que-a-ia-comete.md`, commitados e enviados.
