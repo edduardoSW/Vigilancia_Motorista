@@ -39,7 +39,7 @@ export function SearchResults({
               <b className="mt-0.5 block text-[15px] font-semibold">{resultado.titulo}</b>
               <span className="mt-1 block text-[14px] text-grafite">
                 {resultado.trecho.antes}
-                <mark className="rounded-[3px] bg-lima px-0.5 text-tinta">{resultado.trecho.achado}</mark>
+                <mark className="rounded-[3px] bg-lima px-0.5 text-sobre-lima">{resultado.trecho.achado}</mark>
                 {resultado.trecho.depois}
               </span>
             </button>

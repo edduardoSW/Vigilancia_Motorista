@@ -61,8 +61,12 @@ export function validarCpf(valor: string | null | undefined): string | null {
   return null;
 }
 
-/** Na lista o CPF aparece só com o miolo: •••.•••.247-••. */
+/** CPF que já veio mascarado da ponte (o Python nunca devolve o CPF inteiro na lista). */
+export const cpfMascarado = (valor: string | null | undefined) => (valor ?? "").includes("•");
+
+/** Na lista o CPF aparece só com o miolo: •••.•••.247-••. O que já veio mascarado passa como está. */
 export function mascararCpf(valor: string | null | undefined) {
+  if (cpfMascarado(valor)) return valor ?? "";
   const digitos = soDigitos(valor);
   return digitos.length === 11 ? `•••.•••.${digitos.slice(6, 9)}-••` : "";
 }
@@ -125,4 +129,109 @@ export const mesAno = (data: string) => `${data.slice(5, 7)}/${data.slice(0, 4)}
 export function hojeIso(agora = new Date()) {
   const dois = (numero: number) => String(numero).padStart(2, "0");
   return `${agora.getFullYear()}-${dois(agora.getMonth() + 1)}-${dois(agora.getDate())}`;
+}
+
+// Spec 019 · termo assinado importado como comprovante (decisão 5). A tela confere nome, tamanho e data antes de ler o
+// arquivo; o Python confere de novo pelos primeiros bytes e grava o SHA-256 (TER-01 e TER-02).
+
+/** Maior arquivo de termo aceito (TER-01). */
+export const TERMO_MAX_BYTES = 10 * 1024 * 1024;
+
+/** O que o seletor de arquivo mostra; quem decide é o Python, pelos primeiros bytes. */
+export const TERMO_ACEITA = ".pdf,.png,.jpg,.jpeg";
+
+const EXTENSOES_TERMO = new Set(["pdf", "png", "jpg", "jpeg"]);
+
+export function validarArquivoTermo(arquivo: { nome: string; bytes: number } | null | undefined): string | null {
+  if (!arquivo) return "Escolha o arquivo do termo assinado.";
+  const extensao = /\.([a-z0-9]+)$/i.exec(arquivo.nome.trim())?.[1]?.toLowerCase();
+  if (!extensao || !EXTENSOES_TERMO.has(extensao)) return "Use um PDF ou uma foto (PNG ou JPEG) do termo assinado.";
+  if (arquivo.bytes <= 0) return "O arquivo está vazio. Escolha o arquivo do termo assinado.";
+  if (arquivo.bytes > TERMO_MAX_BYTES) return "O arquivo pode ter até 10 MB.";
+  return null;
+}
+
+/** Data da assinatura: obrigatória e nunca depois de hoje (TER-01). */
+export function validarDataTermo(data: string | null | undefined, hoje: string): string | null {
+  if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return "Informe a data em que o termo foi assinado.";
+  if (data > hoje) return "A data não pode ser depois de hoje.";
+  return null;
+}
+
+/** "data:application/pdf;base64,JVBER..." (FileReader.readAsDataURL) → "JVBER...", que é o que a ponte recebe. */
+export function conteudoBase64(dataUrl: string | null | undefined) {
+  const texto = dataUrl ?? "";
+  const marca = texto.indexOf(";base64,");
+  return texto.startsWith("data:") && marca !== -1 ? texto.slice(marca + ";base64,".length) : "";
+}
+
+/** "212 KB", "1,4 MB". Nunca "0 KB". */
+export function tamanhoArquivo(bytes: number) {
+  const kb = Math.max(1, Math.round(bytes / 1024));
+  if (kb < 1024) return `${kb} KB`;
+  const mb = Math.round((bytes / (1024 * 1024)) * 10) / 10;
+  return `${String(mb).replace(".", ",")} MB`;
+}
+
+const doisDigitos = (numero: number) => String(numero).padStart(2, "0");
+const soData = (texto: string) => /^\d{4}-\d{2}-\d{2}$/.test(texto);
+
+function instante(iso: string) {
+  const data = new Date(iso);
+  return Number.isNaN(data.getTime()) ? null : data;
+}
+
+/** "2026-09-15T15:00:00Z" → "15/09/2026", no dia deste computador. Data sem hora fica como está. */
+export function dataLocal(iso: string) {
+  if (soData(iso)) return formatarData(iso);
+  const data = instante(iso);
+  return data ? formatarData(hojeIso(data)) : iso;
+}
+
+/** "15/09/2026 às 10:07", no relógio deste computador. Data sem hora fica só com a data. */
+export function dataHoraLocal(iso: string) {
+  if (soData(iso)) return formatarData(iso);
+  const data = instante(iso);
+  if (!data) return iso;
+  return `${formatarData(hojeIso(data))} às ${doisDigitos(data.getHours())}:${doisDigitos(data.getMinutes())}`;
+}
+
+export interface TermoParaFrase {
+  assinado: boolean;
+  data: string | null;
+  versao: string | null;
+  arquivo: { nome: string; bytes: number; importado_em: string; importado_por: string } | null;
+}
+
+/**
+ * Situação do termo em frase, na janela do motorista:
+ * "Assinado em 02/09/2026 · versão 1 · termo-carlos.pdf (212 KB), importado por Marina Lopes em 15/09/2026";
+ * "Assinado em 02/09/2026 · sem o arquivo do termo"; "Falta registrar. Os vídeos ficam trancados." (em alarme).
+ */
+export function fraseDoTermo(termo: TermoParaFrase): { texto: string; alarme: boolean } {
+  if (!termo.assinado) return { texto: "Falta registrar. Os vídeos ficam trancados.", alarme: true };
+  const assinado = termo.data ? `Assinado em ${formatarData(termo.data)}` : "Assinado";
+  if (!termo.arquivo) return { texto: `${assinado} · sem o arquivo do termo`, alarme: false };
+  const { nome, bytes, importado_por, importado_em } = termo.arquivo;
+  const versao = termo.versao ? ` · versão ${termo.versao}` : "";
+  return { texto: `${assinado}${versao} · ${nome} (${tamanhoArquivo(bytes)}), importado por ${importado_por} em ${dataLocal(importado_em)}`, alarme: false };
+}
+
+export interface RegistroParaHistorico {
+  assinado: boolean;
+  data: string | null;
+  versao: string | null;
+  registrado_por: string | null;
+  registrado_em: string;
+  arquivo: { nome: string; bytes: number } | null;
+}
+
+/** Uma linha do "Histórico do termo" (TER-03): nada é apagado, revogar também é registro. */
+export function registroDoTermo(registro: RegistroParaHistorico) {
+  const assinado = registro.data ? `Assinado em ${formatarData(registro.data)}` : "Assinado";
+  const titulo = registro.assinado ? `${assinado}${registro.versao ? ` · versão ${registro.versao}` : ""}` : "Termo revogado";
+  const arquivo = registro.arquivo ? `${registro.arquivo.nome} (${tamanhoArquivo(registro.arquivo.bytes)})` : "Sem arquivo";
+  const quando = dataHoraLocal(registro.registrado_em);
+  const quem = registro.registrado_por ? `Registrado por ${registro.registrado_por} em ${quando}` : `Registrado em ${quando}`;
+  return { titulo, arquivo, quem };
 }

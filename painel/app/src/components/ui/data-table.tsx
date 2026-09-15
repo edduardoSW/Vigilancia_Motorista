@@ -98,7 +98,7 @@ export function DataTable<T, K extends string | number = string>({
                 }}
                 className={cn(
                   "anim-row h-12 cursor-default border-b border-fio transition-colors",
-                  selecionada ? "bg-[#e9efe4]" : "hover:bg-lateral",
+                  selecionada ? "bg-selecao" : "hover:bg-lateral",
                 )}
               >
                 {columns.map((column, indice) => (

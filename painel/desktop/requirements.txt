@@ -9,8 +9,11 @@ typing_extensions==4.16.0
 # No Windows, o pywebview abre a janela WinForms com o WebView2 pelo .NET Framework (pythonnet)
 pythonnet==3.1.0 ; sys_platform == "win32"
 clr_loader==0.3.1 ; sys_platform == "win32"
-cffi==2.1.1 ; sys_platform == "win32"
-pycparser==3.0 ; sys_platform == "win32"
+# Cópia de segurança (spec 016, BKP-01): AES-GCM do cryptography. Última estável conferida com `pip index versions`
+# em 15/09/2026. Ele pede o cffi em todo sistema (CPython), e o cffi pede o pycparser; o clr_loader usa os mesmos dois.
+cryptography==50.0.1
+cffi==2.1.1
+pycparser==3.0
 # Empacotamento (implantacao/painel/build.py); os ganchos do pywebview e do pythonnet vêm no hooks-contrib
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.7

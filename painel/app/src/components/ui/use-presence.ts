@@ -24,7 +24,7 @@ export function usePresence(open: boolean, saidaMs = 160) {
   return { montado: montado || open, saindo: montado && !open };
 }
 
-/** Esc fecha e o foco volta para onde estava quando o painel abriu. */
+/** Esc fecha e o foco volta para onde estava quando a janela abriu. O foco inicial não rola a janela: ela abre do começo. */
 export function useEscapeAndFocus(open: boolean, onClose: () => void, alvo: React.RefObject<HTMLElement | null>) {
   const fechar = useRef(onClose);
   useEffect(() => {
@@ -35,7 +35,7 @@ export function useEscapeAndFocus(open: boolean, onClose: () => void, alvo: Reac
     if (!open) return;
     const anterior = document.activeElement as HTMLElement | null;
     const primeiro = alvo.current?.querySelector<HTMLElement>("[autofocus], input, select, textarea, button:not([data-close])");
-    (primeiro ?? alvo.current)?.focus();
+    (primeiro ?? alvo.current)?.focus({ preventScroll: true });
     const tecla = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();

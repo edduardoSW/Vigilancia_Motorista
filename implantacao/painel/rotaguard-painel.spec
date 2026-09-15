@@ -26,7 +26,7 @@ datas = [
 ]
 # Textos das licenças das bibliotecas redistribuídas (pastas *.dist-info).
 for pacote in ("pywebview", "pythonnet", "clr_loader", "cffi", "pycparser", "bottle", "proxy_tools",
-               "typing_extensions"):
+               "typing_extensions", "cryptography"):
     datas += copy_metadata(pacote)
 
 a = Analysis(  # noqa: F821

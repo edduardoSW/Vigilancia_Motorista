@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { bridge, type Usuario } from "@/lib/bridge";
-import { useSession } from "@/components/session-provider";
+import { useListShortcuts } from "@/components/drivers/use-list-shortcuts";
+import { useSession, useVisao } from "@/components/session-provider";
+import { CardGrid, CardInfo, CardTitulo } from "@/components/ui/card-grid";
 import { DataTable } from "@/components/ui/data-table";
 import { Kbd } from "@/components/ui/kbd";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
+import { ViewToggle } from "@/components/ui/view-toggle";
+import { bridge, type Usuario } from "@/lib/bridge";
 import { ActivityLog } from "./activity-log";
 import { AddPersonDialog } from "./add-person-dialog";
 import { PersonDrawer } from "./person-drawer";
@@ -17,15 +20,17 @@ type Aba = "pessoas" | "atividades";
 
 const plural = (total: number, um: string, varios: string) => `${total} ${total === 1 ? um : varios}`;
 
-// Equipe (spec 014; prévia 7 com a direção "menos cara de IA"): só o administrador.
+// Equipe (spec 014; prévia 7 com a direção "menos cara de IA"; spec 019): só o administrador. Pessoas em lista ou cards,
+// e a pessoa abre na janela do centro. O registro de atividades é um histórico e continua só em lista (VIS-01).
 export function TeamScreen() {
   const { pode } = useSession();
   const permitido = pode("equipe");
+  const [visao, setVisao] = useVisao("equipe");
   const [aba, setAba] = useState<Aba>("pessoas");
   const [pessoas, setPessoas] = useState<Usuario[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [versao, setVersao] = useState(0);
-  const [selecionada, setSelecionada] = useState<string | number | null>(null);
+  const [selecionada, setSelecionada] = useState<number | null>(null);
   const [aberta, setAberta] = useState<number | null>(null);
   const [painelAberto, setPainelAberto] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
@@ -45,18 +50,16 @@ export function TeamScreen() {
     };
   }, [permitido, versao]);
 
-  useEffect(() => {
-    if (!permitido) return;
-    const aoTeclar = (evento: KeyboardEvent) => {
-      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "n") {
-        evento.preventDefault();
-        setAba("pessoas");
-        setAdicionando(true);
-      }
-    };
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [permitido]);
+  // Ctrl+N adiciona pessoa; desligado com uma janela aberta, para não abrir uma por cima da outra.
+  useListShortcuts({
+    onNew: permitido
+      ? () => {
+          setAba("pessoas");
+          setAdicionando(true);
+        }
+      : undefined,
+    enabled: permitido && !adicionando && !painelAberto,
+  });
 
   if (!permitido) {
     return (
@@ -76,6 +79,13 @@ export function TeamScreen() {
     : "Carregando…";
   const recarregar = () => setVersao((valor) => valor + 1);
   const pessoaAberta = lista.find((pessoa) => pessoa.id === aberta) ?? null;
+  const vazio = pessoas === null ? "Carregando a equipe…" : "Ninguém na equipe ainda.";
+
+  function abrirPessoa(pessoa: Usuario) {
+    setSelecionada(pessoa.id);
+    setAberta(pessoa.id);
+    setPainelAberto(true);
+  }
 
   return (
     <section className="anim-enter max-w-[1040px] px-14 pb-16 pt-[34px]">
@@ -90,7 +100,7 @@ export function TeamScreen() {
         }
       />
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <Tabs
           items={[
             { id: "pessoas", label: "Pessoas", count: pessoas?.length },
@@ -99,6 +109,7 @@ export function TeamScreen() {
           value={aba}
           onChange={(id: string) => setAba(id as Aba)}
         />
+        {aba === "pessoas" && <ViewToggle value={visao} onChange={setVisao} />}
       </div>
 
       {erro && (
@@ -109,39 +120,60 @@ export function TeamScreen() {
 
       <div className="mt-5">
         {aba === "pessoas" ? (
-          <div key="pessoas" className="anim-enter">
-            <DataTable
-              columns={[
-                {
-                  id: "pessoa",
-                  header: "Pessoa",
-                  cell: (pessoa: Usuario) => (
-                    <span className="block truncate">
-                      <b className="font-semibold">{pessoa.nome}</b>
-                      <span className="text-grafite"> · {pessoa.usuario}</span>
+          <div key={`pessoas-${visao}`} className="anim-enter">
+            {visao === "lista" ? (
+              <DataTable
+                columns={[
+                  {
+                    id: "pessoa",
+                    header: "Pessoa",
+                    cell: (pessoa: Usuario) => (
+                      <span className="block truncate">
+                        <b className="font-semibold">{pessoa.nome}</b>
+                        <span className="text-grafite"> · {pessoa.usuario}</span>
+                      </span>
+                    ),
+                  },
+                  { id: "funcao", header: "Função", width: "170px", cell: (pessoa: Usuario) => NOME_FUNCAO[pessoa.funcao] },
+                  { id: "acesso", header: "Último acesso", width: "170px", cell: (pessoa: Usuario) => quando(pessoa.ultimo_acesso) },
+                  {
+                    id: "situacao",
+                    header: "Situação",
+                    width: "200px",
+                    cell: (pessoa: Usuario) => <span className={pessoa.ativo ? undefined : "text-grafite"}>{situacaoDe(pessoa)}</span>,
+                  },
+                ]}
+                rows={lista}
+                getRowId={(pessoa: Usuario) => pessoa.id}
+                selectedId={selecionada}
+                onSelect={setSelecionada}
+                onOpen={abrirPessoa}
+                label="Pessoas da equipe"
+                empty={vazio}
+              />
+            ) : (
+              <CardGrid
+                items={lista}
+                getId={(pessoa: Usuario) => pessoa.id}
+                selectedId={selecionada}
+                onSelect={setSelecionada}
+                onOpen={abrirPessoa}
+                label="Pessoas da equipe"
+                empty={vazio}
+                renderCard={(pessoa: Usuario) => (
+                  <>
+                    <CardTitulo titulo={pessoa.nome} detalhe={`Usuário ${pessoa.usuario}`} />
+                    <span className="grid gap-1.5">
+                      <CardInfo rotulo="Função">{NOME_FUNCAO[pessoa.funcao]}</CardInfo>
+                      <CardInfo rotulo="Último acesso">{quando(pessoa.ultimo_acesso)}</CardInfo>
+                      <CardInfo rotulo="Situação">
+                        <span className={pessoa.ativo ? undefined : "text-grafite"}>{situacaoDe(pessoa)}</span>
+                      </CardInfo>
                     </span>
-                  ),
-                },
-                { id: "funcao", header: "Função", width: "170px", cell: (pessoa: Usuario) => NOME_FUNCAO[pessoa.funcao] },
-                { id: "acesso", header: "Último acesso", width: "170px", cell: (pessoa: Usuario) => quando(pessoa.ultimo_acesso) },
-                {
-                  id: "situacao",
-                  header: "Situação",
-                  width: "200px",
-                  cell: (pessoa: Usuario) => <span className={pessoa.ativo ? undefined : "text-grafite"}>{situacaoDe(pessoa)}</span>,
-                },
-              ]}
-              rows={lista}
-              getRowId={(pessoa: Usuario) => pessoa.id}
-              selectedId={selecionada}
-              onSelect={setSelecionada}
-              onOpen={(pessoa: Usuario) => {
-                setAberta(pessoa.id);
-                setPainelAberto(true);
-              }}
-              label="Pessoas da equipe"
-              empty={pessoas === null ? "Carregando a equipe…" : "Ninguém na equipe ainda."}
-            />
+                  </>
+                )}
+              />
+            )}
             <RolesTable />
           </div>
         ) : (

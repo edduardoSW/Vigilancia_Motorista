@@ -10,8 +10,10 @@ import {
   precisaRevisao,
   rotuloCurto,
   segundos,
+  type VideoBruto,
   type Viagem,
 } from "@/content";
+import { duracaoDoTrecho, motivoSemVideo } from "@/components/trip/video-rules";
 
 export type TipoMomento = "sono" | "celular" | "jornada" | "outro";
 export type ResultadoMomento = "confirmado" | "alarme_falso";
@@ -23,6 +25,15 @@ export interface Decisao {
   em: string;
 }
 
+/** Trecho gravado no momento, com a duração já calculada (spec 019, VID-01). */
+export interface VideoMomento {
+  id: string;
+  inicio: string;
+  fim: string;
+  duracaoS: number;
+  camera: string;
+}
+
 export interface Momento {
   id: string;
   numero: number;
@@ -31,9 +42,18 @@ export interface Momento {
   tipo: TipoMomento;
   titulo: string;
   detalhe: string;
+  /** Soma dos trechos gravados; null sem vídeo. */
   videoS: number | null;
+  videos: VideoMomento[];
+  /** Por que o momento não tem vídeo; null quando tem. */
+  semVideo: string | null;
   decisaoInicial: Decisao | null;
 }
+
+const paraVideos = (lista: VideoBruto[] | undefined): VideoMomento[] =>
+  (lista ?? []).map((video) => ({ ...video, duracaoS: duracaoDoTrecho(video.inicio, video.fim) }));
+
+const somaDosTrechos = (videos: VideoMomento[]) => (videos.length ? videos.reduce((soma, video) => soma + video.duracaoS, 0) : null);
 
 const tipoDaCategoria = (categoria: Categoria): TipoMomento =>
   categoria === "sonolencia" ? "sono" : categoria === "celular" ? "celular" : categoria === "jornada" ? "jornada" : "outro";
@@ -108,7 +128,9 @@ export function momentosDaViagem(viagem: Viagem): Momento[] {
       tipo: tipoDaCategoria(categoriaDe(principal.tipo)),
       titulo: fechados >= 2 ? `Sono repetido: olhos fechados ${fechados} vezes` : episodio.titulo,
       detalhe: `Em ${duracao(minutosEntre(episodio.inicio, episodio.fim))}, entre ${hora(episodio.inicio)} e ${hora(episodio.fim)}`,
-      videoS: episodio.trecho?.duracaoS ?? null,
+      videoS: somaDosTrechos(paraVideos(episodio.videos)),
+      videos: paraVideos(episodio.videos),
+      semVideo: episodio.videos?.length ? null : motivoSemVideo(principal.tipo),
       decisaoInicial: decisaoDe(eventos),
     });
   }
@@ -122,7 +144,9 @@ export function momentosDaViagem(viagem: Viagem): Momento[] {
       tipo: tipoDaCategoria(categoriaDe(evento.tipo)),
       titulo: tituloDoEvento(evento),
       detalhe: detalheDoEvento(viagem, evento),
-      videoS: null,
+      videoS: somaDosTrechos(paraVideos(evento.videos)),
+      videos: paraVideos(evento.videos),
+      semVideo: evento.videos?.length ? null : motivoSemVideo(evento.tipo),
       decisaoInicial: decisaoDe([evento]),
     });
   }

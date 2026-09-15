@@ -22,7 +22,7 @@ export function Choice({
     <label
       className={cn(
         "flex cursor-pointer items-start gap-3 rounded-[10px] border px-3.5 py-3 transition-colors",
-        checked ? "border-verde bg-[#f3f7ef]" : "border-fio bg-white hover:border-verde/30",
+        checked ? "border-verde bg-escolha" : "border-fio bg-superficie hover:border-verde/30",
         disabled && "cursor-not-allowed opacity-60",
       )}
     >

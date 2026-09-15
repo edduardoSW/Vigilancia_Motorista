@@ -130,6 +130,10 @@ parte de coisas separadas, registro de veículos e motoristas, registros de func
 | RF-48 | Cópia de segurança cifrada com senha, lembrete semanal e restauração com confirmação | Novo (rascunho) | 016 |
 | RF-49 | Guia de uso dentro do app, com 10 capítulos, busca, imagens das telas reais, "Como funciona?" em cada tela e Primeiros passos no Início | Em construção | 017 |
 | RF-50 | Script local no painel: reconhecer quando o RotaGuard Teste ou o monitor está aberto neste computador (anúncio `em_execucao.json` ou nome do processo) e capturar os eventos dele só para leitura, sem duplicar e separados por sessão, na tela "Teste neste computador" | Em construção (14/09/2026) | 018 |
+| RF-51 | Telas com lista (Viagens, Momentos, Motoristas, Veículos, Caixas e Equipe) em Lista ou Cards, com a escolha guardada por pessoa; toda janela abre no centro com o resto desfocado (sem painel lateral) e mostra os dados antes do formulário | Em construção (15/09/2026) | 019 |
+| RF-52 | Modo escuro: Claro, Escuro ou Igual ao Windows, escolhido por pessoa no pé do menu e em Configurações › Aparência | Em construção (15/09/2026) | 019 |
+| RF-53 | Termo de ciência importado para o sistema como comprovante: PDF, PNG ou JPEG de até 10 MB, com SHA-256, guardado na pasta de dados e na cópia de segurança, nunca apagado; só administrador e supervisor importam | Em construção (15/09/2026) | 019 |
+| RF-54 | Relatório da viagem com Veículo e Motorista em destaque e, em cada momento, o campo Vídeo com Início, Fim, Duração, Câmera, Caixa, Coletado em, Fica guardado até e Situação | Em construção (15/09/2026) | 019 |
 
 ## 7. Requisitos não funcionais
 
@@ -260,6 +264,20 @@ Cada spec usa o valor padrão abaixo até ele decidir.
     não tem saída de 3,5 mm), fonte de 5 V e 5 A, Active Cooler e bateria do relógio. Esperando confirmação para
     trocar a seção 8 e a spec 005, que ainda falam do Pi 4.
 
+### 15/09/2026
+
+- Depois de usar o app: "o dashboard eu ainda achei que ficou um pouco confuso porem eu gostei muito, mas ainda não
+  parece muito intuitivo" → spec 019 (RF-51 a RF-54):
+  - "onde tem lista quero que tenha tanto lista e card para melhor identificação" → Lista e Cards nas seis telas com
+    lista (RF-51);
+  - "os modais devem abrir centralizado na tela com um blur no fundo do resto da tela" → o painel lateral saiu; toda
+    janela abre no centro (RF-51);
+  - "deve ter a opção de importar o termo do motorista para dentro do sistema para comprovar" → RF-53;
+  - "quero modo escuro tambem" → RF-52;
+  - "na viagem não tem nada que indica quem foi o motorista de forma clara e não tem os campos dos videos capturados no
+    momento" → RF-54.
+- "apos acabar faça o push" → commit e push na branch `app-instalavel-em-andamento`; a `main` só quando ele pedir.
+
 ## 12. Specs
 
 | Spec | Cobre |
@@ -282,3 +300,4 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 | `docs/specs/016-configuracoes-do-painel.md` | RF-47, RF-48, RNF-13 (configurações, guarda dos dados e cópia de segurança); rascunho de 14/09/2026 |
 | `docs/specs/017-guia-de-uso-do-painel.md` | RF-49 (guia de uso com busca, ajuda em cada tela e Primeiros passos); aprovada em 14/09/2026 |
 | `docs/specs/018-script-local-no-painel.md` | RF-50 (reconhecer o script aberto neste computador e capturar os eventos); pedido de 14/09/2026 |
+| `docs/specs/019-painel-mais-claro-lista-cards-tema-termo-videos.md` | RF-51 a RF-54 (lista e cards, janelas no centro, modo escuro, termo importado, motorista e vídeos no relatório); pedido de 15/09/2026 |

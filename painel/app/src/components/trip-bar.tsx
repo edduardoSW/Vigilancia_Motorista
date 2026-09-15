@@ -27,7 +27,7 @@ export function TripBar({ trip, moments }: { trip: Viagem; moments: Momento[] })
             key={moment.id}
             href={`#momento-${moment.numero}`}
             title={`${moment.numero}. ${hora(moment.inicio)} · ${moment.titulo}`}
-            className="absolute bottom-1 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-tinta text-[12px] font-bold text-white"
+            className="absolute bottom-1 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-tinta text-[12px] font-bold text-papel"
             style={{ left: pct(posicao(trip, moment.inicio)) }}
           >
             {moment.numero}
@@ -39,7 +39,7 @@ export function TripBar({ trip, moments }: { trip: Viagem; moments: Momento[] })
           <div
             key={part.inicio}
             title={`${part.tipo === "direcao" ? "Dirigindo" : "Pausa"} das ${hora(part.inicio)} às ${hora(part.fim)}`}
-            className={part.tipo === "direcao" ? "rounded-[6px] bg-verde" : "rounded-[6px] bg-[#d9e0d5]"}
+            className={part.tipo === "direcao" ? "rounded-[6px] bg-verde" : "rounded-[6px] bg-pausa"}
             style={{ flexGrow: minutosEntre(part.inicio, part.fim), flexBasis: 0 }}
           />
         ))}

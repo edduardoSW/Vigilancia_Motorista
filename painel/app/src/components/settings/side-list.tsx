@@ -32,7 +32,7 @@ export function SideList<T extends string>({
     <nav aria-label={label} className="relative" onKeyDown={aoTeclar}>
       <span
         aria-hidden="true"
-        className="absolute inset-x-0 top-0 rounded-[8px] border-l-2 border-verde bg-white shadow-[0_1px_2px_rgb(23_59_48/0.06)] transition-transform duration-200 ease-[cubic-bezier(.2,.8,.2,1)]"
+        className="absolute inset-x-0 top-0 rounded-[8px] border-l-2 border-verde bg-superficie shadow-[0_1px_2px_rgb(0_0_0/0.06)] transition-transform duration-200 ease-[cubic-bezier(.2,.8,.2,1)]"
         style={{ height: ALTURA, transform: `translateY(${indice * ALTURA}px)` }}
       />
       <ul ref={lista} className="relative">

@@ -6,16 +6,76 @@
   --font-titulo: var(--fonte-titulo), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Cores da prévia 2 aprovada em 14/09/2026 (docs/painel/previa-2026-09-14), na família do site "Boa chegada". */
+/*
+ * Cores da prévia 2 aprovada em 14/09/2026 (docs/painel/previa-2026-09-14), na família do site "Boa chegada".
+ * 15/09 (spec 019): cada cor tem um papel e o modo escuro troca só os valores (bloco logo abaixo), nunca inverte.
+ * As telas não usam cor fixa: o teste ESC-02 procura hex, bg-white e text-white fora deste arquivo.
+ */
 @theme {
-  --color-verde: #103e31;
-  --color-tinta: #173b30;
-  --color-papel: #fbfcf8;
-  --color-lateral: #f1f4ee;
-  --color-grafite: #5d6b62;
-  --color-fio: #e0e6dc;
+  --color-verde: #103e31; /* texto de ação, ícone, linha e barra */
+  --color-verde-cheio: #103e31; /* fundo do botão principal e dos selos preenchidos */
+  --color-sobre-verde: #ffffff;
+  --color-tinta: #173b30; /* texto */
+  --color-grafite: #5d6b62; /* texto secundário */
+  --color-papel: #fbfcf8; /* fundo da janela */
+  --color-lateral: #f1f4ee; /* menu e fundo suave */
+  --color-superficie: #ffffff; /* card, tabela, botão */
+  --color-elevada: #ffffff; /* janela no centro, busca rápida */
+  --color-campo: #ffffff;
+  --color-fio: #e0e6dc; /* borda que separa */
+  --color-fio-campo: #e0e6dc; /* borda de campo e de botão */
   --color-lima: #d5f669;
+  --color-sobre-lima: #103e31;
   --color-alarme: #a72d38;
+  --color-trilho: #e5ebe1; /* fundo da barra de progresso */
+  --color-pausa: #d9e0d5; /* pausa na barra da viagem */
+  --color-selecao: #e9efe4; /* linha selecionada, opção ativa */
+  --color-escolha: #f3f7ef; /* opção marcada */
+  --color-apagado: #8b978f; /* texto de exemplo e desligado */
+  --color-desligado: #e7ece4;
+  --color-campo-desligado: #f3f5f0;
+  --color-video: #143f33;
+  --color-sobre-video: #ffffff;
+  --color-aviso: #173b30; /* aviso curto no canto */
+  --color-sobre-aviso: #ffffff;
+  --color-veu: rgb(23 59 48 / 0.28); /* fundo atrás da janela no centro */
+  --color-veu-forte: rgb(23 59 48 / 0.85); /* tela bloqueada */
+}
+
+/*
+ * Modo escuro (spec 019, decisão 4): neutro esverdeado, mais claro quanto mais alta a camada (Radix Colors "sage",
+ * GitHub Primer e Linear, pesquisados em 15/09). Fora de camada, junto dos tokens: vence o @theme (erro 54 do vault).
+ */
+html[data-tema="escuro"] {
+  color-scheme: dark;
+  --color-verde: #5cc79a;
+  --color-verde-cheio: #1f6b52;
+  --color-sobre-verde: #e6ebe8;
+  --color-tinta: #e6ebe8;
+  --color-grafite: #9fa9a4;
+  --color-papel: #0e1311;
+  --color-lateral: #121815;
+  --color-superficie: #151b18;
+  --color-elevada: #1c2320;
+  --color-campo: #121815;
+  --color-fio: #2b3430;
+  --color-fio-campo: #5d6963;
+  --color-lima: #d5f669;
+  --color-sobre-lima: #0e1311;
+  --color-alarme: #ff8a80;
+  --color-trilho: #2b3430;
+  --color-pausa: #3a4540;
+  --color-selecao: #222b27;
+  --color-escolha: #1b2a22;
+  --color-apagado: #6f7a75;
+  --color-desligado: #222a26;
+  --color-campo-desligado: #181f1c;
+  --color-video: #0a0e0c;
+  --color-sobre-video: #e6ebe8;
+  --color-aviso: #242d29;
+  --color-sobre-aviso: #e6ebe8;
+  --color-veu: rgb(6 9 8 / 0.62);
+  --color-veu-forte: rgb(6 9 8 / 0.9);
 }
 
 @layer base {
@@ -50,9 +110,9 @@
     gap: 0.5rem;
     height: 40px;
     padding-inline: 16px;
-    border: 1px solid var(--color-fio);
+    border: 1px solid var(--color-fio-campo);
     border-radius: 9px;
-    background-color: #fff;
+    background-color: var(--color-superficie);
     color: var(--color-tinta);
     font-size: 14px;
     font-weight: 600;
@@ -61,18 +121,18 @@
   }
 
   .btn:hover {
-    border-color: rgb(23 59 48 / 0.35);
+    border-color: color-mix(in srgb, var(--color-tinta) 35%, transparent);
     transform: translateY(-1px);
   }
 
   .btn-primary {
-    border-color: var(--color-verde);
-    background-color: var(--color-verde);
-    color: #fff;
+    border-color: var(--color-verde-cheio);
+    background-color: var(--color-verde-cheio);
+    color: var(--color-sobre-verde);
   }
 
   .btn-primary:hover {
-    box-shadow: 0 8px 18px -10px rgb(16 62 49 / 0.6);
+    box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--color-verde-cheio) 60%, transparent);
   }
 
   .btn-small {
@@ -82,9 +142,9 @@
   }
 
   .btn:disabled {
-    border-color: #e7ece4;
-    background-color: #e7ece4;
-    color: #8b978f;
+    border-color: var(--color-desligado);
+    background-color: var(--color-desligado);
+    color: var(--color-apagado);
     cursor: not-allowed;
     transform: none;
   }
@@ -107,28 +167,28 @@
     width: 100%;
     height: 40px;
     padding-inline: 12px;
-    border: 1px solid var(--color-fio);
+    border: 1px solid var(--color-fio-campo);
     border-radius: 9px;
-    background-color: #fff;
+    background-color: var(--color-campo);
     color: var(--color-tinta);
     font-size: 14px;
     transition: border-color 160ms var(--ease-painel), box-shadow 160ms var(--ease-painel);
   }
 
   .input::placeholder {
-    color: #8b978f;
+    color: var(--color-apagado);
   }
 
   .input:hover,
   .select:hover {
-    border-color: rgb(23 59 48 / 0.3);
+    border-color: color-mix(in srgb, var(--color-tinta) 30%, transparent);
   }
 
   .input:focus-visible,
   .select:focus-visible {
     outline: none;
     border-color: var(--color-verde);
-    box-shadow: 0 0 0 3px rgb(16 62 49 / 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-verde) 22%, transparent);
   }
 
   .input[aria-invalid="true"],
@@ -138,8 +198,8 @@
 
   .input:disabled,
   .select:disabled {
-    background-color: #f3f5f0;
-    color: #8b978f;
+    background-color: var(--color-campo-desligado);
+    color: var(--color-apagado);
     cursor: not-allowed;
   }
 
@@ -153,7 +213,7 @@
   .select {
     appearance: none;
     padding-right: 36px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%235d6b62' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%238b978f' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
   }
@@ -170,24 +230,14 @@
 /* Movimento com intenção (160 a 220 ms). Some com prefers-reduced-motion. */
 :root {
   --ease-painel: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Altura da janela para o menu e as telas de fora; o texto maior compensa o próprio zoom (mais abaixo). */
+  --altura-janela: 100vh;
 }
 
 @keyframes painel-entra {
   from {
     opacity: 0;
     transform: translateY(6px);
-  }
-}
-
-@keyframes painel-gaveta {
-  from {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes painel-gaveta-sai {
-  to {
-    transform: translateX(100%);
   }
 }
 
@@ -233,26 +283,18 @@
 
 @keyframes painel-pulso {
   0% {
-    box-shadow: 0 0 0 0 rgb(16 62 49 / 0.38);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-verde) 38%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 7px rgb(16 62 49 / 0);
+    box-shadow: 0 0 0 7px transparent;
   }
   100% {
-    box-shadow: 0 0 0 0 rgb(16 62 49 / 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 
 .anim-enter {
   animation: painel-entra 200ms var(--ease-painel) both;
-}
-
-.anim-drawer {
-  animation: painel-gaveta 220ms var(--ease-painel) both;
-}
-
-.anim-drawer-out {
-  animation: painel-gaveta-sai 160ms var(--ease-painel) both;
 }
 
 .anim-dialog {
@@ -293,10 +335,38 @@
   transition: transform 200ms var(--ease-painel), height 200ms var(--ease-painel), opacity 160ms var(--ease-painel);
 }
 
+/* Fundo atrás da janela no centro (spec 019, MOD-01): escurece e desfoca o resto da janela. */
+.veu {
+  background-color: var(--color-veu);
+  backdrop-filter: blur(6px);
+}
+
+.veu-forte {
+  background-color: var(--color-veu-forte);
+  backdrop-filter: blur(4px);
+}
+
+/* Texto maior (spec 016, decisão 8): o painel inteiro a 115%, com as mesmas proporções entre texto, tabela e menu. */
+html[data-texto-maior] {
+  zoom: 1.15;
+  /* O zoom também aumenta o 100vh: sem dividir, o pé do menu (Guia de uso, Sair) sumia em 1200 × 760. */
+  --altura-janela: calc(100vh / 1.15);
+}
+
+/* Texto maior: menu um pouco mais estreito, para as tabelas caberem em 1200 × 760 (captura de 15/09/2026). */
+html[data-texto-maior] .app-shell {
+  grid-template-columns: 256px minmax(0, 1fr);
+}
+
+/* Célula de tabela com linhas empilhadas: o que não cabe termina em reticências, em vez de ser cortado no meio da letra. */
+.data-table td > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .anim-enter,
-  .anim-drawer,
-  .anim-drawer-out,
   .anim-dialog,
   .anim-dialog-out,
   .anim-toast,

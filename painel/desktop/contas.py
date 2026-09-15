@@ -272,8 +272,10 @@ class Contas:
         if espera:
             registro["ate"] = self.relogio() + espera
         self._erros[chave] = registro
-        self.atividades.registrar(acao, dict(linha) if linha else None, alvo=chave[:40],
-                                  detalhe=f"{registro['n']}º erro seguido" + (f", espera de {espera} s" if espera else ""))
+        # Usuário que não existe fica sem "em quê": o texto digitado pode ser a própria senha, no campo errado (ENT-03).
+        self.atividades.registrar(acao, dict(linha) if linha else None, alvo=linha["usuario"] if linha else None,
+                                  detalhe=("" if linha else "usuário não cadastrado, ") + f"{registro['n']}º erro seguido"
+                                  + (f", espera de {espera} s" if espera else ""))
         if espera:
             return ErroPainel(f"Senha errada. Espere {espera} segundos para tentar de novo.", "espera", "senha", espera)
         return ErroPainel(MENSAGEM_CREDENCIAIS, "invalido", "senha")

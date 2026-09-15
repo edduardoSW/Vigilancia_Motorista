@@ -60,10 +60,20 @@ e a janela Python `painel/desktop/rotaguard_painel.py` (pywebview 6.2.1 + WebVie
 type Funcao = "administrador" | "supervisor" | "consulta";
 type Acao = "ver_viagens" | "ver_video" | "importar" | "decidir" | "cadastrar" | "equipe" | "configuracoes" | "atividades";
 interface Usuario { id: number; nome: string; usuario: string; funcao: Funcao; ativo: boolean; ultimo_acesso: string | null; trocar_senha: boolean }
-interface Estado { ativado: boolean; modo: "demonstracao" | "empresa" | null; empresa: { nome: string } | null; sessao: Usuario | null; bloqueado: boolean; versao: string; bloqueio_min: number }
+interface Estado { ativado: boolean; modo: "demonstracao" | "empresa" | null; empresa: { nome: string } | null; sessao: Usuario | null; bloqueado: boolean; versao: string; bloqueio_min: number;
+  texto_maior: boolean /* 15/09: aparência de Configurações, vale inclusive na tela de entrar */;
+  tema: Tema /* spec 019: o da pessoa que entrou; sem sessão, o último usado neste computador */; preferencias: Preferencias | null; videos_dias: number }
+// Spec 019 (15/09): tema e lista ou cards por pessoa; termo importado como comprovante.
+type Tema = "claro" | "escuro" | "sistema";
+type Visao = "lista" | "cards";
+type TelaComVisao = "viagens" | "momentos" | "motoristas" | "veiculos" | "caixas" | "equipe";
+interface Preferencias { tema: Tema; visao: Record<TelaComVisao, Visao> } // padrão: tema "claro", todas "cards"
+interface ArquivoTermo { nome: string; tipo: "pdf" | "imagem"; bytes: number; importado_em: string; importado_por: string }
+interface TermoRegistro { id: number; assinado: boolean; data: string | null; versao: string | null; registrado_por: string | null; registrado_em: string; arquivo: ArquivoTermo | null }
+interface InicioResumo { ultima_copia_em: string | null; dias_desde_copia: number | null; primeiros_passos_escondidos: boolean } // 15/09
 interface Motorista { id: number; ref: string | null; nome: string; nome_curto: string; matricula: string; cpf: string | null; telefone: string | null;
   cnh_numero: string; cnh_categoria: "C" | "D" | "E"; cnh_validade: string /* AAAA-MM-DD */; situacao: "ativo" | "afastado" | "desligado";
-  termo: { assinado: boolean; data: string | null; versao: string | null }; observacoes: string | null; viagens_30d: number; confirmados_30d: number }
+  termo: { assinado: boolean; data: string | null; versao: string | null; arquivo: ArquivoTermo | null }; observacoes: string | null; viagens_30d: number; confirmados_30d: number }
 interface Veiculo { id: number; numero: string; placa: string; tipo: "onibus" | "micro_onibus" | "caminhao" | "van"; transporta: "passageiros" | "carga";
   modelo: string | null; ano: number | null; situacao: "em_uso" | "oficina" | "fora_de_uso"; caixa_id: number | null }
 interface Caixa { id: number; codigo: string; veiculo_id: number | null; situacao: "ok" | "atencao" | "bloqueada"; detalhe: string | null; ultima_coleta: string | null; versao: string | null }
@@ -100,14 +110,20 @@ interface EventoScript { id: number; em: string; tipo: string; risco: number; du
 | `veiculos_listar()`, `caixas_listar()` | sessão | `Veiculo[]`, `Caixa[]` |
 | `veiculo_salvar(dados)` | adm/supervisor | `Veiculo` |
 | `caixa_vincular(caixa_id, veiculo_id \| null)` | adm/supervisor | `Caixa` |
-| `config_ler()` | sessão | `Configuracoes` |
+| `config_ler()` | administrador (15/09, CFG-01: só o administrador lê e muda) | `Configuracoes` |
 | `config_salvar(secao, valores)` | administrador | `Configuracoes` |
 | `decisoes_listar()` | sessão | `Decisao[]` |
 | `decisao_registrar(momento_id, resultado)` | adm/supervisor | `Decisao` |
 | `decisao_desfazer(momento_id)` | adm/supervisor | `{}` |
 | `decisao_orientado(momento_id, orientado)` | adm/supervisor | `Decisao` |
 | `video_abrir(momento_id, motorista_ref)` | adm/supervisor | `{ liberado, motivo? }` (sem termo: `liberado: false`) |
-| `copia_fazer(senha)` | administrador | `{ caminho, bytes }` |
+| `copia_fazer(senha)` | administrador | `{ caminho, bytes }` (senha escolhida na hora, com a regra das contas; não é a senha de quem entrou). Spec 019: formato `rotaguard-copia/2`, com o mesmo envelope cifrado do formato 1 e, dentro, um zip com `painel.db` e os arquivos dos termos; `copia.conteudo_da_copia()` lê os dois formatos |
+| `inicio_resumo()` | sessão (15/09) | `InicioResumo` (aviso da cópia com mais de 7 dias, BKP-03; Primeiros passos escondidos) |
+| `primeiros_passos_esconder(esconder: boolean)` | administrador (15/09) | `{ primeiros_passos_escondidos }` (registra "escondeu/mostrou primeiros passos") |
+| `preferencias_salvar(valores: { tema?, visao?: Partial<Record<TelaComVisao, Visao>> })` | qualquer sessão (spec 019) | `Preferencias` (por pessoa; o `tema` também vira o último usado neste computador) |
+| `termo_importar(motorista_id, arquivo: { nome, conteudo_base64 }, dados: { data, versao? })` | adm/supervisor (spec 019) | `Motorista` (registro novo de termo assinado, com o arquivo; PDF, PNG ou JPEG até 10 MB; registra "importou termo assinado") |
+| `termo_ver(motorista_id)` | adm/supervisor (spec 019) | imagem: `{ tipo: "imagem", nome, conteudo: "data:image/...;base64,..." }`; PDF: abre no leitor do computador e devolve `{ tipo: "pdf", nome, aberto: true }` (registra "abriu termo") |
+| `motorista_termos(motorista_id)` | adm/supervisor (spec 019) | `TermoRegistro[]`, mais novo primeiro |
 | `script_estado()` | sessão | `ScriptEstado` (delegado a `ScriptLocal` do agente 2) |
 | `script_eventos(desde_id)` | sessão | `EventoScript[]` (idem) |
 

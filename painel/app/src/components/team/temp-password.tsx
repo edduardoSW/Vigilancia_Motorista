@@ -20,7 +20,7 @@ export function TempPassword({ nome, usuario, senha }: { nome: string; usuario: 
       <p className="text-[14px] text-grafite">
         Acesso de <b className="font-semibold text-tinta">{nome}</b>, usuário <b className="font-semibold text-tinta">{usuario}</b>.
       </p>
-      <div className="mt-3 flex items-center gap-3 rounded-[10px] border border-fio bg-white px-4 py-3">
+      <div className="mt-3 flex items-center gap-3 rounded-[10px] border border-fio bg-superficie px-4 py-3">
         <span className="min-w-0 flex-1 select-all break-all font-titulo text-[20px] font-semibold tracking-[0.02em]">{senha}</span>
         <button type="button" className="btn btn-small" onClick={copiar}>
           {copiada ? "Copiada" : "Copiar"}

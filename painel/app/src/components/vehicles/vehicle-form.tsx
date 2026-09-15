@@ -8,7 +8,8 @@ import { bridge, type Caixa, type Veiculo } from "@/lib/bridge";
 import { normalizarPlaca, validarPlaca } from "@/lib/validators";
 import { nomeDoVeiculo, SITUACAO_VEICULO, TIPO_VEICULO, TRANSPORTA } from "./vehicle-labels";
 
-// Formulário do veículo (prévia 6 e spec 015, decisão 4): diálogo para cadastrar, painel lateral para editar e trocar a caixa.
+// Formulário do veículo (prévia 6 e spec 015, decisão 4): o mesmo para cadastrar e editar, na janela do veículo
+// (spec 019: "Editar" troca os dados por este formulário; "Cancelar" volta para os dados).
 
 interface Campos {
   numero: string;
@@ -140,7 +141,7 @@ export function VehicleForm({
             className="input"
             value={campos.numero}
             maxLength={10}
-            autoFocus={!veiculo}
+            autoFocus
             autoComplete="off"
             onChange={(evento) => mudar("numero", evento.target.value)}
             onBlur={() => tocar("numero")}

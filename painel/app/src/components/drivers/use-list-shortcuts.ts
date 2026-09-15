@@ -3,7 +3,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 
 // Atalhos das telas de lista (contrato do painel): Ctrl+N cadastra e "/" vai para a busca.
-// Desligado enquanto um painel lateral ou diálogo está aberto, para não abrir um cadastro por cima do outro.
+// Desligado enquanto uma janela está aberta, para não abrir um cadastro por cima do outro.
 export function useListShortcuts({
   onNew,
   searchRef,

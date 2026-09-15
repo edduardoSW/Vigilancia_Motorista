@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MomentList } from "@/components/moment-list";
 import { PrintButton } from "@/components/print-button";
 import { TripBar } from "@/components/trip-bar";
-import { dados, dia, duracao, hora, minutosEntre, motoristaDe, nomeDoVeiculo, resumoDaViagem, rotuloDe, segundos, viagemDe } from "@/content";
+import { TripPeople } from "@/components/trip/trip-people";
+import { Glyph } from "@/components/ui/glyph";
+import { dados, dia, duracao, hora, minutosEntre, nomeDoVeiculo, resumoDaViagem, rotuloDe, segundos, viagemDe } from "@/content";
 import { contarPorTipo, momentosDaViagem, naMadrugada } from "@/content/moments";
 
 export const dynamicParams = false;
@@ -31,7 +34,6 @@ export default async function TripPage({ params }: Props) {
   const trip = viagemDe((await params).id);
   if (!trip) notFound();
 
-  const driver = motoristaDe(trip.motorista);
   const summary = resumoDaViagem(trip);
   const moments = momentosDaViagem(trip);
   const byType = contarPorTipo(moments);
@@ -56,15 +58,29 @@ export default async function TripPage({ params }: Props) {
 
   return (
     <section className="max-w-[900px] px-14 pb-16 pt-[34px]">
-      <div className="flex items-start justify-between gap-6">
+      <Link href="/viagens/" className="no-print text-[13px] font-semibold text-grafite transition-colors hover:text-tinta">
+        Voltar para Viagens
+      </Link>
+      <div className="mt-2 flex items-start justify-between gap-6">
         <div>
           <h1 className="font-titulo text-[34px] font-semibold leading-[1.1] tracking-[-0.01em]">{nomeDoVeiculo(trip.tipo, trip.veiculo)}</h1>
           <p className="mt-2 text-[15px] text-grafite">
-            {trip.linha} · motorista {driver?.nome} · {dia(trip.saida)} às {hora(trip.saida)} até {dia(trip.chegada)} às {hora(trip.chegada)}
+            {trip.linha} · {dia(trip.saida)} às {hora(trip.saida)} até {dia(trip.chegada)} às {hora(trip.chegada)}
           </p>
         </div>
-        <PrintButton />
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/guia/?capitulo=verificar-momentos&passo=verificar"
+            className="no-print mr-1 inline-flex h-9 items-center gap-1.5 rounded-[8px] px-2 text-[13px] font-medium text-grafite transition-colors hover:bg-lateral hover:text-tinta"
+          >
+            <Glyph name="book" size={16} />
+            Guia
+          </Link>
+          <PrintButton />
+        </div>
       </div>
+
+      <TripPeople viagemId={trip.id} />
 
       <h2 className="mb-2.5 mt-[30px] font-titulo text-[20px] font-semibold">Resumo</h2>
       <p className="max-w-[760px] text-[17px] leading-[1.65]">
@@ -95,8 +111,7 @@ export default async function TripPage({ params }: Props) {
 
       <TripBar trip={trip} moments={moments} />
 
-      <h2 className="mb-2.5 mt-[30px] font-titulo text-[20px] font-semibold">Momentos para verificar</h2>
-      <MomentList moments={moments} />
+      <MomentList viagemId={trip.id} />
       <p className="mt-4 text-[12.5px] text-grafite">
         Os alertas ajudam a sua avaliação e não são diagnóstico. Depois de confirmar, dá para registrar se o motorista foi
         orientado.

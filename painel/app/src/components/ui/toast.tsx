@@ -49,7 +49,7 @@ function ToastRow({ item, onDone }: { item: Item; onDone: (id: number) => void }
   }, [item, onDone]);
 
   return (
-    <div className="anim-toast pointer-events-auto flex items-center gap-3 rounded-[10px] bg-tinta py-2.5 pl-4 pr-2 text-[14px] text-white shadow-[0_14px_30px_-18px_rgb(23_59_48/0.7)]">
+    <div className="anim-toast pointer-events-auto flex items-center gap-3 rounded-[10px] border border-fio bg-aviso py-2.5 pl-4 pr-2 text-[14px] text-sobre-aviso shadow-[0_14px_30px_-18px_rgb(0_0_0/0.6)]">
       <span className="min-w-0 flex-1">{item.text}</span>
       {item.action && (
         <button
@@ -58,7 +58,7 @@ function ToastRow({ item, onDone }: { item: Item; onDone: (id: number) => void }
             item.action?.onClick();
             onDone(item.id);
           }}
-          className="h-8 shrink-0 rounded-[7px] px-2.5 text-[13.5px] font-semibold text-lima transition-colors hover:bg-white/10"
+          className="h-8 shrink-0 rounded-[7px] px-2.5 text-[13.5px] font-semibold text-lima transition-colors hover:bg-sobre-aviso/10"
         >
           {item.action.label}
         </button>

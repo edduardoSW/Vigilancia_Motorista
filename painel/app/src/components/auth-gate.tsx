@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Suspense, use, useEffect, useRef, useState } from "react";
+import { CommandPalette } from "@/components/command-palette";
 import { Wordmark } from "@/components/icons";
 import { useSession } from "@/components/session-provider";
 import { Sidebar } from "@/components/sidebar";
@@ -47,6 +48,29 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const bloqueado = fase === "app" && Boolean(estado?.bloqueado);
   useVigiaDeUso(fase === "app" && !bloqueado, atualizar);
+
+  // Texto maior (spec 016, decisão 8): vale para todas as pessoas deste computador, inclusive na tela de entrar.
+  const textoMaior = Boolean(estado?.texto_maior);
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-texto-maior", textoMaior);
+  }, [textoMaior]);
+
+  // Tema (spec 019, decisão 4): o da pessoa que entrou; "Igual ao Windows" acompanha a troca do sistema na hora.
+  const tema = estado?.tema ?? "claro";
+  useEffect(() => {
+    const raiz = document.documentElement;
+    if (tema !== "sistema") {
+      raiz.dataset.tema = tema;
+      return;
+    }
+    const escuro = window.matchMedia("(prefers-color-scheme: dark)");
+    const aplicar = () => {
+      raiz.dataset.tema = escuro.matches ? "escuro" : "claro";
+    };
+    aplicar();
+    escuro.addEventListener("change", aplicar);
+    return () => escuro.removeEventListener("change", aplicar);
+  }, [tema]);
 
   return (
     <>
@@ -94,7 +118,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       )}
 
       {(fase === "app" || fase === "carregando") && (
-        <div hidden={fase !== "app"} inert={bloqueado} className="app-shell grid h-screen grid-cols-[288px_minmax(0,1fr)] overflow-hidden">
+        <div hidden={fase !== "app"} inert={bloqueado} className="app-shell grid h-[var(--altura-janela)] grid-cols-[288px_minmax(0,1fr)] overflow-hidden">
           <Sidebar />
           <main id="conteudo" className="overflow-y-auto">
             <Faixa />
@@ -106,8 +130,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
               </Conteudo>
             </Suspense>
           </main>
+          {/* Painéis laterais e diálogos das telas abrem aqui (ui/layer.tsx), fora da animação de entrada da tela. */}
+          <div id="camada-sobreposta" className="contents" />
         </div>
       )}
+
+      {fase === "app" && !bloqueado && <CommandPalette />}
 
       {bloqueado && usuario && <TelaBloqueada nome={usuario.nome} minutos={estado?.bloqueio_min ?? 15} onDesbloqueou={atualizar} onSair={sair} />}
     </>
@@ -144,7 +172,7 @@ function useVigiaDeUso(ativo: boolean, atualizar: () => Promise<void>) {
 
 function TelaDeFora({ children, versao }: { children: React.ReactNode; versao: string | null }) {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-[var(--altura-janela)] flex-col">
       <Faixa />
       <div className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="anim-enter w-full max-w-[400px]">{children}</div>
@@ -488,7 +516,7 @@ function CodigoRecuperacao({ codigo, onAnotei }: { codigo: string; onAnotei: () 
         Ele aparece só agora. Se quem administra esquecer a senha, é com este código que se volta a entrar. Imprima ou anote e
         guarde longe do computador.
       </p>
-      <p className="my-6 rounded-[12px] border border-fio bg-white px-4 py-6 text-center font-titulo text-[26px] font-semibold tabular-nums tracking-[0.06em]">
+      <p className="my-6 rounded-[12px] border border-fio bg-superficie px-4 py-6 text-center font-titulo text-[26px] font-semibold tabular-nums tracking-[0.06em]">
         {codigo}
       </p>
       <div className="flex gap-2">
@@ -605,10 +633,10 @@ function TelaBloqueada({
   }
 
   return (
-    <div className="anim-fade fixed inset-0 z-[70] flex flex-col bg-tinta/85 backdrop-blur-[3px]">
-      <p className="no-print border-b border-white/10 px-10 py-2.5 text-[12px] text-white/70">{AVISO_PREVIA}</p>
+    <div className="veu-forte anim-fade fixed inset-0 z-[70] flex flex-col">
+      <p className="no-print border-b border-sobre-video/10 px-10 py-2.5 text-[12px] text-sobre-video/70">{AVISO_PREVIA}</p>
       <div className="grid flex-1 place-items-center p-6">
-        <form onSubmit={enviar} noValidate className="anim-dialog w-full max-w-[380px] rounded-[14px] bg-white p-6">
+        <form onSubmit={enviar} noValidate className="anim-dialog w-full max-w-[380px] rounded-[14px] border border-fio bg-elevada p-6">
           <h2 className="font-titulo text-[24px] font-semibold">Tela bloqueada</h2>
           <p className="mt-1.5 text-[14.5px] text-grafite">
             Ficou {minutos} min sem uso. Digite a senha de {nome} para continuar de onde parou.

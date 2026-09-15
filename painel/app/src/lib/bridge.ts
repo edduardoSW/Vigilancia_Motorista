@@ -10,6 +10,27 @@ export type Funcao = "administrador" | "supervisor" | "consulta";
 export type Acao = "ver_viagens" | "ver_video" | "importar" | "decidir" | "cadastrar" | "equipe" | "configuracoes" | "atividades";
 export type CodigoErro = "invalido" | "sem_permissao" | "sem_sessao" | "bloqueado" | "espera" | "nao_encontrado" | "conflito";
 
+/** Spec 019: tema e visão (lista ou cards) guardados por pessoa, pela ponte (nada no navegador). */
+export type Tema = "claro" | "escuro" | "sistema";
+export type Visao = "lista" | "cards";
+export const TELAS_COM_VISAO = ["viagens", "momentos", "motoristas", "veiculos", "caixas", "equipe"] as const;
+export type TelaComVisao = (typeof TELAS_COM_VISAO)[number];
+
+export interface Preferencias {
+  tema: Tema;
+  visao: Record<TelaComVisao, Visao>;
+}
+
+export interface PreferenciasEntrada {
+  tema?: Tema;
+  visao?: Partial<Record<TelaComVisao, Visao>>;
+}
+
+export const PREFERENCIAS_PADRAO: Preferencias = {
+  tema: "claro",
+  visao: { viagens: "cards", momentos: "cards", motoristas: "cards", veiculos: "cards", caixas: "cards", equipe: "cards" },
+};
+
 export type Resposta<T> =
   | { ok: true; dados: T }
   | { ok: false; erro: string; codigo?: CodigoErro; campo?: string; esperar_s?: number };
@@ -34,6 +55,48 @@ export interface Estado {
   bloqueado: boolean;
   versao: string;
   bloqueio_min: number;
+  /** Aparência de Configurações: vale para todas as pessoas deste computador, inclusive na tela de entrar. */
+  texto_maior: boolean;
+  /** Tema da pessoa que entrou; sem sessão, o último usado neste computador (spec 019). */
+  tema: Tema;
+  preferencias: Preferencias | null;
+  /** Prazo de guarda dos vídeos, para "fica guardado até" no momento (spec 019, VID-02). */
+  videos_dias: number;
+}
+
+/** Arquivo do termo assinado importado para o painel (spec 019, decisão 5). */
+export interface ArquivoTermo {
+  nome: string;
+  tipo: "pdf" | "imagem";
+  bytes: number;
+  importado_em: string;
+  importado_por: string;
+}
+
+/** Um registro do histórico de termos do motorista (nunca apagado). */
+export interface TermoRegistro {
+  id: number;
+  assinado: boolean;
+  data: string | null;
+  versao: string | null;
+  registrado_por: string | null;
+  registrado_em: string;
+  arquivo: ArquivoTermo | null;
+}
+
+/** Arquivo escolhido na tela, enviado pela ponte. */
+export interface ArquivoEnviado {
+  nome: string;
+  conteudo_base64: string;
+}
+
+export type TermoVisto = { tipo: "imagem"; nome: string; conteudo: string } | { tipo: "pdf"; nome: string; aberto: true };
+
+/** Início: aviso da cópia de segurança (BKP-03) e se o administrador escondeu os Primeiros passos (spec 017). */
+export interface InicioResumo {
+  ultima_copia_em: string | null;
+  dias_desde_copia: number | null;
+  primeiros_passos_escondidos: boolean;
 }
 
 export interface Motorista {
@@ -49,7 +112,7 @@ export interface Motorista {
   /** AAAA-MM-DD */
   cnh_validade: string;
   situacao: "ativo" | "afastado" | "desligado";
-  termo: { assinado: boolean; data: string | null; versao: string | null };
+  termo: { assinado: boolean; data: string | null; versao: string | null; arquivo: ArquivoTermo | null };
   observacoes: string | null;
   viagens_30d: number;
   confirmados_30d: number;
@@ -145,7 +208,10 @@ export interface FiltroAtividades {
 }
 
 /** Sem `id` cria; com `id` altera. O Python confere cada campo e devolve `campo` quando algo não confere. */
-export type MotoristaDados = Partial<Omit<Motorista, "viagens_30d" | "confirmados_30d">>;
+export type MotoristaDados = Partial<Omit<Motorista, "viagens_30d" | "confirmados_30d" | "termo">> & {
+  /** O arquivo do termo entra só por `termo_importar`. */
+  termo?: { assinado: boolean; data: string | null; versao: string | null };
+};
 export type VeiculoDados = Partial<Veiculo>;
 
 export interface Api {
@@ -180,6 +246,12 @@ export interface Api {
   decisao_orientado(momento_id: string, orientado: boolean): Promise<Resposta<Decisao>>;
   video_abrir(momento_id: string, motorista_ref: string): Promise<Resposta<{ liberado: boolean; motivo?: string }>>;
   copia_fazer(senha: string): Promise<Resposta<{ caminho: string; bytes: number }>>;
+  inicio_resumo(): Promise<Resposta<InicioResumo>>;
+  primeiros_passos_esconder(esconder: boolean): Promise<Resposta<{ primeiros_passos_escondidos: boolean }>>;
+  preferencias_salvar(valores: PreferenciasEntrada): Promise<Resposta<Preferencias>>;
+  termo_importar(motorista_id: number, arquivo: ArquivoEnviado, dados: { data: string; versao?: string | null }): Promise<Resposta<Motorista>>;
+  termo_ver(motorista_id: number): Promise<Resposta<TermoVisto>>;
+  motorista_termos(motorista_id: number): Promise<Resposta<TermoRegistro[]>>;
   script_estado(): Promise<Resposta<ScriptEstado>>;
   script_eventos(desde_id: number): Promise<Resposta<EventoScript[]>>;
 }
@@ -230,6 +302,12 @@ const NOMES = [
   "decisao_orientado",
   "video_abrir",
   "copia_fazer",
+  "inicio_resumo",
+  "primeiros_passos_esconder",
+  "preferencias_salvar",
+  "termo_importar",
+  "termo_ver",
+  "motorista_termos",
   "script_estado",
   "script_eventos",
 ] as const satisfies readonly (keyof Api)[];

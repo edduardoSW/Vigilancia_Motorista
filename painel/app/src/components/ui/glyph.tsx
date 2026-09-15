@@ -17,6 +17,15 @@ const paths = {
   live: "M12 12h.01M8.6 8.6a4.8 4.8 0 0 0 0 6.8m6.8-6.8a4.8 4.8 0 0 1 0 6.8M5.8 5.8a8.8 8.8 0 0 0 0 12.4m12.4-12.4a8.8 8.8 0 0 1 0 12.4",
   box: "M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Zm0 0 8 4.5m0 0 8-4.5M12 12v9",
   exit: "M14 4h5v16h-5M10 8l-4 4 4 4m-4-4h10",
+  // 15/09 (spec 019): lista e cards, tema, vídeo do momento e termo importado.
+  list: "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01",
+  grid: "M4 4h6.5v6.5H4V4Zm9.5 0H20v6.5h-6.5V4ZM4 13.5h6.5V20H4v-6.5Zm9.5 0H20V20h-6.5v-6.5Z",
+  sun: "M12 16.2a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4ZM12 2.8v1.9m0 14.6v1.9M5.5 5.5l1.3 1.3m10.4 10.4 1.3 1.3M2.8 12h1.9m14.6 0h1.9M5.5 18.5l1.3-1.3M17.2 6.8l1.3-1.3",
+  moon: "M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1Z",
+  monitor: "M3.5 4.5h17v11h-17v-11ZM9 19.5h6m-3-4v4",
+  video: "M3.5 6.5h11.5v11H3.5v-11Zm11.5 4 5.5-3.2v9.4L15 13.5",
+  upload: "M12 15.5V4m-4.5 4.5L12 4l4.5 4.5M4.5 15v5h15v-5",
+  play: "M8 5.5v13l10.5-6.5L8 5.5Z",
 } as const;
 
 export type GlyphName = keyof typeof paths;

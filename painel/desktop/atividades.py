@@ -15,6 +15,7 @@ from dados import Banco, novo_uid
 
 GENESE = "0" * 64
 CHAVE_META = "atividades_ultimo"
+CHAVE_QUEBRA = "atividades_quebra"
 LIMITE_PADRAO, LIMITE_MAXIMO = 500, 5000
 
 
@@ -39,19 +40,31 @@ class Atividades:
         with self.banco.transacao():
             ultimo = self.banco.um("SELECT hash FROM atividades ORDER BY id DESC LIMIT 1")
             anterior = ultimo["hash"] if ultimo else GENESE
+            total = self.banco.um("SELECT COUNT(*) AS n FROM atividades")["n"]
             em = self.banco.agora()
+            self._conferir_ponta(total, anterior, em)
             linha = {"uid": novo_uid(), "em": em, "usuario_id": usuario["id"] if usuario else None,
                      "usuario": usuario["nome"] if usuario else None, "acao": acao, "alvo": _texto(alvo),
                      "detalhe": _texto(detalhe, 1000)}
             linha["hash"] = _hash(anterior, linha)
             novo_id = self.banco.inserir("atividades", {**linha, "criado_em": em, "alterado_em": em,
                                                         "hash_anterior": anterior})
-            total = self.banco.um("SELECT COUNT(*) AS n FROM atividades")["n"]
-            self.banco.meta_gravar(CHAVE_META, f"{total}:{linha['hash']}")
+            self.banco.meta_gravar(CHAVE_META, f"{total + 1}:{linha['hash']}")
         return {"id": novo_id, "em": em, "usuario": linha["usuario"], "acao": acao, "alvo": linha["alvo"],
                 "detalhe": linha["detalhe"]}
 
+    def _conferir_ponta(self, total: int, anterior: str, em: str) -> None:
+        """A ponta guardada em `meta` precisa bater com a do banco antes de acrescentar. Se não bate, alguém apagou as
+        últimas linhas (ou a meta) com os gatilhos removidos: a marca fica, para a linha nova não esconder o que sumiu."""
+        guardado = self.banco.meta_ler(CHAVE_META)
+        if (guardado is None and total == 0) or guardado == f"{total}:{anterior}":
+            return
+        if self.banco.meta_ler(CHAVE_QUEBRA) is None:
+            self.banco.meta_gravar(CHAVE_QUEBRA, f"{em}: guardado {guardado or 'nada'}, no banco {total}:{anterior}")
+
     def verificar(self) -> bool:
+        if self.banco.meta_ler(CHAVE_QUEBRA) is not None:
+            return False
         anterior, total = GENESE, 0
         for linha in self.banco.todos("SELECT * FROM atividades ORDER BY id"):
             if linha["hash_anterior"] != anterior or _hash(anterior, dict(linha)) != linha["hash"]:

@@ -93,7 +93,8 @@ test("PRV-10 sem os vícios da prévia rejeitada: rótulo em maiúsculas, legend
 
 const exportado = existsSync(path.join(saida, "index.html"));
 const relatorios = demo.viagens.map((v) => `viagens/${v.id}/index.html`);
-const paginas = ["index.html", "veiculos/index.html", ...relatorios];
+const telas = ["viagens", "motoristas", "veiculos", "equipe", "configuracoes", "guia", "ao-vivo"].map((tela) => `${tela}/index.html`);
+const paginas = ["index.html", ...telas, ...relatorios];
 // Texto visível da página exportada, sem tags nem scripts (um aviso só em comentário do código não conta).
 const textoVisivel = (pagina) =>
   readFileSync(path.join(saida, pagina), "utf8")
@@ -102,7 +103,7 @@ const textoVisivel = (pagina) =>
     .replace(/<!-- -->/g, "")
     .replace(/\s+/g, " ");
 
-test("PRV-01 exportação estática com caixa conectada, veículos e o relatório de cada viagem", { skip: !exportado && "sem build" }, () => {
+test("PRV-01 exportação estática com o Início, as telas do menu, o teste local e o relatório de cada viagem", { skip: !exportado && "sem build" }, () => {
   for (const pagina of paginas) assert.ok(existsSync(path.join(saida, pagina)), `falta out/${pagina}`);
   assert.ok(!existsSync(path.join(saida, "revisao")) && !existsSync(path.join(saida, "frota")), "telas da prévia rejeitada ainda exportadas");
 });
@@ -123,13 +124,15 @@ test("PRV-04 relatório diz na tela que os alertas não são diagnóstico e ajud
   }
 });
 
-test("PRV-09 momentos agrupados e contagens da coluna de viagens", { skip: !exportado && "sem build" }, () => {
+test("PRV-09 momentos agrupados e contagens da tela Viagens", { skip: !exportado && "sem build" }, () => {
   assert.match(textoVisivel("viagens/v-2240/index.html"), /4 momentos para você verificar/);
   assert.match(textoVisivel("viagens/v-2240/index.html"), /Sono repetido: olhos fechados 2 vezes/);
   assert.match(textoVisivel("viagens/v-3310/index.html"), /2 momentos para você verificar/);
-  const inicio = textoVisivel("index.html");
-  assert.match(inicio, /Caixa do Ônibus 2258 conectada/);
-  assert.match(inicio, /4 para ver/);
-  assert.match(inicio, /2 para ver/);
-  assert.match(inicio, /Revisada/);
+  assert.match(textoVisivel("index.html"), /Caixa do Ônibus 2258 conectada/);
+  const viagens = textoVisivel("viagens/index.html");
+  assert.match(viagens, /4 para ver/);
+  assert.match(viagens, /2 para ver/);
+  assert.match(viagens, /Para verificar 2/, "aba com as 2 viagens que faltam verificar");
+  assert.match(viagens, /Revisadas 1/, "a viagem v-1187 já foi verificada");
+  assert.match(viagens, /Todas 3/);
 });

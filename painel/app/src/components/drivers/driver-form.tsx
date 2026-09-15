@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Choice } from "@/components/ui/choice";
 import { Field } from "@/components/ui/field";
 import { bridge, type Motorista } from "@/lib/bridge";
-import { diasAte, formatarData, hojeIso, nomeCurto, situacaoCnh, soDigitos, validarCnh, validarCpf } from "@/lib/validators";
+import { cpfMascarado, diasAte, formatarData, hojeIso, nomeCurto, situacaoCnh, soDigitos, validarCnh, validarCpf } from "@/lib/validators";
+import { SITUACAO_MOTORISTA, termoAtual } from "./driver-data";
 
-// Formulário do motorista (prévia 5 e spec 015, decisão 1): o mesmo para cadastrar e editar, dentro do painel lateral.
+// Formulário do motorista (prévia 5, spec 015 decisão 1): o mesmo para cadastrar e editar, na janela do motorista.
 // Valida ao sair do campo; o Python confere de novo e o erro dele volta marcado no campo certo (`campo`).
+// Spec 019: o termo de ciência saiu daqui e entra só por "Importar termo assinado". Ao salvar, o formulário manda o termo
+// como está, porque o Python entende "sem termo" como "não assinou".
 
 export type SaveState = "idle" | "saving" | "saved";
 
@@ -21,20 +23,14 @@ interface Campos {
   cnh_categoria: Motorista["cnh_categoria"];
   cnh_validade: string;
   situacao: Motorista["situacao"];
-  termo: "assinado" | "pendente";
-  termo_data: string;
   observacoes: string;
 }
 type NomeCampo = keyof Campos;
 type Erros = Partial<Record<NomeCampo, string>>;
 
-export const SITUACAO_MOTORISTA: Record<Motorista["situacao"], string> = {
-  ativo: "Ativo",
-  afastado: "Afastado",
-  desligado: "Desligado",
-};
+const ORDEM: NomeCampo[] = ["nome", "matricula", "nome_curto", "telefone", "cpf", "cnh_numero", "cnh_categoria", "cnh_validade"];
 
-const ORDEM: NomeCampo[] = ["nome", "matricula", "nome_curto", "telefone", "cpf", "cnh_numero", "cnh_categoria", "cnh_validade", "termo_data"];
+const SEM_TERMO = { assinado: false, data: null, versao: null };
 
 function camposDe(motorista: Motorista | null): Campos {
   if (!motorista) {
@@ -48,8 +44,6 @@ function camposDe(motorista: Motorista | null): Campos {
       cnh_categoria: "D",
       cnh_validade: "",
       situacao: "ativo",
-      termo: "pendente",
-      termo_data: "",
       observacoes: "",
     };
   }
@@ -63,8 +57,6 @@ function camposDe(motorista: Motorista | null): Campos {
     cnh_categoria: motorista.cnh_categoria,
     cnh_validade: motorista.cnh_validade,
     situacao: motorista.situacao,
-    termo: motorista.termo.assinado ? "assinado" : "pendente",
-    termo_data: motorista.termo.data ?? "",
     observacoes: motorista.observacoes ?? "",
   };
 }
@@ -81,20 +73,16 @@ function validar(campos: Campos, outros: Motorista[]): Erros {
   const cnh = validarCnh(campos.cnh_numero);
   if (cnh) erros.cnh_numero = cnh;
   else if (outros.some((outro) => outro.cnh_numero === soDigitos(campos.cnh_numero))) erros.cnh_numero = "Já existe um motorista com esta CNH.";
-  const cpf = validarCpf(campos.cpf);
+  // CPF guardado volta mascarado da ponte: sem mexer, fica o que já está salvo.
+  const cpf = cpfMascarado(campos.cpf) ? null : validarCpf(campos.cpf);
   if (cpf) erros.cpf = cpf;
   if (!campos.cnh_validade) erros.cnh_validade = "Informe até quando a CNH vale.";
-  if (campos.termo === "assinado") {
-    if (!campos.termo_data) erros.termo_data = "Informe a data em que assinou.";
-    else if (campos.termo_data > hojeIso()) erros.termo_data = "A data não pode ser depois de hoje.";
-  }
   return erros;
 }
 
-/** O Python marca `campo` com o nome da propriedade; "termo" e "termo.data" caem na data do termo. */
+/** O Python marca `campo` com o nome da propriedade. Erro do termo não tem campo neste formulário e aparece embaixo. */
 function campoDoServidor(campo: string | undefined): NomeCampo | null {
-  if (!campo) return null;
-  if (campo.startsWith("termo")) return "termo_data";
+  if (!campo || campo.startsWith("termo")) return null;
   return campo in camposDe(null) ? (campo as NomeCampo) : null;
 }
 
@@ -160,19 +148,18 @@ export function DriverForm({
       return;
     }
     onStateChange("saving");
-    const assinado = campos.termo === "assinado";
     const resposta = await bridge.motorista_salvar({
       ...(motorista ? { id: motorista.id } : {}),
       nome: campos.nome.trim(),
       nome_curto: campos.nome_curto.trim(),
       matricula: campos.matricula.trim(),
       telefone: campos.telefone.trim() || null,
-      cpf: soDigitos(campos.cpf) || null,
+      cpf: cpfMascarado(campos.cpf) ? campos.cpf : soDigitos(campos.cpf) || null,
       cnh_numero: soDigitos(campos.cnh_numero),
       cnh_categoria: campos.cnh_categoria,
       cnh_validade: campos.cnh_validade,
       situacao: campos.situacao,
-      termo: { assinado, data: assinado ? campos.termo_data : null, versao: motorista?.termo.versao ?? null },
+      termo: motorista ? termoAtual(motorista) : SEM_TERMO,
       observacoes: campos.observacoes.trim() || null,
     });
     if (!resposta.ok) {
@@ -210,7 +197,7 @@ export function DriverForm({
         <div className="mt-3 grid grid-cols-2 gap-x-4">
           <div className="col-span-2">
             <Field label="Nome completo" htmlFor={id("nome")} error={erro("nome")}>
-              {texto("nome", { autoFocus: !motorista })}
+              {texto("nome", { autoFocus: true })}
             </Field>
           </div>
           <Field label="Matrícula" htmlFor={id("matricula")} error={erro("matricula")}>
@@ -227,7 +214,13 @@ export function DriverForm({
           <Field label="Telefone" optional htmlFor={id("telefone")} error={erro("telefone")}>
             {texto("telefone", { inputMode: "tel", placeholder: "(11) 98765-4321" })}
           </Field>
-          <Field label="CPF" optional htmlFor={id("cpf")} error={erro("cpf")}>
+          <Field
+            label="CPF"
+            optional
+            htmlFor={id("cpf")}
+            hint={cpfMascarado(campos.cpf) ? "Guardado sem mostrar. Para trocar, apague e escreva o novo." : undefined}
+            error={erro("cpf")}
+          >
             {texto("cpf", { inputMode: "numeric", placeholder: "Só se a empresa precisar" })}
           </Field>
         </div>
@@ -264,43 +257,7 @@ export function DriverForm({
           </Field>
         </div>
 
-        <h3 className="mt-2 border-t border-fio pt-5 font-titulo text-[15px] font-semibold">Termo de ciência do monitoramento</h3>
-        <div className="mb-4 mt-3 grid grid-cols-2 gap-3">
-          <Choice
-            name={`${formId}-termo`}
-            value="assinado"
-            checked={campos.termo === "assinado"}
-            onChange={() => mudar("termo", "assinado")}
-            title="Já assinou"
-            description="Informe a data em que assinou o termo."
-          />
-          <Choice
-            name={`${formId}-termo`}
-            value="pendente"
-            checked={campos.termo === "pendente"}
-            onChange={() => mudar("termo", "pendente")}
-            title="Ainda não assinou"
-            description="Os vídeos das viagens dele ficam trancados até registrar."
-          />
-        </div>
-        {campos.termo === "assinado" && (
-          <div className="anim-enter grid grid-cols-2 gap-x-4">
-            <Field label="Assinou em" htmlFor={id("termo_data")} error={erro("termo_data")}>
-              <input
-                id={id("termo_data")}
-                type="date"
-                className="input"
-                value={campos.termo_data}
-                max={hojeIso()}
-                onChange={(evento) => mudar("termo_data", evento.target.value)}
-                onBlur={() => tocar("termo_data")}
-                aria-invalid={Boolean(erro("termo_data"))}
-              />
-            </Field>
-          </div>
-        )}
-
-        {motorista && (
+        {motorista ? (
           <>
             <h3 className="mt-2 border-t border-fio pt-5 font-titulo text-[15px] font-semibold">Situação</h3>
             <div className="mt-3 grid grid-cols-2 gap-x-4">
@@ -335,6 +292,10 @@ export function DriverForm({
               </div>
             </div>
           </>
+        ) : (
+          <p className="mt-2 border-t border-fio pt-5 text-[13.5px] text-grafite">
+            Depois de salvar, importe o termo assinado. Até lá, os vídeos das viagens ficam trancados.
+          </p>
         )}
 
         {erroGeral && (

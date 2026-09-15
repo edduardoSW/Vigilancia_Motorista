@@ -9,6 +9,8 @@ from __future__ import annotations
 import functools
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
@@ -21,11 +23,13 @@ from cadastros import DEMO_EMPRESA, Cadastros, Decisoes, carregar_caixas_do_arqu
 from configuracoes import Configuracoes
 from contas import CUSTO_PRODUCAO, Contas, ler_chaveiro, validar_senha
 from dados import Banco, ErroPainel, pasta_dados
+from preferencias import Preferencias
 
 AQUI = Path(__file__).resolve().parent
 MENSAGEM_FALHA = "Algo deu errado. Tente de novo; se continuar, fale com a RotaGuard."
 MENSAGEM_JA_ATIVADO = "O painel já foi ativado neste computador."
 MENSAGEM_NAO_ATIVADO = "O painel ainda não foi ativado."
+CHAVE_PASSOS_ESCONDIDOS = "primeiros_passos_escondidos"
 ESTADO_SCRIPT_FECHADO = {"aberto": False, "programa": None, "desde": None, "pid": None, "camera": None,
                          "ultimo_sinal": None, "eventos": 0, "pasta": None}
 
@@ -60,11 +64,12 @@ def _resposta(travar: bool = True):
 
 class Ponte:
     def __init__(self, pasta=None, relogio=time.time, custo_scrypt=CUSTO_PRODUCAO, escolher_destino=None,
-                 script_local=None):
+                 script_local=None, abrir_arquivo=None):
         self._pasta = Path(pasta) if pasta is not None else None
         self._relogio = relogio
         self._custo = custo_scrypt
         self._escolher_destino_injetado = escolher_destino
+        self._abrir_arquivo_injetado = abrir_arquivo  # testes passam um falso: nenhum leitor de PDF abre
         self._janela = None
         self._trava = threading.RLock()
         self._nucleo = None
@@ -81,7 +86,8 @@ class Ponte:
             contas = Contas(banco, atividades, self._relogio, self._custo, config.bloqueio_min)
             cadastros = Cadastros(banco, atividades, lambda: datetime.fromtimestamp(self._relogio()).date())
             self._nucleo = SimpleNamespace(banco=banco, atividades=atividades, config=config, contas=contas,
-                                           cadastros=cadastros, decisoes=Decisoes(banco, atividades))
+                                           cadastros=cadastros, decisoes=Decisoes(banco, atividades),
+                                           preferencias=Preferencias(banco))
         return self._nucleo
 
     def _ligar_janela(self, janela) -> None:
@@ -105,6 +111,17 @@ class Ponte:
         if not escolhido:
             raise ErroPainel("Nada foi salvo.", "invalido")
         return Path(escolhido)
+
+    def _abrir_arquivo(self, caminho: Path) -> None:
+        """Abre o arquivo no programa padrão do computador (PDF do termo, spec 019)."""
+        if self._abrir_arquivo_injetado is not None:
+            self._abrir_arquivo_injetado(caminho)
+        elif sys.platform == "win32":
+            os.startfile(str(caminho))  # noqa: S606 - arquivo do próprio painel, caminho conferido
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(caminho)])  # noqa: S603, S607
+        else:
+            subprocess.Popen(["xdg-open", str(caminho)])  # noqa: S603, S607
 
     def _carregar_script(self):
         if self._script is None:
@@ -159,9 +176,20 @@ class Ponte:
         ativado = n.contas.ativado()
         sessao, bloqueado = n.contas.estado_sessao() if ativado else (None, False)
         config = n.config.ler()
+        # Spec 019: tema e preferências da pessoa na sessão; sem sessão, o último tema salvo neste computador.
+        preferencias = n.preferencias.ler(sessao["id"]) if sessao else None
         return {"ativado": ativado, "modo": n.banco.meta_ler("modo") if ativado else None,
                 "empresa": {"nome": config["empresa"]["nome"]} if ativado else None, "sessao": sessao,
-                "bloqueado": bloqueado, "versao": versao_app(), "bloqueio_min": config["acesso"]["bloqueio_min"]}
+                "bloqueado": bloqueado, "versao": versao_app(), "bloqueio_min": config["acesso"]["bloqueio_min"],
+                "texto_maior": bool(config["aparencia"]["texto_maior"]) if ativado else False,
+                "tema": preferencias["tema"] if preferencias else n.preferencias.tema_ultimo(),
+                "preferencias": preferencias, "videos_dias": config["guarda"]["videos_dias"]}
+
+    @_resposta()
+    def preferencias_salvar(self, valores):
+        """Spec 019 (PRF-01): qualquer função, por pessoa; não vai para o registro de atividades."""
+        quem = self._exigir()
+        return self._n().preferencias.salvar(quem["id"], valores)
 
     @_resposta()
     def ativar_demonstracao(self, admin):
@@ -275,6 +303,20 @@ class Ponte:
         with self._trava:
             return self._n().cadastros.motorista_exportar(motorista_id, destino, self._exigir("cadastrar"))
 
+    # Termo importado (spec 019): só administrador e supervisor, pela ação "cadastrar" ---------------------------------
+    @_resposta()
+    def motorista_termos(self, motorista_id):
+        self._exigir("cadastrar")
+        return self._n().cadastros.motorista_termos(motorista_id)
+
+    @_resposta()
+    def termo_importar(self, motorista_id, arquivo, dados_termo):
+        return self._n().cadastros.termo_importar(motorista_id, arquivo, dados_termo, self._exigir("cadastrar"))
+
+    @_resposta()
+    def termo_ver(self, motorista_id):
+        return self._n().cadastros.termo_ver(motorista_id, self._exigir("cadastrar"), self._abrir_arquivo)
+
     @_resposta()
     def veiculos_listar(self):
         self._exigir("ver_viagens")
@@ -296,7 +338,7 @@ class Ponte:
     # Configurações e cópia --------------------------------------------------------------------------------------------
     @_resposta()
     def config_ler(self):
-        self._exigir()
+        self._exigir("configuracoes")  # CFG-01: só o administrador lê; os outros recebem o que precisam em estado()
         return self._n().config.ler()
 
     @_resposta()
@@ -316,6 +358,31 @@ class Ponte:
             n.atividades.registrar("fez cópia de segurança", quem, alvo=Path(resultado["caminho"]).name,
                                    detalhe=f"{resultado['bytes']} bytes")
         return resultado
+
+    # Início ------------------------------------------------------------------------------------------------------------
+    @_resposta()
+    def inicio_resumo(self):
+        """BKP-03 (aviso de cópia com mais de 7 dias) e Primeiros passos (spec 017, decisão 6)."""
+        self._exigir("ver_viagens")
+        banco = self._n().banco
+        ultima = banco.meta_ler("ultima_copia_em")
+        dias = None
+        if ultima:
+            instante = datetime.fromisoformat(ultima.replace("Z", "+00:00")).timestamp()
+            dias = max(0, int((self._relogio() - instante) // 86400))
+        return {"ultima_copia_em": ultima, "dias_desde_copia": dias,
+                "primeiros_passos_escondidos": banco.meta_ler(CHAVE_PASSOS_ESCONDIDOS) == "1"}
+
+    @_resposta()
+    def primeiros_passos_esconder(self, esconder):
+        quem = self._exigir("configuracoes")
+        if not isinstance(esconder, bool):
+            raise ErroPainel("Valor inválido.", "invalido", "esconder")
+        n = self._n()
+        with n.banco.transacao():
+            n.banco.meta_gravar(CHAVE_PASSOS_ESCONDIDOS, "1" if esconder else "0")
+            n.atividades.registrar("escondeu primeiros passos" if esconder else "mostrou primeiros passos", quem)
+        return {"primeiros_passos_escondidos": esconder}
 
     # Decisões e vídeo -------------------------------------------------------------------------------------------------
     @_resposta()

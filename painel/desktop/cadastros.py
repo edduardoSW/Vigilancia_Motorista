@@ -2,11 +2,20 @@
 
 Módulo puro (sem pywebview). Nada é apagado: desligado e fora de uso continuam no banco; termo de ciência só ganha
 registro novo; trocar a caixa de veículo fecha o vínculo antigo e abre outro.
+
+Spec 019: o termo assinado pode ser importado (PDF, PNG ou JPEG até 10 MB). O arquivo fica em `<pasta de dados>/termos/`
+com o nome `<uid do registro>.<pdf|png|jpg>`, só para leitura, e o SHA-256 no banco confere se foi mexido fora do painel.
 """
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
+import os
 import re
+import stat
+import unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -23,6 +32,18 @@ AVISO_CNH_DIAS = 30
 VERSAO_TERMO_PADRAO = "1"
 MENSAGEM_TERMO = "Falta registrar o termo de ciência deste motorista."
 MENSAGEM_CAIXA_BLOQUEADA = "Caixa bloqueada pela RotaGuard"
+# Termo importado (spec 019, decisão 5)
+PASTA_TERMOS = "termos"
+LIMITE_TERMO_BYTES = 10 * 1024 * 1024
+MENSAGEM_TIPO_TERMO = "Use um PDF ou uma foto (PNG ou JPEG) do termo assinado."
+MENSAGEM_TAMANHO_TERMO = "O arquivo pode ter até 10 MB."
+MENSAGEM_SEM_ARQUIVO = "Este motorista não tem o arquivo do termo."
+MENSAGEM_TERMO_ALTERADO = "O arquivo do termo foi alterado fora do painel."
+MENSAGEM_TERMO_SUMIU = "O arquivo do termo sumiu da pasta do painel."
+ASSINATURAS_TERMO = ((b"%PDF-", "pdf", "application/pdf", "pdf"),
+                     (b"\x89PNG\r\n\x1a\n", "imagem", "image/png", "png"),
+                     (b"\xff\xd8\xff", "imagem", "image/jpeg", "jpg"))
+CAMINHO_TERMO = re.compile(r"^termos/[0-9a-f]{32}\.(pdf|png|jpg)$")
 # RF-03: carga 30 min a cada 6 h; passageiros 30 min a cada 4 h.
 REGRAS_DESCANSO = {"carga": {"descanso_min": 30, "a_cada_min": 360},
                    "passageiros": {"descanso_min": 30, "a_cada_min": 240}}
@@ -77,17 +98,26 @@ def formatar_cpf(digitos: str) -> str:
 
 
 def mascarar_cpf(cpf) -> str | None:
+    """Igual ao mascararCpf da tela: só os 3 dígitos das posições 7 a 9 aparecem (•••.•••.247-••)."""
     digitos = so_digitos(cpf)
-    return f"***.{digitos[3:6]}.{digitos[6:9]}-**" if len(digitos) == 11 else None
+    return f"•••.•••.{digitos[6:9]}-••" if len(digitos) == 11 else None
+
+
+PARTICULAS = frozenset({"de", "da", "das", "do", "dos", "e"})
+
+
+def _capitalizar(palavra: str) -> str:
+    return palavra[:1].upper() + palavra[1:].lower()
 
 
 def nome_curto_sugerido(nome) -> str:
+    """Igual ao nomeCurto da tela: primeiro nome capitalizado e a inicial do último sobrenome, sem as partículas."""
     partes = str(nome or "").split()
     if not partes:
         return ""
-    if len(partes) == 1:
-        return partes[0]
-    return f"{partes[0]} {partes[-1][0].upper()}."
+    sobrenomes = [parte for parte in partes[1:] if parte.lower() not in PARTICULAS]
+    primeiro = _capitalizar(partes[0])
+    return f"{primeiro} {sobrenomes[-1][:1].upper()}." if sobrenomes else primeiro
 
 
 _MERCOSUL = re.compile(r"^[A-Z]{3}[0-9][A-Z][0-9]{2}$")
@@ -126,6 +156,46 @@ def aviso_cnh(validade, hoje: date) -> str | None:
     return None
 
 
+def tipo_do_termo(conteudo: bytes) -> tuple[str, str, str] | None:
+    """(tipo, MIME, extensão) pelos primeiros bytes; a extensão do nome não conta (.exe renomeado para .pdf é recusado)."""
+    for assinatura, tipo, mime, extensao in ASSINATURAS_TERMO:
+        if conteudo.startswith(assinatura):
+            return tipo, mime, extensao
+    return None
+
+
+def formatar_tamanho(quantidade: int) -> str:
+    if quantidade < 1024:
+        return f"{quantidade} byte{'' if quantidade == 1 else 's'}"
+    if quantidade < 1024 * 1024:
+        return f"{round(quantidade / 1024)} KB"
+    return f"{quantidade / (1024 * 1024):.1f}".replace(".", ",").removesuffix(",0") + " MB"
+
+
+def nome_do_arquivo(nome, extensao: str) -> str:
+    """Só o nome do arquivo (sem pastas nem caracteres de controle), até 120 caracteres, mantendo a extensão."""
+    texto = re.split(r"[\\/]", nome)[-1] if isinstance(nome, str) else ""
+    texto = " ".join("".join(c for c in texto if not unicodedata.category(c).startswith("C")).split())
+    if texto in ("", ".", ".."):
+        return f"termo-assinado.{extensao}"
+    if len(texto) > 120:
+        base, ponto, final = texto.rpartition(".")
+        texto = f"{base[:119 - len(final)]}.{final}" if ponto and base and len(final) <= 10 else texto[:120]
+    return texto
+
+
+def _decodificar_termo(texto) -> bytes:
+    if len(texto) > 4 * ((LIMITE_TERMO_BYTES + 2) // 3):  # nem decodifica o que passa de 10 MB
+        raise ErroPainel(MENSAGEM_TAMANHO_TERMO, "invalido", "arquivo")
+    try:
+        conteudo = binascii.a2b_base64(texto.encode("ascii"), strict_mode=True)
+    except (binascii.Error, ValueError):
+        raise ErroPainel("Não foi possível ler o arquivo. Escolha o arquivo de novo.", "invalido", "arquivo") from None
+    if len(conteudo) > LIMITE_TERMO_BYTES:
+        raise ErroPainel(MENSAGEM_TAMANHO_TERMO, "invalido", "arquivo")
+    return conteudo
+
+
 def regra_descanso(transporta: str) -> dict:
     if transporta not in REGRAS_DESCANSO:
         raise ErroPainel("Diga se o veículo leva passageiros ou carga.", "invalido", "transporta")
@@ -152,6 +222,10 @@ DEMO_VEICULOS = (  # número, tipo, transporta, placa, caixa, modelo (descriçã
 )
 DEMO_CAIXA_LIVRE = "RG-0155"
 DEMO_DETALHE_RG_0129 = "A caixa esquentou demais na última viagem (passou de 70 °C). Vale conferir a instalação."
+# Iguais às da tela (painel/app/src/content/demo.json, viagem v-1187: e-202 alarme falso; e-203 "orientado", que vira
+# confirmado com orientação). Entram sem linha no registro de atividades, como no lado TypeScript.
+DEMO_DECISOES = (("v-1187-e-202", "alarme_falso", False), ("v-1187-e-203", "confirmado", True))
+DEMO_DECISAO_POR, DEMO_DECISAO_EM = "Marina (gestora)", "2026-09-14T06:58"
 
 
 def cnh_demo(indice: int) -> str:
@@ -165,6 +239,15 @@ def cnh_demo(indice: int) -> str:
 
 
 def carregar_demonstracao(banco: Banco) -> None:
+    carregar_cadastros_demonstracao(banco)
+    with banco.transacao():
+        for momento_id, resultado, orientado in DEMO_DECISOES:
+            banco.inserir("decisoes", {"momento_id": momento_id, "resultado": resultado, "orientado": int(orientado),
+                                       "por": DEMO_DECISAO_POR, "funcao": "administrador", "em": DEMO_DECISAO_EM,
+                                       "ativa": 1})
+
+
+def carregar_cadastros_demonstracao(banco: Banco) -> None:
     with banco.transacao():
         for indice, (ref, nome, curto, matricula, categoria, validade, termo) in enumerate(DEMO_MOTORISTAS, 1):
             motorista_id = banco.inserir("motoristas", {
@@ -216,16 +299,133 @@ class Cadastros:
         self.banco, self.atividades, self.hoje = banco, atividades, hoje
 
     # Motoristas ----------------------------------------------------------------------------------------------------
+    def _termo_mais_novo(self, motorista_id: int):
+        return self.banco.um("SELECT * FROM termos WHERE motorista_id = ? ORDER BY id DESC LIMIT 1", (motorista_id,))
+
+    @staticmethod
+    def _arquivo_termo(linha) -> dict | None:
+        """ArquivoTermo do contrato: sem caminho nem hash."""
+        if linha["arquivo_caminho"] is None:
+            return None
+        return {"nome": linha["arquivo_nome"], "tipo": linha["arquivo_tipo"], "bytes": linha["arquivo_bytes"],
+                "importado_em": linha["criado_em"], "importado_por": linha["registrado_por"]}
+
     def termo_atual(self, motorista_id: int) -> dict:
-        linha = self.banco.um("SELECT * FROM termos WHERE motorista_id = ? ORDER BY id DESC LIMIT 1", (motorista_id,))
+        linha = self._termo_mais_novo(motorista_id)
         if linha is None or not linha["assinado"]:
-            return {"assinado": False, "data": None, "versao": None}
-        return {"assinado": True, "data": linha["data"], "versao": linha["versao"]}
+            return {"assinado": False, "data": None, "versao": None, "arquivo": None}
+        return {"assinado": True, "data": linha["data"], "versao": linha["versao"], "arquivo": self._arquivo_termo(linha)}
+
+    def _registro_termo(self, linha) -> dict:
+        return {"id": linha["id"], "assinado": bool(linha["assinado"]), "data": linha["data"], "versao": linha["versao"],
+                "registrado_por": linha["registrado_por"], "registrado_em": linha["criado_em"],
+                "arquivo": self._arquivo_termo(linha)}
 
     def termos_historico(self, motorista_id: int) -> list[dict]:
-        return [{"assinado": bool(l["assinado"]), "data": l["data"], "versao": l["versao"],
-                 "registrado_por": l["registrado_por"], "registrado_em": l["criado_em"]}
+        return [self._registro_termo(l)
                 for l in self.banco.todos("SELECT * FROM termos WHERE motorista_id = ? ORDER BY id", (motorista_id,))]
+
+    def _motorista_ou_erro(self, motorista_id):
+        linha = self.banco.um("SELECT * FROM motoristas WHERE id = ?", (motorista_id,)) \
+            if _inteiro(motorista_id) else None
+        if linha is None:
+            raise ErroPainel("Motorista não encontrado.", "nao_encontrado")
+        return linha
+
+    def motorista_termos(self, motorista_id) -> list[dict]:
+        """TermoRegistro[] do mais novo para o mais velho (spec 019, TER-03)."""
+        linha = self._motorista_ou_erro(motorista_id)
+        return [self._registro_termo(l) for l in
+                self.banco.todos("SELECT * FROM termos WHERE motorista_id = ? ORDER BY id DESC", (linha["id"],))]
+
+    def _dados_do_termo(self, dados_termo) -> tuple[str, str]:
+        if not isinstance(dados_termo, dict) or not data_valida(dados_termo.get("data")):
+            raise ErroPainel("Informe a data em que o termo foi assinado.", "invalido", "data")
+        if date.fromisoformat(dados_termo["data"]) > self.hoje():
+            raise ErroPainel("A data da assinatura não pode ser no futuro.", "invalido", "data")
+        versao = dados_termo.get("versao")
+        if versao is None or (isinstance(versao, str) and not versao.strip()):
+            return dados_termo["data"], VERSAO_TERMO_PADRAO
+        if not isinstance(versao, str) or len(versao.strip()) > 20:
+            raise ErroPainel("A versão do termo pode ter até 20 letras.", "invalido", "versao")
+        return dados_termo["data"], versao.strip()
+
+    def termo_importar(self, motorista_id, arquivo, dados_termo, quem: dict) -> dict:
+        """TER-01 a TER-03 e TER-05: tudo conferido antes de gravar; registro novo de termo assinado com o arquivo."""
+        motorista = self._motorista_ou_erro(motorista_id)
+        if not (isinstance(arquivo, dict) and isinstance(arquivo.get("nome"), str)
+                and isinstance(arquivo.get("conteudo_base64"), str)):
+            raise ErroPainel("Escolha o arquivo do termo assinado.", "invalido", "arquivo")
+        conteudo = _decodificar_termo(arquivo["conteudo_base64"])
+        tipo = tipo_do_termo(conteudo)
+        if tipo is None:
+            raise ErroPainel(MENSAGEM_TIPO_TERMO, "invalido", "arquivo")
+        data, versao = self._dados_do_termo(dados_termo)
+        tipo_arquivo, mime, extensao = tipo
+        nome = nome_do_arquivo(arquivo["nome"], extensao)
+        uid = novo_uid()
+        destino = self.banco.pasta / PASTA_TERMOS / f"{uid}.{extensao}"
+        temporario = destino.with_name(destino.name + ".tmp")
+        alvo = f"{motorista['nome_curto']} (matrícula {motorista['matricula']})"
+        try:
+            with self.banco.transacao():
+                self.banco.inserir("termos", {
+                    "uid": uid, "motorista_id": motorista["id"], "assinado": 1, "data": data, "versao": versao,
+                    "registrado_por": quem["nome"], "arquivo_nome": nome,
+                    "arquivo_caminho": f"{PASTA_TERMOS}/{destino.name}", "arquivo_tipo": tipo_arquivo,
+                    "arquivo_mime": mime, "arquivo_bytes": len(conteudo),
+                    "arquivo_sha256": hashlib.sha256(conteudo).hexdigest()})
+                self.atividades.registrar("importou termo assinado", quem, alvo=alvo,
+                                          detalhe=f"{nome}, {formatar_tamanho(len(conteudo))}")
+                destino.parent.mkdir(parents=True, exist_ok=True)
+                temporario.write_bytes(conteudo)
+                os.chmod(temporario, stat.S_IREAD)  # só leitura: o leitor de PDF não grava por cima
+                os.replace(temporario, destino)
+        except BaseException:
+            for sobra in (temporario, destino):  # banco voltou atrás: o arquivo também não fica
+                try:
+                    if sobra.exists():
+                        os.chmod(sobra, stat.S_IREAD | stat.S_IWRITE)
+                        sobra.unlink()
+                except OSError:
+                    pass
+            raise
+        return self._motorista(self._motorista_ou_erro(motorista["id"]))
+
+    def termo_ver(self, motorista_id, quem: dict, abrir) -> dict:
+        """TER-02 e TER-05: confere o SHA-256; foto volta para a tela, PDF abre no leitor do computador."""
+        motorista = self._motorista_ou_erro(motorista_id)
+        linha = self._termo_mais_novo(motorista["id"])
+        if linha is None or not linha["assinado"] or linha["arquivo_caminho"] is None:
+            raise ErroPainel(MENSAGEM_SEM_ARQUIVO, "nao_encontrado")
+        alvo = f"{motorista['nome_curto']} (matrícula {motorista['matricula']})"
+        relativo = linha["arquivo_caminho"]
+        conteudo, mensagem = None, MENSAGEM_TERMO_ALTERADO
+        caminho = self.banco.pasta / Path(*relativo.split("/"))
+        if CAMINHO_TERMO.match(relativo):
+            try:
+                conteudo = caminho.read_bytes()
+            except FileNotFoundError:
+                mensagem = MENSAGEM_TERMO_SUMIU
+        tipo = tipo_do_termo(conteudo) if conteudo is not None else None
+        if (conteudo is None or hashlib.sha256(conteudo).hexdigest() != linha["arquivo_sha256"] or tipo is None
+                or tipo[0] != linha["arquivo_tipo"]):
+            self.atividades.registrar("achou termo alterado fora do painel", quem, alvo=alvo,
+                                      detalhe=linha["arquivo_nome"] if mensagem == MENSAGEM_TERMO_ALTERADO
+                                      else f"{linha['arquivo_nome']} (arquivo sumiu)")
+            raise ErroPainel(mensagem, "conflito")
+        if tipo[0] == "pdf":
+            try:
+                abrir(caminho)
+            except OSError:
+                raise ErroPainel("Não foi possível abrir o PDF. Confira se o computador tem um leitor de PDF.",
+                                 "invalido") from None
+            resultado = {"tipo": "pdf", "nome": linha["arquivo_nome"], "aberto": True}
+        else:
+            resultado = {"tipo": "imagem", "nome": linha["arquivo_nome"],
+                         "conteudo": f"data:{tipo[1]};base64,{base64.b64encode(conteudo).decode('ascii')}"}
+        self.atividades.registrar("abriu termo", quem, alvo=alvo, detalhe=linha["arquivo_nome"])
+        return resultado
 
     def _motorista(self, linha, mascarar: bool = True) -> dict:
         return {"id": linha["id"], "ref": linha["ref"], "nome": linha["nome"], "nome_curto": linha["nome_curto"],
@@ -266,8 +466,8 @@ class Cadastros:
         if not data_valida(dados.get("cnh_validade")):
             raise ErroPainel("Informe a validade da CNH.", "invalido", "cnh_validade")
         cpf_bruto = dados.get("cpf")
-        if isinstance(cpf_bruto, str) and "*" in cpf_bruto and atual is not None:
-            cpf = atual["cpf"]  # a lista devolve o CPF mascarado; salvar sem mexer mantém o guardado
+        if isinstance(cpf_bruto, str) and ("•" in cpf_bruto or "*" in cpf_bruto) and atual is not None:
+            cpf = atual["cpf"]  # a lista devolve o CPF mascarado (•••.•••.247-••); salvar sem mexer mantém o guardado
         elif cpf_bruto is None or (isinstance(cpf_bruto, str) and not cpf_bruto.strip()):
             cpf = None
         elif cpf_valido(cpf_bruto):
@@ -275,12 +475,16 @@ class Cadastros:
         else:
             raise ErroPainel("CPF inválido. Confira os números.", "invalido", "cpf")
         telefone = _texto_opcional(dados.get("telefone"), 30, "telefone", "Telefone inválido.")
-        situacao = dados.get("situacao", "ativo")
+        # Alteração sem a chave mantém o que está guardado: chamada parcial não reativa o motorista nem revoga o termo.
+        situacao = dados["situacao"] if "situacao" in dados else (atual["situacao"] if atual is not None else "ativo")
         if situacao not in SITUACOES_MOTORISTA:
             raise ErroPainel("Escolha a situação: ativo, afastado ou desligado.", "invalido", "situacao")
         observacoes = _texto_opcional(dados.get("observacoes"), 500, "observacoes",
                                       "Observações podem ter até 500 letras.")
-        termo = dados.get("termo") if dados.get("termo") is not None else {"assinado": False}
+        if "termo" not in dados and atual is not None:
+            termo = {chave: valor for chave, valor in self.termo_atual(atual["id"]).items() if chave != "arquivo"}
+        else:
+            termo = dados.get("termo") if dados.get("termo") is not None else {"assinado": False}
         if not isinstance(termo, dict):
             raise ErroPainel("Informe se o termo de ciência foi assinado.", "invalido", "termo")
         assinado = termo.get("assinado") is True
@@ -311,7 +515,9 @@ class Cadastros:
                 if mudou:
                     self.banco.atualizar("motoristas", "id", motorista_id, valores)
                     self.atividades.registrar("editou motorista", quem, alvo=alvo, detalhe="campos: " + ", ".join(mudou))
-            if novo_termo != self.termo_atual(motorista_id) and (atual is not None or assinado):
+            termo_guardado = self.termo_atual(motorista_id)
+            termo_guardado.pop("arquivo")  # o formulário não mexe no arquivo: só assinado, data e versão contam
+            if novo_termo != termo_guardado and (atual is not None or assinado):
                 self.banco.inserir("termos", {"motorista_id": motorista_id, "assinado": int(assinado),
                                               "data": novo_termo["data"], "versao": novo_termo["versao"],
                                               "registrado_por": quem["nome"]})
@@ -510,7 +716,9 @@ class Decisoes:
             raise ErroPainel("Escolha confirmado ou alarme falso.", "invalido", "resultado")
         with self.banco.transacao():
             atual = self._ativa(momento_id)
-            self._gravar(momento_id, resultado, bool(atual["orientado"]) if atual else False, quem)
+            # A orientação só continua se o momento segue confirmado; alarme falso nunca fica "orientado".
+            manter = bool(atual and atual["orientado"] and resultado == "confirmado")
+            self._gravar(momento_id, resultado, manter, quem)
             self.atividades.registrar("confirmou momento" if resultado == "confirmado" else "marcou alarme falso", quem,
                                       alvo=momento_id)
         return self._decisao(self._ativa(momento_id))
@@ -533,6 +741,8 @@ class Decisoes:
             atual = self._ativa(momento_id)
             if atual is None:
                 raise ErroPainel("Decida o momento antes de registrar a orientação.", "nao_encontrado")
+            if atual["resultado"] != "confirmado":
+                raise ErroPainel("Só dá para registrar orientação em momento confirmado.", "conflito")
             self._gravar(momento_id, atual["resultado"], orientado, quem)
             self.atividades.registrar("registrou orientação" if orientado else "tirou orientação", quem, alvo=momento_id)
         return self._decisao(self._ativa(momento_id))

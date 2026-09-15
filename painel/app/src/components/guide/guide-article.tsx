@@ -16,7 +16,7 @@ export function GuideArticle({ capitulo }: { capitulo: Capitulo }) {
           <ol className="mt-3.5 grid gap-3">
             {topico.passos.map((passo, indice) => (
               <li key={passo} className="grid grid-cols-[26px_minmax(0,1fr)] items-start gap-3 text-[15px] leading-[1.5]">
-                <span aria-hidden="true" className="mt-px grid size-[22px] place-items-center rounded-full bg-verde text-[12px] font-semibold text-white">
+                <span aria-hidden="true" className="mt-px grid size-[22px] place-items-center rounded-full bg-verde-cheio text-[12px] font-semibold text-sobre-verde">
                   {indice + 1}
                 </span>
                 <span>{passo}</span>

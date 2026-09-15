@@ -76,6 +76,8 @@
 | GUI-06 | Imagens do guia geradas pelo build a partir das telas com dados fictícios; imagem faltando quebra o build | idem |
 | GUI-07 | Primeiros passos marcam cada item pelo estado real (veículos, caixas, motoristas, termos, equipe, cópia) e somem quando completos | teste da interface |
 | GUI-08 | O guia abre sem internet e sem login de administrador (qualquer função) | teste da interface |
+| INI-01 | `inicio_resumo()` devolve a última cópia, os dias desde ela e se os Primeiros passos foram escondidos; exige sessão. Incluído em 15/09/2026 | `tests/test_painel_contas.py` |
+| INI-02 | `primeiros_passos_esconder(esconder)` só para o administrador, com linha no registro de atividades. Incluído em 15/09/2026 | idem |
 
 ## Fora de escopo agora
 

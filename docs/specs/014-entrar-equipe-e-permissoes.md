@@ -145,7 +145,8 @@ Menu fixo na coluna da esquerda, com nomes simples:
 | ATV-01 | Registro de atividades só acrescenta; cada linha leva o hash da anterior; alterar ou apagar uma linha é detectado | idem |
 | ATV-02 | Todas as ações da decisão 11 geram linha com quem, quando, o quê e em quê | idem |
 | ATV-03 | Exportação CSV do registro, só para o administrador, também registrada | idem |
-| MEN-01 | Menu com os 7 itens na ordem do mapa; o item da tela aberta marcado; itens sem permissão não aparecem | teste da interface |
+| MEN-01 | Menu com os 7 itens na ordem do mapa; o item da tela aberta marcado; itens sem permissão não aparecem | teste da interface (`painel/app/scripts/testes/shell.test.mjs`) e roteiro `painel/app/scripts/conferir-telas.mjs` |
+| MEN-02 | Ctrl+K abre a busca rápida: telas do menu da própria função, viagens, motoristas, veículos e capítulos do guia, sem acento e sem maiúscula; Enter abre (motorista e veículo no painel lateral), Esc fecha. Incluído em 15/09/2026, vindo do contrato do painel | idem |
 
 ## Fora de escopo agora
 

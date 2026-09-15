@@ -1,28 +1,34 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { SaveState } from "@/components/drivers/driver-form";
 import { plural, useListShortcuts } from "@/components/drivers/use-list-shortcuts";
-import { useSession } from "@/components/session-provider";
+import { useSession, useVisao } from "@/components/session-provider";
+import { CardGrid, CardInfo, CardTitulo } from "@/components/ui/card-grid";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog } from "@/components/ui/dialog";
-import { Drawer } from "@/components/ui/drawer";
 import { Kbd } from "@/components/ui/kbd";
 import { PageHeader } from "@/components/ui/page-header";
 import { SaveButton } from "@/components/ui/save-button";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
+import { ViewToggle } from "@/components/ui/view-toggle";
 import { veiculoDe, type SituacaoVeiculo } from "@/content";
 import { bridge, type Caixa, type Veiculo } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 import { BoxDrawer } from "./box-drawer";
+import { VehicleDetails } from "./vehicle-details";
 import { VehicleForm } from "./vehicle-form";
 import { nomeDoVeiculo, quando, SITUACAO_CAIXA, SITUACAO_VEICULO, TRANSPORTA } from "./vehicle-labels";
 
-// Veículos e caixas (prévia 6 e spec 015): duas abas, cadastro no diálogo, edição e troca de caixa no painel lateral.
-// A coluna "Agora" ainda vem do demo.json enquanto a leitura da caixa de verdade não chega.
+// Veículos e caixas (prévia 6, specs 015 e 019): duas abas, cada uma em lista ou cards, e a janela no centro.
+// Abrir um veículo mostra os dados; "Editar" troca para o formulário na mesma janela (INT-01). A caixa abre a janela
+// de troca de veículo. A coluna "Agora" ainda vem do demo.json enquanto a leitura da caixa de verdade não chega.
 
 type Aba = "veiculos" | "caixas";
+/** O que a janela do veículo mostra: o formulário do cadastro novo, os dados ou o formulário para editar. */
+type Janela = { modo: "novo" } | { modo: "ver"; id: number } | { modo: "editar"; id: number };
 
 const AGORA: Record<SituacaoVeiculo, string> = {
   atencao: "Precisa de atenção",
@@ -33,8 +39,7 @@ const AGORA: Record<SituacaoVeiculo, string> = {
   revisada: "Tudo verificado",
 };
 
-const FORM_NOVO = "form-veiculo-novo";
-const FORM_EDITAR = "form-veiculo";
+const FORM_ID = "form-veiculo";
 
 function agora(veiculo: Veiculo, caixa: Caixa | undefined) {
   if (veiculo.situacao !== "em_uso") return { texto: SITUACAO_VEICULO[veiculo.situacao], alarme: false, lendo: false };
@@ -60,17 +65,21 @@ export function VehiclesScreen() {
   const { pode } = useSession();
   const podeEditar = pode("cadastrar");
   const { toast } = useToast();
+  const [visaoVeiculos, setVisaoVeiculos] = useVisao("veiculos");
+  const [visaoCaixas, setVisaoCaixas] = useVisao("caixas");
   const [veiculos, setVeiculos] = useState<Veiculo[] | null>(null);
   const [caixas, setCaixas] = useState<Caixa[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<Aba>("veiculos");
   const [selVeiculo, setSelVeiculo] = useState<string | null>(null);
   const [selCaixa, setSelCaixa] = useState<string | null>(null);
-  const [novo, setNovo] = useState(false);
-  const [editando, setEditando] = useState<number | null>(null);
+  const [janela, setJanela] = useState<Janela | null>(null);
+  const [aberta, setAberta] = useState(false);
+  // Cada abertura (veículo ou caixa) começa do zero; ao fechar, o conteúdo fica até a janela terminar de sumir.
+  const [abertura, setAbertura] = useState(0);
   const [caixaAberta, setCaixaAberta] = useState<number | null>(null);
+  const [caixaVisivel, setCaixaVisivel] = useState(false);
   const [salvando, setSalvando] = useState<SaveState>("idle");
-  const [versaoForm, setVersaoForm] = useState(0);
   const [verForaDeUso, setVerForaDeUso] = useState(false);
 
   useEffect(() => {
@@ -87,6 +96,19 @@ export function VehiclesScreen() {
     };
   }, []);
 
+  // A busca rápida (Ctrl+K) pede para abrir um veículo com ?abrir=<id>. Ajuste na renderização, sem efeito.
+  const params = useSearchParams();
+  const pedido = params.get("abrir") ? params.toString() : null;
+  const [pedidoAtendido, setPedidoAtendido] = useState<string | null>(null);
+  if (pedido && veiculos && pedido !== pedidoAtendido) {
+    setPedidoAtendido(pedido);
+    const escolhido = veiculos.find((veiculo) => String(veiculo.id) === params.get("abrir"));
+    if (escolhido) {
+      setAba("veiculos");
+      abrirVeiculo(escolhido);
+    }
+  }
+
   async function recarregar() {
     const [rv, rc] = await Promise.all([bridge.veiculos_listar(), bridge.caixas_listar()]);
     if (!rv.ok) return setErro(rv.erro);
@@ -99,9 +121,11 @@ export function VehiclesScreen() {
   const lista = veiculos ?? [];
   const listaCaixas = caixas ?? [];
   const caixaDe = (veiculo: Veiculo) => listaCaixas.find((caixa) => caixa.id === veiculo.caixa_id);
-  const veiculoAberto = lista.find((veiculo) => veiculo.id === editando) ?? null;
+  const veiculoAberto = janela && janela.modo !== "novo" ? (lista.find((veiculo) => veiculo.id === janela.id) ?? null) : null;
   const caixaAbertaObj = listaCaixas.find((caixa) => caixa.id === caixaAberta) ?? null;
   const foraDeUso = lista.filter((veiculo) => veiculo.situacao === "fora_de_uso").length;
+  const carregado = veiculos !== null && caixas !== null;
+  const visao = aba === "veiculos" ? visaoVeiculos : visaoCaixas;
 
   const linhasVeiculos = lista
     .filter((veiculo) => verForaDeUso || veiculo.situacao !== "fora_de_uso")
@@ -111,36 +135,49 @@ export function VehiclesScreen() {
   const linhasCaixas = [...listaCaixas].sort(
     (a, b) => Number(b.situacao !== "ok") - Number(a.situacao !== "ok") || a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true }),
   );
+  const vazioVeiculos = carregado ? "Nenhum veículo cadastrado ainda." : "Carregando…";
+  const vazioCaixas = carregado ? "Nenhuma caixa ainda. As caixas vêm do arquivo da empresa." : "Carregando…";
 
   function abrirNovo() {
     setAba("veiculos");
     setSalvando("idle");
-    setVersaoForm((versao) => versao + 1);
-    setNovo(true);
+    setAbertura((valor) => valor + 1);
+    setJanela({ modo: "novo" });
+    setAberta(true);
   }
 
   function abrirVeiculo(veiculo: Veiculo) {
     setSelVeiculo(String(veiculo.id));
+    setAbertura((valor) => valor + 1);
+    setJanela({ modo: "ver", id: veiculo.id });
+    setAberta(true);
+  }
+
+  function editar(id: number) {
     setSalvando("idle");
-    setVersaoForm((versao) => versao + 1);
-    setEditando(veiculo.id);
+    setJanela({ modo: "editar", id });
   }
 
   function abrirCaixa(caixa: Caixa) {
     setSelCaixa(String(caixa.id));
     setCaixaAberta(caixa.id);
+    setAbertura((valor) => valor + 1);
+    setCaixaVisivel(true);
   }
 
-  useListShortcuts({ onNew: podeEditar ? abrirNovo : undefined, enabled: !novo && editando === null && caixaAberta === null });
+  const fechar = () => setAberta(false);
 
-  async function aoSalvarVeiculo(salvo: Veiculo) {
+  useListShortcuts({ onNew: podeEditar ? abrirNovo : undefined, enabled: !aberta && !caixaVisivel });
+
+  async function aoSalvarVeiculo(salvo: Veiculo, novo: boolean) {
     setVeiculos((atual) => {
       const base = atual ?? [];
       return base.some((item) => item.id === salvo.id) ? base.map((item) => (item.id === salvo.id ? salvo : item)) : [...base, salvo];
     });
     setSelVeiculo(String(salvo.id));
-    toast({ text: "Veículo salvo" });
-    if (novo) setNovo(false);
+    toast({ text: novo ? "Veículo cadastrado" : "Veículo salvo" });
+    // Salvou: a janela volta para os dados do veículo.
+    setJanela({ modo: "ver", id: salvo.id });
     // A caixa escolhida sai da lista de livres (e de outro veículo, se estava lá).
     await recarregar();
   }
@@ -228,7 +265,104 @@ export function VehiclesScreen() {
     { id: "versao", header: "Versão", cell: (caixa: Caixa) => caixa.versao ?? <span className="text-grafite">—</span> },
   ];
 
-  const carregado = veiculos !== null && caixas !== null;
+  function cardVeiculo(veiculo: Veiculo) {
+    const caixa = caixaDe(veiculo);
+    const situacao = agora(veiculo, caixa);
+    return (
+      <>
+        <CardTitulo titulo={nomeDoVeiculo(veiculo)} detalhe={`Placa ${veiculo.placa}`} />
+        <span className="grid gap-1.5">
+          <CardInfo rotulo="Caixa">{caixa ? caixa.codigo : <span className="text-grafite">Sem caixa</span>}</CardInfo>
+          <CardInfo rotulo="Transporta">{TRANSPORTA[veiculo.transporta].rotulo}</CardInfo>
+          <CardInfo rotulo="Agora" alarme={situacao.alarme}>
+            {situacao.texto}
+          </CardInfo>
+        </span>
+      </>
+    );
+  }
+
+  function cardCaixa(caixa: Caixa) {
+    const veiculo = lista.find((item) => item.id === caixa.veiculo_id);
+    const motivo = caixa.situacao === "ok" ? null : (caixa.detalhe ?? (caixa.situacao === "bloqueada" ? "Não importa viagem." : null));
+    return (
+      <>
+        <CardTitulo titulo={caixa.codigo} detalhe={veiculo ? nomeDoVeiculo(veiculo) : "Sem veículo"} />
+        <span className="grid gap-1.5">
+          <CardInfo rotulo="Situação" alarme={caixa.situacao !== "ok"}>
+            {SITUACAO_CAIXA[caixa.situacao]}
+          </CardInfo>
+          <CardInfo rotulo="Última coleta">{quando(caixa.ultima_coleta) ?? <span className="text-grafite">Nunca coletada</span>}</CardInfo>
+          <CardInfo rotulo="Versão">{caixa.versao ?? <span className="text-grafite">Não informada</span>}</CardInfo>
+        </span>
+        {motivo && <span className="line-clamp-2 text-[13px] text-grafite">{motivo}</span>}
+      </>
+    );
+  }
+
+  function conteudoDaJanela() {
+    if (!janela) return null;
+    if (janela.modo === "novo") {
+      return (
+        <VehicleForm
+          key={`novo-${abertura}`}
+          formId={FORM_ID}
+          veiculo={null}
+          outros={lista}
+          caixas={listaCaixas}
+          readOnly={!podeEditar}
+          onSaved={(salvo) => aoSalvarVeiculo(salvo, true)}
+          onStateChange={setSalvando}
+        />
+      );
+    }
+    if (!veiculoAberto) return null;
+    if (janela.modo === "editar") {
+      return (
+        <VehicleForm
+          key={`editar-${veiculoAberto.id}-${abertura}`}
+          formId={FORM_ID}
+          veiculo={veiculoAberto}
+          outros={lista.filter((veiculo) => veiculo.id !== veiculoAberto.id)}
+          caixas={listaCaixas}
+          readOnly={!podeEditar}
+          onSaved={(salvo) => aoSalvarVeiculo(salvo, false)}
+          onStateChange={setSalvando}
+        />
+      );
+    }
+    const caixa = caixaDe(veiculoAberto);
+    return <VehicleDetails veiculo={veiculoAberto} caixa={caixa} agora={agora(veiculoAberto, caixa)} podeCadastrar={podeEditar} />;
+  }
+
+  function rodapeDaJanela() {
+    if (!janela) return undefined;
+    if (janela.modo === "ver") {
+      return (
+        <>
+          {podeEditar && (
+            <button type="button" className="btn" onClick={() => editar(janela.id)}>
+              Editar
+            </button>
+          )}
+          <button type="button" className="btn" onClick={fechar}>
+            Fechar
+          </button>
+        </>
+      );
+    }
+    const voltarPara = janela.modo === "editar" ? janela.id : null;
+    return (
+      <>
+        <SaveButton state={salvando} type="submit" form={FORM_ID}>
+          Salvar veículo
+        </SaveButton>
+        <button type="button" className="btn" onClick={() => (voltarPara === null ? fechar() : setJanela({ modo: "ver", id: voltarPara }))}>
+          Cancelar
+        </button>
+      </>
+    );
+  }
 
   return (
     <section className="anim-enter px-14 pb-16 pt-[34px]">
@@ -245,7 +379,7 @@ export function VehiclesScreen() {
         }
       />
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <Tabs
           items={[
             { id: "veiculos", label: "Veículos", count: lista.length - (verForaDeUso ? 0 : foraDeUso) },
@@ -254,6 +388,7 @@ export function VehiclesScreen() {
           value={aba}
           onChange={(id: string) => setAba(id as Aba)}
         />
+        <ViewToggle value={visao} onChange={aba === "veiculos" ? setVisaoVeiculos : setVisaoCaixas} />
       </div>
 
       {erro ? (
@@ -264,16 +399,30 @@ export function VehiclesScreen() {
           </button>
         </p>
       ) : aba === "veiculos" ? (
-        <div key="veiculos" className="anim-enter mt-3">
-          <DataTable
-            columns={colunasVeiculos}
-            rows={linhasVeiculos}
-            getRowId={(veiculo: Veiculo) => String(veiculo.id)}
-            selectedId={selVeiculo}
-            onSelect={(id) => setSelVeiculo(String(id))}
-            onOpen={abrirVeiculo}
-            empty={carregado ? "Nenhum veículo cadastrado ainda." : "Carregando…"}
-          />
+        <div key={`veiculos-${visao}`} className="anim-enter mt-4">
+          {visao === "lista" ? (
+            <DataTable
+              columns={colunasVeiculos}
+              rows={linhasVeiculos}
+              getRowId={(veiculo: Veiculo) => String(veiculo.id)}
+              selectedId={selVeiculo}
+              onSelect={(id) => setSelVeiculo(String(id))}
+              onOpen={abrirVeiculo}
+              label="Veículos"
+              empty={vazioVeiculos}
+            />
+          ) : (
+            <CardGrid
+              items={linhasVeiculos}
+              getId={(veiculo: Veiculo) => String(veiculo.id)}
+              selectedId={selVeiculo}
+              onSelect={setSelVeiculo}
+              onOpen={abrirVeiculo}
+              renderCard={cardVeiculo}
+              label="Veículos"
+              empty={vazioVeiculos}
+            />
+          )}
           {foraDeUso > 0 && (
             <button type="button" className="mt-3 text-[13px] font-semibold text-grafite hover:text-tinta" onClick={() => setVerForaDeUso((ver) => !ver)}>
               {verForaDeUso ? "Esconder os fora de uso" : `Mostrar ${plural(foraDeUso, "veículo fora de uso", "veículos fora de uso")}`}
@@ -281,92 +430,58 @@ export function VehiclesScreen() {
           )}
         </div>
       ) : (
-        <div key="caixas" className="anim-enter mt-3">
-          <DataTable
-            columns={colunasCaixas}
-            rows={linhasCaixas}
-            getRowId={(caixa: Caixa) => String(caixa.id)}
-            selectedId={selCaixa}
-            onSelect={(id) => setSelCaixa(String(id))}
-            onOpen={abrirCaixa}
-            empty={carregado ? "Nenhuma caixa ainda. As caixas vêm do arquivo da empresa." : "Carregando…"}
-          />
+        <div key={`caixas-${visao}`} className="anim-enter mt-4">
+          {visao === "lista" ? (
+            <DataTable
+              columns={colunasCaixas}
+              rows={linhasCaixas}
+              getRowId={(caixa: Caixa) => String(caixa.id)}
+              selectedId={selCaixa}
+              onSelect={(id) => setSelCaixa(String(id))}
+              onOpen={abrirCaixa}
+              label="Caixas"
+              empty={vazioCaixas}
+            />
+          ) : (
+            <CardGrid
+              items={linhasCaixas}
+              getId={(caixa: Caixa) => String(caixa.id)}
+              selectedId={selCaixa}
+              onSelect={setSelCaixa}
+              onOpen={abrirCaixa}
+              renderCard={cardCaixa}
+              label="Caixas"
+              empty={vazioCaixas}
+            />
+          )}
         </div>
       )}
 
       <Dialog
-        width={620}
-        open={novo}
-        onClose={() => setNovo(false)}
-        title="Cadastrar veículo"
-        summary="Depois de salvar, a caixa escolhida passa a ser deste veículo."
-        footer={
-          <>
-            <SaveButton state={salvando} type="submit" form={FORM_NOVO}>
-              Salvar veículo
-            </SaveButton>
-            <button type="button" className="btn" onClick={() => setNovo(false)}>
-              Cancelar
-            </button>
-          </>
+        width={600}
+        open={aberta && (janela?.modo === "novo" || veiculoAberto !== null)}
+        onClose={fechar}
+        title={janela?.modo === "novo" ? "Cadastrar veículo" : veiculoAberto ? nomeDoVeiculo(veiculoAberto) : ""}
+        summary={
+          janela?.modo === "novo"
+            ? "Depois de salvar, a caixa escolhida passa a ser deste veículo."
+            : veiculoAberto
+              ? `Placa ${veiculoAberto.placa} · ${janela?.modo === "editar" ? "Editando o cadastro" : SITUACAO_VEICULO[veiculoAberto.situacao]}`
+              : undefined
         }
+        footer={rodapeDaJanela()}
       >
-        {novo && (
-          <VehicleForm
-            key={versaoForm}
-            formId={FORM_NOVO}
-            veiculo={null}
-            outros={lista}
-            caixas={listaCaixas}
-            readOnly={!podeEditar}
-            onSaved={aoSalvarVeiculo}
-            onStateChange={setSalvando}
-          />
-        )}
+        {conteudoDaJanela()}
       </Dialog>
 
-      <Drawer
-        open={veiculoAberto !== null}
-        onClose={() => setEditando(null)}
-        title={veiculoAberto ? nomeDoVeiculo(veiculoAberto) : ""}
-        summary={veiculoAberto ? `Placa ${veiculoAberto.placa} · ${SITUACAO_VEICULO[veiculoAberto.situacao]}` : undefined}
-        footer={
-          podeEditar ? (
-            <>
-              <SaveButton state={salvando} type="submit" form={FORM_EDITAR}>
-                Salvar veículo
-              </SaveButton>
-              <button type="button" className="btn" onClick={() => setEditando(null)}>
-                Cancelar
-              </button>
-            </>
-          ) : (
-            <button type="button" className="btn" onClick={() => setEditando(null)}>
-              Fechar
-            </button>
-          )
-        }
-      >
-        {veiculoAberto && (
-          <VehicleForm
-            key={versaoForm}
-            formId={FORM_EDITAR}
-            veiculo={veiculoAberto}
-            outros={lista.filter((veiculo) => veiculo.id !== veiculoAberto.id)}
-            caixas={listaCaixas}
-            readOnly={!podeEditar}
-            onSaved={aoSalvarVeiculo}
-            onStateChange={setSalvando}
-          />
-        )}
-      </Drawer>
-
       <BoxDrawer
+        open={caixaVisivel}
+        abertura={abertura}
         caixa={caixaAbertaObj}
         caixas={listaCaixas}
         veiculos={lista}
         readOnly={!podeEditar}
-        onClose={() => setCaixaAberta(null)}
+        onClose={() => setCaixaVisivel(false)}
         onLinked={aoVincular}
       />
     </section>

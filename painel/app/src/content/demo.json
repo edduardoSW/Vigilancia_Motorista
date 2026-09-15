@@ -56,7 +56,8 @@
       "eventos": [
         { "id": "e-301", "hora": "2026-09-13T21:02", "tipo": "calibracao_concluida", "risco": 1, "duracaoS": 121 },
         { "id": "e-302", "hora": "2026-09-14T02:10", "tipo": "direcao_continua", "risco": 2, "duracaoS": 0 },
-        { "id": "e-303", "hora": "2026-09-14T05:37", "tipo": "celular_na_mao", "risco": 3, "duracaoS": 6.0 }
+        { "id": "e-303", "hora": "2026-09-14T05:37", "tipo": "celular_na_mao", "risco": 3, "duracaoS": 6.0,
+          "videos": [{ "id": "vd-3310-1", "inicio": "2026-09-14T05:36:54", "fim": "2026-09-14T05:37:10", "camera": "Câmera da cabine" }] }
       ],
       "episodios": []
     },
@@ -79,7 +80,8 @@
       ],
       "eventos": [
         { "id": "e-201", "hora": "2026-09-13T23:48", "tipo": "calibracao_concluida", "risco": 1, "duracaoS": 97 },
-        { "id": "e-202", "hora": "2026-09-14T02:26", "tipo": "celular_no_ouvido", "risco": 3, "duracaoS": 3.4, "revisao": { "resultado": "alarme_falso", "por": "Marina (gestora)", "em": "2026-09-14T06:58", "nota": "Mão na orelha, sem celular." } },
+        { "id": "e-202", "hora": "2026-09-14T02:26", "tipo": "celular_no_ouvido", "risco": 3, "duracaoS": 3.4,
+          "videos": [{ "id": "vd-1187-1", "inicio": "2026-09-14T02:25:56", "fim": "2026-09-14T02:26:12", "camera": "Câmera da cabine" }], "revisao": { "resultado": "alarme_falso", "por": "Marina (gestora)", "em": "2026-09-14T06:58", "nota": "Mão na orelha, sem celular." } },
         { "id": "e-203", "hora": "2026-09-14T05:15", "tipo": "atencao", "risco": 2, "duracaoS": 0, "revisao": { "resultado": "orientado", "por": "Marina (gestora)", "em": "2026-09-14T06:58", "nota": "Pausa extra combinada para a próxima escala." } }
       ],
       "episodios": []
@@ -103,14 +105,16 @@
       ],
       "eventos": [
         { "id": "e-101", "hora": "2026-09-13T22:31", "tipo": "calibracao_concluida", "risco": 1, "duracaoS": 108 },
-        { "id": "e-102", "hora": "2026-09-13T23:41", "tipo": "olhando_celular", "risco": 4, "duracaoS": 4.2 },
+        { "id": "e-102", "hora": "2026-09-13T23:41", "tipo": "olhando_celular", "risco": 4, "duracaoS": 4.2,
+          "videos": [{ "id": "vd-2240-1", "inicio": "2026-09-13T23:40:52", "fim": "2026-09-13T23:41:08", "camera": "Câmera da cabine" }] },
         { "id": "e-103", "hora": "2026-09-14T00:58", "tipo": "mao_no_rosto", "risco": 1, "duracaoS": 7.5 },
         { "id": "e-104", "hora": "2026-09-14T01:12", "tipo": "atencao", "risco": 2, "duracaoS": 0 },
         { "id": "e-105", "hora": "2026-09-14T03:52", "tipo": "sonolencia", "risco": 3, "duracaoS": 0, "episodio": "ep-1" },
         { "id": "e-106", "hora": "2026-09-14T04:03", "tipo": "microssono", "risco": 3, "duracaoS": 1.3, "episodio": "ep-1" },
         { "id": "e-107", "hora": "2026-09-14T04:11", "tipo": "olhos_esfregados", "risco": 1, "duracaoS": 3.1, "episodio": "ep-1" },
         { "id": "e-108", "hora": "2026-09-14T04:18", "tipo": "microssono", "risco": 3, "duracaoS": 1.1, "episodio": "ep-1" },
-        { "id": "e-109", "hora": "2026-09-14T04:40", "tipo": "celular_no_ouvido", "risco": 3, "duracaoS": 3.0 },
+        { "id": "e-109", "hora": "2026-09-14T04:40", "tipo": "celular_no_ouvido", "risco": 3, "duracaoS": 3.0,
+          "videos": [{ "id": "vd-2240-4", "inicio": "2026-09-14T04:39:55", "fim": "2026-09-14T04:40:10", "camera": "Câmera da cabine" }] },
         { "id": "e-110", "hora": "2026-09-14T05:02", "tipo": "rosto_nao_detectado", "risco": 1, "duracaoS": 10 }
       ],
       "episodios": [
@@ -120,7 +124,10 @@
           "inicio": "2026-09-14T03:52",
           "fim": "2026-09-14T04:18",
           "resumo": "Sinal de sonolência seguido de dois microssonos em 26 min, na madrugada.",
-          "trecho": { "duracaoS": 20, "situacao": "Aguardando revisão autorizada" }
+          "videos": [
+            { "id": "vd-2240-2", "inicio": "2026-09-14T04:02:52", "fim": "2026-09-14T04:03:12", "camera": "Câmera da cabine" },
+            { "id": "vd-2240-3", "inicio": "2026-09-14T04:17:52", "fim": "2026-09-14T04:18:12", "camera": "Câmera da cabine" }
+          ]
         }
       ]
     }

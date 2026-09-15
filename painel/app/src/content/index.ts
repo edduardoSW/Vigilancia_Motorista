@@ -12,6 +12,14 @@ export interface Revisao {
   nota?: string;
 }
 
+/** Trecho de vídeo gravado pela caixa (spec 019, VID-01). Na prévia, fictício: só os campos, sem imagem. */
+export interface VideoBruto {
+  id: string;
+  inicio: string;
+  fim: string;
+  camera: string;
+}
+
 export interface Evento {
   id: string;
   hora: string;
@@ -20,6 +28,7 @@ export interface Evento {
   duracaoS: number;
   episodio?: string;
   revisao?: Revisao;
+  videos?: VideoBruto[];
 }
 
 export interface ParteJornada {
@@ -34,7 +43,7 @@ export interface Episodio {
   inicio: string;
   fim: string;
   resumo: string;
-  trecho: { duracaoS: number; situacao: string } | null;
+  videos?: VideoBruto[];
 }
 
 export interface Viagem {

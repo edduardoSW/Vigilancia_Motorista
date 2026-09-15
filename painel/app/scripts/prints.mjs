@@ -83,7 +83,8 @@ try {
         captureBeyondViewport: true,
         clip: { x: 0, y: 0, width: largura, height: altura, scale: 1 },
       });
-      const nome = `${largura}-${rota.replace(/\//g, "_").replace(/^_|_$/g, "") || "chegadas"}.png`;
+      // Rota com ?sessao= (demonstração já com alguém dentro) vira nome de arquivo válido no Windows.
+      const nome = `${largura}-${rota.replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "") || "inicio"}.png`;
       writeFileSync(path.join(pasta, nome), Buffer.from(captura.data, "base64"));
       console.log(`${nome} · ${largura}x${altura}${transborda ? " · TRANSBORDA NA HORIZONTAL" : ""}`);
     }

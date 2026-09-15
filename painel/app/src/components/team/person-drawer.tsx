@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { DetailList, DetailRow } from "@/components/drivers/detail-list";
 import { bridge, type Funcao, type Usuario } from "@/lib/bridge";
 import { Choice } from "@/components/ui/choice";
-import { Drawer } from "@/components/ui/drawer";
+import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { FRASE_FUNCAO, FUNCOES, NOME_FUNCAO, quando, situacaoDe } from "./roles";
 import { TempPassword } from "./temp-password";
 
 type Confirmando = "senha" | "ativo" | null;
 
-// Painel lateral da pessoa: trocar função, criar senha nova, desativar ou reativar (spec 014, decisões 8 e 9).
-// A pessoa continua no painel enquanto ele desliza para fora; ao fechar, o conteúdo desmonta (senha nova não volta).
+// Janela da pessoa, no centro (spec 014 decisões 8 e 9; spec 019 MOD-01): trocar função, criar senha nova, desativar
+// ou reativar. Já é uma janela de ações: a função muda na hora, sem "Salvar". Ao fechar, o conteúdo desmonta (a senha
+// nova não aparece de novo).
 export function PersonDrawer({
   open,
   pessoa,
@@ -24,14 +26,20 @@ export function PersonDrawer({
   onChanged: () => void;
 }) {
   return (
-    <Drawer
+    <Dialog
+      width={520}
       open={open && pessoa !== null}
       onClose={onClose}
       title={pessoa?.nome ?? ""}
       summary={pessoa ? `Usuário ${pessoa.usuario} · ${situacaoDe(pessoa)}` : undefined}
+      footer={
+        <button type="button" className="btn" onClick={onClose}>
+          Fechar
+        </button>
+      }
     >
       {pessoa && <PersonDetails key={pessoa.id} pessoa={pessoa} onChanged={onChanged} />}
-    </Drawer>
+    </Dialog>
   );
 }
 
@@ -83,12 +91,10 @@ function PersonDetails({ pessoa, onChanged }: { pessoa: Usuario; onChanged: () =
 
   return (
     <div className="grid gap-8">
-      <dl className="grid grid-cols-[130px_minmax(0,1fr)] gap-y-2 text-[14px]">
-        <dt className="text-grafite">Último acesso</dt>
-        <dd>{quando(pessoa.ultimo_acesso)}</dd>
-        <dt className="text-grafite">Situação</dt>
-        <dd>{situacaoDe(pessoa)}</dd>
-      </dl>
+      <DetailList>
+        <DetailRow label="Último acesso">{quando(pessoa.ultimo_acesso)}</DetailRow>
+        <DetailRow label="Situação">{situacaoDe(pessoa)}</DetailRow>
+      </DetailList>
 
       <fieldset className="grid gap-2" disabled={!pessoa.ativo}>
         <legend className="mb-2 text-[14px] font-semibold">Função</legend>
@@ -152,7 +158,7 @@ function PersonDetails({ pessoa, onChanged }: { pessoa: Usuario; onChanged: () =
 
 function Confirm(props: { texto: string; acao: string; perigo?: boolean; ocupado: boolean; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="anim-enter grid gap-3 rounded-[10px] border border-fio bg-white p-4">
+    <div className="anim-enter grid gap-3 rounded-[10px] border border-fio bg-superficie p-4">
       <p className="text-[14px]">{props.texto}</p>
       <div className="flex gap-2">
         <button

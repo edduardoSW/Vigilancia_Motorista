@@ -94,6 +94,18 @@ MIGRACOES = (
         ativa INTEGER NOT NULL DEFAULT 1);
     CREATE INDEX decisoes_momento ON decisoes (momento_id, ativa);
     """,
+    # 2 · spec 019: arquivo do termo assinado (caminho relativo à pasta de dados, com SHA-256) e preferências por pessoa.
+    # ADD COLUMN não passa pelos gatilhos: o termo continua sem UPDATE e sem DELETE.
+    f"""
+    ALTER TABLE termos ADD COLUMN arquivo_nome TEXT;
+    ALTER TABLE termos ADD COLUMN arquivo_caminho TEXT;
+    ALTER TABLE termos ADD COLUMN arquivo_tipo TEXT CHECK (arquivo_tipo IN ('pdf', 'imagem'));
+    ALTER TABLE termos ADD COLUMN arquivo_mime TEXT;
+    ALTER TABLE termos ADD COLUMN arquivo_bytes INTEGER;
+    ALTER TABLE termos ADD COLUMN arquivo_sha256 TEXT;
+    CREATE TABLE preferencias (usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id), {_COMUNS},
+        valores TEXT NOT NULL);
+    """,
 )
 
 

@@ -15,11 +15,15 @@ import type {
   Funcao,
   Motorista,
   NovoAdministrador,
+  Preferencias,
+  PreferenciasEntrada,
   Resposta,
+  Tema,
+  TermoRegistro,
   Usuario,
   Veiculo,
 } from "./bridge";
-import { podeFazer, SENHA_MINIMA } from "./bridge";
+import { PREFERENCIAS_PADRAO, podeFazer, SENHA_MINIMA, TELAS_COM_VISAO } from "./bridge";
 
 const VERSAO = "0.1.0";
 const FUNCOES: Funcao[] = ["administrador", "supervisor", "consulta"];
@@ -42,11 +46,34 @@ const COMUNS = new Set([
 ]);
 
 type Erro = { ok: false; erro: string; codigo?: Extract<Resposta<unknown>, { ok: false }>["codigo"]; campo?: string; esperar_s?: number };
-type Conta = Usuario & { senha: string };
+type Conta = Usuario & { senha: string; preferencias: Preferencias };
 
 const ok = <T>(valor: T): Resposta<T> => ({ ok: true, dados: valor });
 const falha = (erro: string, extra: Omit<Erro, "ok" | "erro"> = {}): Erro => ({ ok: false, erro, ...extra });
 const agora = () => new Date().toISOString();
+const dois = (numero: number) => String(numero).padStart(2, "0");
+const hoje = (data = new Date()) => `${data.getFullYear()}-${dois(data.getMonth() + 1)}-${dois(data.getDate())}`;
+
+/** Igual ao nome_do_arquivo do Python: sem pastas nem caracteres de controle, até 120 caracteres, mantendo a extensão. */
+function nomeDoArquivo(nome: unknown, extensao: string) {
+  const ultimo = typeof nome === "string" ? (nome.split(/[\\/]/).pop() ?? "") : "";
+  let texto = ultimo.replace(/\p{C}/gu, "").split(/\s+/).filter(Boolean).join(" ");
+  if (texto === "" || texto === "." || texto === "..") return `termo-assinado.${extensao}`;
+  if (texto.length > 120) {
+    const ponto = texto.lastIndexOf(".");
+    const final = texto.slice(ponto + 1);
+    texto = ponto > 0 && final.length <= 10 ? `${texto.slice(0, ponto).slice(0, 119 - final.length)}.${final}` : texto.slice(0, 120);
+  }
+  return texto;
+}
+
+/** Igual ao formatar_tamanho do Python, para o detalhe do registro de atividades. */
+function formatarTamanho(quantidade: number) {
+  if (quantidade < 1024) return `${quantidade} byte${quantidade === 1 ? "" : "s"}`;
+  if (quantidade < 1024 * 1024) return `${Math.round(quantidade / 1024)} KB`;
+  return `${(quantidade / (1024 * 1024)).toFixed(1).replace(".", ",").replace(/,0$/, "")} MB`;
+}
+
 const pausa = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const ehErro = (valor: unknown): valor is Erro => typeof valor === "object" && valor !== null && (valor as Erro).ok === false;
 
@@ -137,7 +164,7 @@ function motoristasDemo(): Motorista[] {
     cnh_categoria: categoria,
     cnh_validade: validade,
     situacao: "ativo",
-    termo: { assinado: Boolean(termo), data: termo, versao: termo ? "1" : null },
+    termo: { assinado: Boolean(termo), data: termo, versao: termo ? "1" : null, arquivo: null },
     observacoes: null,
     viagens_30d: viagens,
     confirmados_30d: confirmados,
@@ -219,11 +246,28 @@ export function criarDemonstracao(): Api {
   let veiculos: Veiculo[] = [];
   let caixas: Caixa[] = [];
   let decisoes = new Map<string, Decisao>();
+  let ultimaCopiaEm: string | null = null;
+  let passosEscondidos = false;
+  // Spec 019: tema usado antes de entrar, histórico de termos (nunca apagado) e as fotos de termo importadas.
+  let temaUltimo: Tema = "claro";
+  const termosHistorico = new Map<number, TermoRegistro[]>();
+  const fotosDeTermo = new Map<number, string>();
+  let proximoTermoId = 1;
   const atividades: Atividade[] = [];
   let config = configPadrao("Viação Demonstração");
   const tentativas = new Map<string, { erros: number; esperaAte: number }>();
 
-  const publico = ({ senha: _senha, ...usuario }: Conta): Usuario => ({ ...usuario });
+  const publico = (conta: Conta): Usuario => ({
+    id: conta.id,
+    nome: conta.nome,
+    usuario: conta.usuario,
+    funcao: conta.funcao,
+    ativo: conta.ativo,
+    ultimo_acesso: conta.ultimo_acesso,
+    trocar_senha: conta.trocar_senha,
+  });
+  // Como o Python: a lista nunca leva o CPF inteiro, só o miolo (spec 015, MOT-02).
+  const listado = (item: Motorista): Motorista => ({ ...item, cpf: item.cpf ? `•••.•••.${item.cpf.slice(6, 9)}-••` : null, termo: { ...item.termo } });
   const sessao = () => contas.find((conta) => conta.id === sessaoId && conta.ativo) ?? null;
 
   function registrar(quem: string | null, acao: string, alvo: string | null = null, detalhe: string | null = null) {
@@ -246,7 +290,6 @@ export function criarDemonstracao(): Api {
       registrar(conta.nome, "tentou sem permissão", acao);
       return falha("Sua função não permite fazer isso.", { codigo: "sem_permissao" });
     }
-    if (!bloqueado) ultimoUso = Date.now();
     return conta;
   }
 
@@ -260,6 +303,7 @@ export function criarDemonstracao(): Api {
       ultimo_acesso: null,
       trocar_senha: trocar,
       senha,
+      preferencias: structuredClone(PREFERENCIAS_PADRAO),
     };
     contas.push(conta);
     return conta;
@@ -273,6 +317,15 @@ export function criarDemonstracao(): Api {
       motoristas = motoristasDemo();
       ({ veiculos, caixas } = frotaDemo());
       decisoes = decisoesDemo();
+      termosHistorico.clear();
+      for (const item of motoristas) {
+        termosHistorico.set(
+          item.id,
+          item.termo.assinado
+            ? [{ id: proximoTermoId++, assinado: true, data: item.termo.data, versao: item.termo.versao, registrado_por: "Demonstração", registrado_em: `${item.termo.data}T12:00:00Z`, arquivo: null }]
+            : [],
+        );
+      }
     }
     contas = [];
     const conta = novaConta(admin.nome, admin.usuario, "administrador", admin.senha, false);
@@ -309,6 +362,10 @@ export function criarDemonstracao(): Api {
         bloqueado: Boolean(sessao()) && bloqueado,
         versao: VERSAO,
         bloqueio_min: config.acesso.bloqueio_min,
+        texto_maior: config.aparencia.texto_maior,
+        tema: sessao()?.preferencias.tema ?? temaUltimo,
+        preferencias: sessao() ? structuredClone(sessao()!.preferencias) : null,
+        videos_dias: config.guarda.videos_dias,
       });
     },
 
@@ -356,10 +413,11 @@ export function criarDemonstracao(): Api {
       const restante = Math.ceil((tentativa.esperaAte - Date.now()) / 1000);
       if (restante > 0) return falha(`Espere ${restante} segundos para tentar de novo.`, { codigo: "espera", esperar_s: restante });
       const conta = contas.find((item) => item.usuario === chave);
-      if (conta && !conta.ativo) return falha("Este acesso foi desativado. Fale com o administrador.", { codigo: "invalido" });
+      if (conta && !conta.ativo) return falha("Este acesso foi desativado. Fale com o administrador.", { codigo: "sem_permissao" });
       if (!conta || conta.senha !== senha) {
         tentativa.erros += 1;
-        registrar(null, "errou a senha", chave || null);
+        // Como o Python: usuário que não existe não vai para o registro (pode ser a senha digitada no campo errado).
+        registrar(conta?.nome ?? null, "errou a senha", conta?.usuario ?? null, conta ? null : "usuário não cadastrado");
         if (tentativa.erros >= 5) {
           const espera = Math.min(30 * 2 ** (tentativa.erros - 5), 900);
           tentativa.esperaAte = Date.now() + espera * 1000;
@@ -394,9 +452,11 @@ export function criarDemonstracao(): Api {
       return ok({});
     },
 
+    // Como o contrato e o Python: só o toque da tela (uso de verdade) renova o tempo sem uso.
     async tocar() {
       const conta = exigir(undefined, { mesmoBloqueado: true });
       if (ehErro(conta)) return conta;
+      if (!bloqueado) ultimoUso = Date.now();
       return ok({ bloqueado });
     },
 
@@ -525,7 +585,7 @@ export function criarDemonstracao(): Api {
     async motoristas_listar() {
       const conta = exigir();
       if (ehErro(conta)) return conta;
-      return ok(motoristas.map((item) => ({ ...item, termo: { ...item.termo } })));
+      return ok(motoristas.map(listado));
     },
 
     async motorista_salvar(entrada) {
@@ -538,7 +598,8 @@ export function criarDemonstracao(): Api {
       const nome = (junto.nome ?? "").trim();
       const matricula = (junto.matricula ?? "").trim();
       const cnh = String(junto.cnh_numero ?? "").replace(/\D/g, "");
-      const cpf = junto.cpf ? String(junto.cpf).replace(/\D/g, "") : null;
+      // CPF mascarado de volta da tela = manter o guardado.
+      const cpf = atual && String(entrada.cpf ?? "").includes("•") ? atual.cpf : junto.cpf ? String(junto.cpf).replace(/\D/g, "") : null;
       if (nome.length < 3) return falha("Escreva o nome completo do motorista.", { codigo: "invalido", campo: "nome" });
       if (!matricula) return falha("Escreva a matrícula.", { codigo: "invalido", campo: "matricula" });
       if (motoristas.some((item) => item.matricula === matricula && item.id !== atual?.id)) {
@@ -550,6 +611,14 @@ export function criarDemonstracao(): Api {
       if (cpf && !cpfValido(cpf)) return falha("O CPF não confere. Confira os 11 dígitos ou deixe em branco.", { codigo: "invalido", campo: "cpf" });
       const termo = junto.termo ?? { assinado: false, data: null, versao: null };
       if (termo.assinado && !termo.data) return falha("Informe a data em que o termo foi assinado.", { codigo: "invalido", campo: "termo" });
+      const novoTermo = {
+        assinado: Boolean(termo.assinado),
+        data: termo.assinado ? termo.data : null,
+        versao: termo.assinado ? (termo.versao ?? "1") : null,
+      };
+      // Termo igual ao guardado mantém o arquivo importado; mudou, é registro novo e sem arquivo (spec 019, TER-03).
+      const mesmoTermo =
+        Boolean(atual) && atual!.termo.assinado === novoTermo.assinado && atual!.termo.data === novoTermo.data && atual!.termo.versao === novoTermo.versao;
       const salvo: Motorista = {
         id: atual?.id ?? motoristas.reduce((maior, item) => Math.max(maior, item.id), 0) + 1,
         ref: atual?.ref ?? null,
@@ -562,14 +631,18 @@ export function criarDemonstracao(): Api {
         cnh_categoria: junto.cnh_categoria as Motorista["cnh_categoria"],
         cnh_validade: junto.cnh_validade as string,
         situacao: ["ativo", "afastado", "desligado"].includes(junto.situacao ?? "") ? (junto.situacao as Motorista["situacao"]) : "ativo",
-        termo: { assinado: Boolean(termo.assinado), data: termo.assinado ? termo.data : null, versao: termo.assinado ? (termo.versao ?? "1") : null },
+        termo: { ...novoTermo, arquivo: mesmoTermo ? atual!.termo.arquivo : null },
         observacoes: junto.observacoes?.trim() || null,
         viagens_30d: atual?.viagens_30d ?? 0,
         confirmados_30d: atual?.confirmados_30d ?? 0,
       };
       motoristas = atual ? motoristas.map((item) => (item.id === salvo.id ? salvo : item)) : [...motoristas, salvo];
+      if (!mesmoTermo && (atual || novoTermo.assinado)) {
+        const registro: TermoRegistro = { id: proximoTermoId++, ...novoTermo, registrado_por: conta.nome, registrado_em: agora(), arquivo: null };
+        termosHistorico.set(salvo.id, [...(termosHistorico.get(salvo.id) ?? []), registro]);
+      }
       registrar(conta.nome, atual ? "editou motorista" : "cadastrou motorista", salvo.nome);
-      return ok(salvo);
+      return ok(listado(salvo));
     },
 
     async motorista_exportar(id) {
@@ -653,7 +726,7 @@ export function criarDemonstracao(): Api {
     },
 
     async config_ler() {
-      const conta = exigir();
+      const conta = exigir("configuracoes");
       if (ehErro(conta)) return conta;
       return ok(structuredClone(config));
     },
@@ -739,18 +812,141 @@ export function criarDemonstracao(): Api {
       if (ehErro(conta)) return conta;
       if (!MOMENTOS.has(momento_id)) return falha("Momento não encontrado.", { codigo: "nao_encontrado" });
       const motorista = motoristas.find((item) => item.ref === motorista_ref);
-      if (!motorista?.termo.assinado) return ok({ liberado: false, motivo: "Vídeo trancado: falta o termo de ciência" });
-      registrar(conta.nome, "abriu vídeo", momento_id);
-      return ok({ liberado: true });
+      const motivo = !motorista
+        ? "Não sabemos quem dirigiu. Confirme o motorista antes de ver o vídeo."
+        : !motorista.termo.assinado
+          ? "Falta registrar o termo de ciência deste motorista."
+          : null;
+      registrar(conta.nome, motivo ? "vídeo trancado" : "abriu vídeo", momento_id, motivo);
+      return ok(motivo ? { liberado: false, motivo } : { liberado: true });
     },
 
+    // Senha escolhida na hora, com a mesma regra das contas (spec 016, decisão 5); não é a senha de quem entrou.
     async copia_fazer(senha) {
       await pausa(400);
       const conta = exigir("configuracoes");
       if (ehErro(conta)) return conta;
-      if (conta.senha !== senha) return falha("Senha não confere.", { codigo: "invalido", campo: "senha" });
+      const problema = problemaDaSenha(String(senha ?? ""));
+      if (problema) return falha(problema, { codigo: "invalido", campo: "senha" });
+      ultimaCopiaEm = agora();
       registrar(conta.nome, "fez cópia de segurança", null, "demonstração: nada foi gravado");
       return ok({ caminho: "Demonstração: nenhuma cópia foi gravada", bytes: 0 });
+    },
+
+    async inicio_resumo() {
+      const conta = exigir("ver_viagens");
+      if (ehErro(conta)) return conta;
+      const dias = ultimaCopiaEm ? Math.max(0, Math.floor((Date.now() - Date.parse(ultimaCopiaEm)) / 86_400_000)) : null;
+      return ok({ ultima_copia_em: ultimaCopiaEm, dias_desde_copia: dias, primeiros_passos_escondidos: passosEscondidos });
+    },
+
+    async primeiros_passos_esconder(esconder) {
+      const conta = exigir("configuracoes");
+      if (ehErro(conta)) return conta;
+      if (typeof esconder !== "boolean") return falha("Valor inválido.", { codigo: "invalido", campo: "esconder" });
+      registrar(conta.nome, esconder ? "escondeu primeiros passos" : "mostrou primeiros passos");
+      passosEscondidos = esconder;
+      return ok({ primeiros_passos_escondidos: esconder });
+    },
+
+    // Spec 019 (PRF-01): tema e visão por pessoa; o tema também vale para a tela de entrar deste computador.
+    // Frases e campos iguais aos de painel/desktop/preferencias.py.
+    async preferencias_salvar(valores) {
+      const conta = exigir();
+      if (ehErro(conta)) return conta;
+      if (!valores || typeof valores !== "object" || Array.isArray(valores)) return falha("Preferências inválidas.", { codigo: "invalido" });
+      const desconhecida = Object.keys(valores).find((chave) => chave !== "tema" && chave !== "visao");
+      if (desconhecida !== undefined) return falha("Preferência desconhecida.", { codigo: "invalido", campo: desconhecida });
+      const entrada = valores as PreferenciasEntrada;
+      if ("tema" in entrada && !["claro", "escuro", "sistema"].includes(entrada.tema as string)) {
+        return falha("Escolha o tema claro, escuro ou igual ao Windows.", { codigo: "invalido", campo: "tema" });
+      }
+      if ("visao" in entrada) {
+        if (!entrada.visao || typeof entrada.visao !== "object" || Array.isArray(entrada.visao)) {
+          return falha("Escolha lista ou cards.", { codigo: "invalido", campo: "visao" });
+        }
+        for (const [tela, visao] of Object.entries(entrada.visao)) {
+          if (!(TELAS_COM_VISAO as readonly string[]).includes(tela)) return falha("Esta tela não tem lista e cards.", { codigo: "invalido", campo: `visao.${tela}` });
+          if (visao !== "lista" && visao !== "cards") return falha("Escolha lista ou cards.", { codigo: "invalido", campo: `visao.${tela}` });
+        }
+      }
+      conta.preferencias = { tema: entrada.tema ?? conta.preferencias.tema, visao: { ...conta.preferencias.visao, ...entrada.visao } };
+      if (entrada.tema) temaUltimo = entrada.tema;
+      return ok(structuredClone(conta.preferencias));
+    },
+
+    // Spec 019 (TER-01 a TER-05): termo assinado importado como comprovante; nada é apagado.
+    async termo_importar(motorista_id, arquivo, dadosTermo) {
+      await pausa(300);
+      const conta = exigir("cadastrar");
+      if (ehErro(conta)) return conta;
+      const atual = motoristas.find((item) => item.id === motorista_id);
+      if (!atual) return falha("Motorista não encontrado.", { codigo: "nao_encontrado" });
+      // Mesma ordem de conferência e mesmas frases de painel/desktop/cadastros.py (termo_importar).
+      if (!arquivo || typeof arquivo.nome !== "string" || typeof arquivo.conteudo_base64 !== "string") {
+        return falha("Escolha o arquivo do termo assinado.", { codigo: "invalido", campo: "arquivo" });
+      }
+      const limite = 10 * 1024 * 1024;
+      const base64 = arquivo.conteudo_base64;
+      if (base64.length > 4 * Math.floor((limite + 2) / 3)) return falha("O arquivo pode ter até 10 MB.", { codigo: "invalido", campo: "arquivo" });
+      let bytes: string | null = null;
+      if (base64.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
+        try {
+          bytes = atob(base64);
+        } catch {
+          bytes = null;
+        }
+      }
+      if (bytes === null) return falha("Não foi possível ler o arquivo. Escolha o arquivo de novo.", { codigo: "invalido", campo: "arquivo" });
+      if (bytes.length > limite) return falha("O arquivo pode ter até 10 MB.", { codigo: "invalido", campo: "arquivo" });
+      const tipo = bytes.startsWith("%PDF-") ? "pdf" : bytes.startsWith("\x89PNG\r\n\x1a\n") ? "png" : bytes.startsWith("\xff\xd8\xff") ? "jpg" : null;
+      if (!tipo) return falha("Use um PDF ou uma foto (PNG ou JPEG) do termo assinado.", { codigo: "invalido", campo: "arquivo" });
+      const data = dadosTermo && typeof dadosTermo.data === "string" ? dadosTermo.data : "";
+      const dataExiste =
+        /^\d{4}-\d{2}-\d{2}$/.test(data) && !Number.isNaN(Date.parse(`${data}T00:00:00Z`)) && new Date(`${data}T00:00:00Z`).toISOString().startsWith(data);
+      if (!dataExiste) return falha("Informe a data em que o termo foi assinado.", { codigo: "invalido", campo: "data" });
+      if (data > hoje()) return falha("A data da assinatura não pode ser no futuro.", { codigo: "invalido", campo: "data" });
+      const versaoBruta: unknown = dadosTermo?.versao;
+      let versao = "1";
+      if (!(versaoBruta === undefined || versaoBruta === null || (typeof versaoBruta === "string" && !versaoBruta.trim()))) {
+        if (typeof versaoBruta !== "string" || versaoBruta.trim().length > 20) return falha("A versão do termo pode ter até 20 letras.", { codigo: "invalido", campo: "versao" });
+        versao = versaoBruta.trim();
+      }
+      const registro: TermoRegistro = {
+        id: proximoTermoId++,
+        assinado: true,
+        data,
+        versao,
+        registrado_por: conta.nome,
+        registrado_em: agora(),
+        arquivo: { nome: nomeDoArquivo(arquivo.nome, tipo), tipo: tipo === "pdf" ? "pdf" : "imagem", bytes: bytes.length, importado_em: agora(), importado_por: conta.nome },
+      };
+      if (tipo !== "pdf") fotosDeTermo.set(registro.id, `data:image/${tipo === "png" ? "png" : "jpeg"};base64,${base64}`);
+      termosHistorico.set(atual.id, [...(termosHistorico.get(atual.id) ?? []), registro]);
+      atual.termo = { assinado: true, data, versao, arquivo: registro.arquivo };
+      registrar(conta.nome, "importou termo assinado", `${atual.nome_curto} (matrícula ${atual.matricula})`, `${registro.arquivo!.nome}, ${formatarTamanho(bytes.length)}`);
+      return ok(listado(atual));
+    },
+
+    async termo_ver(motorista_id) {
+      const conta = exigir("cadastrar");
+      if (ehErro(conta)) return conta;
+      const atual = motoristas.find((item) => item.id === motorista_id);
+      if (!atual) return falha("Motorista não encontrado.", { codigo: "nao_encontrado" });
+      const ultimo = (termosHistorico.get(atual.id) ?? []).at(-1);
+      if (!ultimo?.assinado || !ultimo.arquivo) return falha("Este motorista não tem o arquivo do termo.", { codigo: "nao_encontrado" });
+      const foto = fotosDeTermo.get(ultimo.id);
+      if (ultimo.arquivo.tipo !== "imagem" || !foto) return falha("Na demonstração sem a janela do app, o PDF não abre no leitor do computador.");
+      // Como no Python: só registra quando o termo abriu de verdade.
+      registrar(conta.nome, "abriu termo", `${atual.nome_curto} (matrícula ${atual.matricula})`, ultimo.arquivo.nome);
+      return ok({ tipo: "imagem" as const, nome: ultimo.arquivo.nome, conteudo: foto });
+    },
+
+    async motorista_termos(motorista_id) {
+      const conta = exigir("cadastrar");
+      if (ehErro(conta)) return conta;
+      if (!motoristas.some((item) => item.id === motorista_id)) return falha("Motorista não encontrado.", { codigo: "nao_encontrado" });
+      return ok([...(termosHistorico.get(motorista_id) ?? [])].reverse().map((item) => structuredClone(item)));
     },
 
     async script_estado() {
