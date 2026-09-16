@@ -143,7 +143,7 @@ endereço ou servidor.
 - **Assinatura digital:** sem certificado, o SmartScreen pede confirmação na primeira abertura.
 - **Microsoft Store (pacote MSIX):** caminho futuro, como no app de teste (spec 010, decisão 12).
 - Versão para Mac (decisão de 14/09/2026).
-- Build no GitHub Actions e download na área do PIN do site: depois.
+- Build no GitHub Actions: depois. O download na área do PIN do site entrou em 16/09/2026 (spec 020).
 - Instalar o WebView2 pelo instalador (bootstrapper Evergreen): depois, se o Windows 10 der problema.
 - Mudanças na interface (`painel/app/src`): redesenho da spec 012.
 - Login, API, importação real da caixa e dados reais (specs 004 e 007).
@@ -170,6 +170,7 @@ endereço ou servidor.
 1. Quando o painel tiver dados reais, ele deve guardar sessão e preferências entre aberturas (sair do modo privado e
    usar `%LOCALAPPDATA%\RotaGuard\Painel`)?
 2. Em computador sem WebView2 (Windows 10), basta o aviso ou o instalador já deve instalar o runtime?
-3. O painel entra agora na área de download do site (PIN), ao lado do RotaGuard Teste?
+3. ~~O painel entra agora na área de download do site (PIN), ao lado do RotaGuard Teste?~~ Respondida em 16/09: "coloque o
+   downlaod do painel no site tambem" → spec 020.
 4. ~~O PRD (RF-25) e a spec 007 ainda falam em Tauri 2.~~ Resolvido em 14/09: o PRD e a spec 007 foram atualizados
    para a janela em Python + WebView2, que o Matheus escolheu. Linux e Android seguem para depois.

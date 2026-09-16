@@ -4,8 +4,8 @@ O painel da empresa (a interface de `painel/app`) numa **janela própria do Wind
 endereço e sem servidor à vista. A janela é do pywebview com o WebView2 do Windows; a interface vai dentro do programa e
 é servida só para ele, em `127.0.0.1`. Spec: `docs/specs/013-app-do-painel-no-computador.md`.
 
-Por enquanto o painel mostra a prévia com **dados fictícios** (spec 012): não tem login, não fala com servidor e não
-guarda nada entre aberturas.
+Por enquanto viagens, vídeos e caixa conectada são **dados fictícios** (spec 012). As contas, os cadastros e as
+preferências ficam só neste computador, em `%LOCALAPPDATA%\RotaGuard\Painel` (spec 014), sem servidor.
 
 ## Baixar
 
@@ -13,8 +13,8 @@ guarda nada entre aberturas.
 |---|---|
 | Windows 10/11 64 bits | `RotaGuard-Painel-windows-x64.zip` (portátil: extraia e abra `RotaGuardPainel.exe`); instalador `RotaGuard-Painel-windows-x64-setup.exe` quando o build tiver o Inno Setup |
 
-Os arquivos saem do build em `build/painel/pacotes/`; ainda não estão na área de download do site. Sem versão para
-Linux e Mac nesta etapa.
+Os arquivos saem do build em `build/painel/pacotes/`. O `.zip` é oferecido na área do PIN do site (spec 020): depois
+de cada build, copie-o para `site/public/downloads/`. Sem versão para Linux e Mac nesta etapa.
 
 É uma versão sem assinatura digital:
 

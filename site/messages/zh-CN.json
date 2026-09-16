@@ -114,7 +114,7 @@
     "question3": "产品已经可以部署了吗？",
     "answer3": "产品是开发中的原型。检测与提醒已在项目中实现；完整记录、收集及应用尚有待完成。性能与安装仍需真实硬件及车辆验证。",
     "question4": "如何访问应用？",
-    "answer4": "此预览版的客户专区使用本地 PIN。您可以在那里获取适用于 Windows 和 Linux 的脚本测试应用，它会使用电脑摄像头运行检测。企业管理面板和手机版本正在筹备中。",
+    "answer4": "此预览版的客户专区使用本地 PIN。您可以在那里获取适用于 Windows 的企业管理面板（使用虚构数据），以及适用于 Windows 和 Linux 的脚本测试应用，它会使用电脑摄像头运行检测。手机版本正在筹备中。",
     "contactLabel": "聊聊您的运营需求",
     "contactTitle1": "下一步",
     "contactTitle2": "从您的车队开始。",
@@ -148,17 +148,23 @@
     "voltar": "返回网站"
   },
   "app": {
-    "titulo": "在您的电脑上测试 RotaGuard。",
-    "texto": "测试应用使用电脑摄像头运行 RotaGuard 脚本：检测困倦和使用手机的迹象，并发出声音警报。不会向服务器发送任何数据。",
+    "titulo": "将 RotaGuard 下载到您的电脑。",
+    "texto": "两款电脑应用：企业管理面板和脚本测试应用。",
     "sair": "退出登录",
     "baixar": "下载",
     "emPreparacao": "筹备中",
     "carregando": "检查访问权限…",
-    "windows": "Windows 10 和 11 · 64 位 · .zip 文件：解压后打开 RotaGuardTeste.exe",
-    "linux": "Linux x86_64 · .tar.gz 文件",
-    "instrucoes": "打开 RotaGuard Teste 并点击“Iniciar teste”（开始测试）：会自动找到摄像头。在摄像头窗口中：按 Q 或 Esc 退出，按 C 重新校准。",
+    "painelTitulo": "RotaGuard Painel",
+    "painelTexto": "企业管理面板在电脑上以独立窗口运行：行程、待核查时刻、驾驶员、车辆和设备盒。目前使用虚构数据。",
+    "painelWindows": "Windows 10 和 11 · 64 位 · .zip 文件：解压后打开 RotaGuardPainel.exe",
+    "painelInstrucoes": "首次打开时，点击“Ver demonstração”（查看演示）并创建管理员。在 Windows 10 上，如果面板提示需要 WebView2，请从 Microsoft 网站安装 WebView2 Runtime。",
+    "testeTitulo": "RotaGuard Teste",
+    "testeTexto": "测试应用使用电脑摄像头运行 RotaGuard 脚本：检测困倦和使用手机的迹象，并发出声音警报。不会向服务器发送任何数据。",
+    "testeWindows": "Windows 10 和 11 · 64 位 · .zip 文件：解压后打开 RotaGuardTeste.exe",
+    "testeLinux": "Linux x86_64 · .tar.gz 文件",
+    "testeInstrucoes": "打开 RotaGuard Teste 并点击“Iniciar teste”（开始测试）：会自动找到摄像头。在摄像头窗口中：按 Q 或 Esc 退出，按 C 重新校准。",
     "aviso": "测试版本没有数字签名。在 Windows 上，如出现“Windows 已保护你的电脑”，请点击“更多信息”→“仍要运行”。",
-    "painel": "企业管理面板和手机应用：筹备中。"
+    "depois": "Linux 版管理面板和手机应用：筹备中。"
   },
   "creditos": {
     "titulo": "有设计方向的图片。",

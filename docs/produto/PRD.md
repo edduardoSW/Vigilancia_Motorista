@@ -97,7 +97,7 @@
 | RF-22 | Revisão de eventos e trechos (confirmado, alarme falso, motorista orientado), com quem revisou e quando | Existe no servidor (`servidor/backend/routes/alerts.py`) | 004 |
 | RF-23 | Área do motorista: os próprios dados, autorizações e exportação | Existe (`painel/webapp`) | 007 |
 | RF-24 | Modo de teste com a câmera do aparelho, com as mesmas regras de detecção da caixa | Novo | 007 |
-| RF-25 | Painel instalável no computador: app de janela própria em Python + WebView2 (pywebview, PyInstaller e instalador), escolhido pelo Matheus em 14/09/2026, para Windows e Linux; Android e PWA no iPhone depois; sem Mac; Windows no futuro pela Microsoft Store (MSIX) | Em construção (Windows) | 007, 013 |
+| RF-25 | Painel instalável no computador: app de janela própria em Python + WebView2 (pywebview, PyInstaller e instalador), escolhido pelo Matheus em 14/09/2026, para Windows e Linux; Android e PWA no iPhone depois; sem Mac; Windows no futuro pela Microsoft Store (MSIX); o `.zip` do Windows é baixado na área do PIN do site | Em construção (Windows) | 007, 013, 020 |
 | RF-26 | Logins criados só pela equipe; modo local de demonstração com PIN e dados fictícios | Existe | 007 |
 | RF-27 | **App de teste do script**: o script da caixa empacotado para Windows e Linux, baixado na área do PIN do site, que roda a detecção e o alarme com a câmera do computador, sem servidor e sem instalar Python; com seção de privacidade, LGPD e termos, sem aceite obrigatório | Novo (14/09/2026) | 010 |
 
@@ -107,7 +107,7 @@
 |---|---|---|---|
 | RF-30 | Site Next.js + Tailwind + next-intl em português, inglês, espanhol, francês e chinês, com seletor de idioma em dropdown com bandeira e nome do país | Em construção (`site/`) | 008 |
 | RF-31 | Contato só por WhatsApp e telefone, com mensagem pronta por segmento; nenhum formulário de cadastro | Novo | 008 |
-| RF-32 | "Já é cliente? Entrar": PIN conferido no servidor → página de download do app por plataforma | Novo | 008 |
+| RF-32 | "Já é cliente? Entrar": PIN conferido no servidor → página de download dos apps por plataforma (painel e app de teste) | Novo | 008, 010, 020 |
 | RF-33 | Nenhuma afirmação sem fonte ou sem base no código | Regra | 008 |
 | RF-34 | Estradas e mapa-múndi com dado real (Natural Earth, IBGE, DNIT); nunca pino de veículo ou evento | Em construção | 008 |
 
@@ -278,6 +278,11 @@ Cada spec usa o valor padrão abaixo até ele decidir.
     momento" → RF-54.
 - "apos acabar faça o push" → commit e push na branch `app-instalavel-em-andamento`; a `main` só quando ele pedir.
 
+### 16/09/2026
+
+- "coloque o downlaod do painel no site tambem" → spec 020: o `.zip` do painel para Windows entra na área do PIN,
+  acima do RotaGuard Teste (responde a pergunta 3 da spec 013).
+
 ## 12. Specs
 
 | Spec | Cobre |
@@ -301,3 +306,4 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 | `docs/specs/017-guia-de-uso-do-painel.md` | RF-49 (guia de uso com busca, ajuda em cada tela e Primeiros passos); aprovada em 14/09/2026 |
 | `docs/specs/018-script-local-no-painel.md` | RF-50 (reconhecer o script aberto neste computador e capturar os eventos); pedido de 14/09/2026 |
 | `docs/specs/019-painel-mais-claro-lista-cards-tema-termo-videos.md` | RF-51 a RF-54 (lista e cards, janelas no centro, modo escuro, termo importado, motorista e vídeos no relatório); pedido de 15/09/2026 |
+| `docs/specs/020-download-do-painel-no-site.md` | RF-25 e RF-32 (download do painel na área do PIN do site); pedido de 16/09/2026 |

@@ -14,8 +14,8 @@ function achatar(obj, prefixo = "") {
 }
 
 const base = new Map(achatar(ler("pt-BR")));
-// Textos que são iguais em qualquer idioma (nomes próprios, horas, códigos).
-const iguaisPermitidos = /^(RotaGuard|\d{2}:\d{2}|[\d\s:→.,h]+|BR-116.*|Carreta 12|PERCLOS|CTB.*|© 2026 RotaGuard|Windows|macOS|Linux|Android|PIN)$/;
+// Textos que são iguais em qualquer idioma (nomes próprios, como o dos apps, horas, códigos).
+const iguaisPermitidos = /^(RotaGuard|RotaGuard Painel|RotaGuard Teste|\d{2}:\d{2}|[\d\s:→.,h]+|BR-116.*|Carreta 12|PERCLOS|CTB.*|© 2026 RotaGuard|Windows|macOS|Linux|Android|PIN)$/;
 
 for (const locale of ["en", "es", "fr", "zh-CN"]) {
   test(`SITE-03 ${locale}: mesmas chaves que pt-BR`, () => {
