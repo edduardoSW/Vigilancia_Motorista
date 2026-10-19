@@ -20,7 +20,7 @@ export const TABELA_PERMISSOES: { texto: string; funcoes: Funcao[] }[] = [
   { texto: "Equipe, configurações e registro de atividades", funcoes: ["administrador"] },
 ];
 
-/** "Marina Lopes da Silva" → "marina.silva" (sem acento, só letras, números e ponto). */
+/** "Maria Santos da Silva" → "maria.silva" (sem acento, só letras, números e ponto). */
 export function sugerirUsuario(nome: string) {
   const partes = nome
     .normalize("NFD")

@@ -24,6 +24,7 @@ SENHA_SUP = "frase comprida de teste dois"
 SENHA_CON = "frase comprida de teste tres"
 SENHA_NOVA = "frase comprida de teste quatro"
 ADMIN = {"nome": "Marina Lopes", "usuario": "marina.lopes", "senha": SENHA_ADM}
+EMPRESA = "Transportes Lima"  # spec 030: ativar sem arquivo cria a empresa com o nome digitado
 TELAS = ["viagens", "momentos", "motoristas", "veiculos", "caixas", "equipe"]
 PADRAO = {"tema": "claro", "visao": {tela: "cards" for tela in TELAS}}
 ORDEM_ESTADO = ["ativado", "modo", "empresa", "sessao", "bloqueado", "versao", "bloqueio_min", "texto_maior", "tema",
@@ -88,7 +89,7 @@ def entrar_como(ponte, usuario, senha):
 def pronta(tmp, relogio):
     """Demonstração ativada, com supervisor e consulta criados; volta com a administradora na sessão."""
     ponte = nova_ponte(tmp, relogio)
-    dados(ponte.ativar_demonstracao(ADMIN), "ativar demonstração")
+    dados(ponte.ativar_local(EMPRESA, ADMIN), "ativar demonstração")
     for nome, usuario, funcao, senha in (("Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP),
                                          ("Ana Souza", "ana.souza", "consulta", SENHA_CON)):
         entrar_como(ponte, "marina.lopes", SENHA_ADM)

@@ -1,0 +1,42 @@
+# Painel da empresa no navegador (spec 024): pronto e NÃO publicado (o painel é executável, spec 026). Contexto de build: a raiz do repositório.
+#   docker build -f implantacao/vps/Dockerfile.painel -t rotaguard-painel:<commit> .
+# Mesmas telas e mesmas regras Python do app instalado; só o transporte da ponte muda (HTTP em vez do pywebview).
+
+# 1) Interface: export estático do Next com basePath /painel e transporte "servidor".
+FROM node:26.12.0-trixie-slim AS interface
+WORKDIR /app/painel/app
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    PAINEL_BASE_PATH=/painel \
+    NEXT_PUBLIC_PAINEL_TRANSPORTE=servidor \
+    NEXT_PUBLIC_PAINEL_BASE_PATH=/painel
+COPY painel/app/package.json painel/app/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY painel/app ./
+# O prebuild copia o modelo da caixa para public/mediapipe (spec 025).
+COPY caixa/vision/models/face_landmarker.task /app/caixa/vision/models/face_landmarker.task
+RUN npm run build
+
+# 2) Servidor da ponte (Starlette + Uvicorn) com os módulos puros do painel.
+FROM python:3.14.8-slim-trixie
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PAINEL_BASE=/painel \
+    PAINEL_DADOS=/dados \
+    PAINEL_ESTATICO=/app/painel/app/out-web
+WORKDIR /app
+COPY painel/web/requirements.txt painel/web/requirements.txt
+RUN pip install --no-cache-dir -r painel/web/requirements.txt
+COPY painel/desktop ./painel/desktop
+COPY painel/web ./painel/web
+# ponte.versao_app() lê a versão daqui.
+COPY painel/app/package.json ./painel/app/package.json
+COPY --from=interface /app/painel/app/out-web ./painel/app/out-web
+RUN useradd --system --uid 10001 --home-dir /app rotaguard \
+    && mkdir -p /dados \
+    && chown rotaguard /dados
+USER rotaguard
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/painel/api/saude', timeout=4)"
+WORKDIR /app/painel/web
+CMD ["python", "-m", "uvicorn", "servidor_web:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--no-proxy-headers", "--no-server-header"]

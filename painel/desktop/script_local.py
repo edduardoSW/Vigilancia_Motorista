@@ -37,6 +37,7 @@ LOTE = 500
 EXECUTAVEIS = ("rotaguardteste.exe", "rotaguardteste")
 MARCAS_NA_LINHA = ("app_teste.py", "run_monitor.py", "rotaguardteste")
 CHAVES_ESTADO = ("aberto", "programa", "desde", "pid", "camera", "ultimo_sinal", "eventos", "pasta")
+RISCO_DE_ALERTA = 2  # risco médio ou alto: o que o Início conta como alerta (spec 030)
 
 
 @dataclass(frozen=True)
@@ -428,6 +429,30 @@ class ScriptLocal:
                 (int(desde_id or 0), LOTE)).fetchall()
         return [{"id": linha["id"], "em": linha["ocorrido_em"], "tipo": linha["tipo"], "risco": linha["risco"],
                  "duracao_s": linha["duracao_s"], "sessao": linha["sessao_uid"]} for linha in linhas]
+
+    def resumo_do_dia(self, inicio: datetime, fim: datetime) -> dict:
+        """Números do Início (spec 030, SDF-05): sessões deste computador começadas e eventos ocorridos entre `inicio`
+        e `fim` (o dia local), e os alertas (risco 2 ou mais) por tipo. Só lê o que já foi capturado."""
+        resumo = {"sessoes": 0, "eventos": 0, "alertas": 0, "alertas_por_tipo": {}}
+        corte = _iso(inicio - timedelta(days=1))[:10]  # filtro grosso pelo texto, conferido pela data de verdade
+
+        def dentro(texto) -> bool:
+            quando = _ler_iso(texto)
+            return quando is not None and inicio <= quando < fim
+
+        with self._trava:
+            db = self._db()
+            sessoes = db.execute("SELECT iniciado_em FROM sessoes WHERE iniciado_em >= ?", (corte,)).fetchall()
+            eventos = db.execute("SELECT tipo, risco, ocorrido_em FROM eventos WHERE ocorrido_em >= ?", (corte,)).fetchall()
+        resumo["sessoes"] = sum(dentro(linha["iniciado_em"]) for linha in sessoes)
+        for linha in eventos:
+            if not dentro(linha["ocorrido_em"]):
+                continue
+            resumo["eventos"] += 1
+            if linha["risco"] >= RISCO_DE_ALERTA:
+                resumo["alertas"] += 1
+                resumo["alertas_por_tipo"][linha["tipo"]] = resumo["alertas_por_tipo"].get(linha["tipo"], 0) + 1
+        return resumo
 
     # ----- vigia -----
 

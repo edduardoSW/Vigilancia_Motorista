@@ -22,6 +22,10 @@ MAX_YAW_FOR_RATIO_DEG = 25.0
 _EYE_SIGNALS = {
     "ear": None, "ear_left": None, "ear_right": None, "eye_width_left": 0.0, "eye_width_right": 0.0,
     "blink_score": None, "eye_open_prob": None, "pupil_ratio": None, "gaze_x": None, "gaze_y": None,
+    # Spec 027: olhar pelos blendshapes e fenda da íris também somem com o olho tapado ou atrás da lente escura
+    # (a distração passa a usar só a cabeça, DMS-01 modo degradado).
+    "eye_look_down": None, "eye_look_up": None, "eye_look_in": None, "eye_look_out": None,
+    "iris_visible_fraction": None,
 }
 
 

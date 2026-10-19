@@ -1,12 +1,12 @@
-"""Monta o RotaGuard Teste (spec 010): PyInstaller → teste de fumaça → pacotes para download.
+"""Monta o RotaGuard Script (specs 010 e 023): PyInstaller → testes do pacote → pacotes para download.
 
-Uso (com as dependências da caixa e o PyInstaller 6.22.3 instalados):
+Uso (com caixa/requirements-app-teste.txt e o PyInstaller 6.22.3 instalados):
   python implantacao/app-teste/build.py              pacote do sistema atual
   python implantacao/app-teste/build.py --sem-fumaca pula o teste de fumaça (não usar na release)
 
 Saída em build/app-teste/pacotes/:
-  Windows: RotaGuard-Teste-windows-x64-setup.exe (Inno Setup) e RotaGuard-Teste-windows-x64.zip
-  Linux:   RotaGuard-Teste-linux-x86_64.tar.gz
+  Windows: RotaGuard-Script-windows-x64-setup.exe (Inno Setup) e RotaGuard-Script-windows-x64.zip
+  Linux:   RotaGuard-Script-linux-x86_64.tar.gz
 Sem Mac (decisão de 14/09/2026): no macOS o build recusa.
 Versão: variável ROTAGUARD_VERSAO (tag teste-vX.Y.Z) ou __version__ de caixa/vision.
 """
@@ -32,8 +32,8 @@ SAIDA = RAIZ / "build" / "app-teste"
 DIST = SAIDA / "dist"
 TRABALHO = SAIDA / "work"
 PACOTES = SAIDA / "pacotes"
-NOME = "RotaGuard-Teste"
-PASTA_APP = "RotaGuardTeste"
+NOME = "RotaGuard-Script"
+PASTA_APP = "RotaGuardScript"
 
 
 def versao() -> str:
@@ -61,10 +61,10 @@ def numeros_versao(texto: str) -> tuple[int, int, int, int]:
     return tuple(partes + [0] * (4 - len(partes)))
 
 
-def texto_versao_windows(numero: str, produto: str = "RotaGuard Teste", executavel: str = PASTA_APP) -> str:
+def texto_versao_windows(numero: str, produto: str = "RotaGuard Script", executavel: str = PASTA_APP) -> str:
     """Propriedades do .exe (Detalhes no Windows): empresa RotaGuard e o produto, nada do computador do build.
 
-    O padrão é o RotaGuardTeste.exe. O painel (implantacao/painel/build.py, spec 013) usa produto "RotaGuard Painel"."""
+    O padrão é o RotaGuardScript.exe. O painel (implantacao/painel/build.py, spec 013) usa produto "RotaGuard Painel"."""
     versao_tupla = numeros_versao(numero)
     campos = (("CompanyName", "RotaGuard"), ("FileDescription", produto), ("FileVersion", numero),
               ("InternalName", executavel), ("LegalCopyright", "© 2026 RotaGuard"),
@@ -92,7 +92,7 @@ def rodar_pyinstaller() -> None:
         ambiente["ROTAGUARD_VERSAO_WINDOWS"] = str(propriedades)
     subprocess.run(
         [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--distpath", str(DIST), "--workpath",
-         str(TRABALHO), str(AQUI / "rotaguard-teste.spec")],
+         str(TRABALHO), str(AQUI / "rotaguard-script.spec")],
         check=True,
         env=ambiente,
     )
@@ -103,6 +103,10 @@ def rodar_pyinstaller() -> None:
         raise SystemExit(f"O pacote saiu sem {avisos.name}: as licenças de terceiros precisam ir junto (APT-21).")
     if not list((DIST / PASTA_APP / "_internal").glob("opencv_contrib_python-*.dist-info/**/LICENSE-3RD-PARTY.txt")):
         raise SystemExit("O pacote saiu sem o LICENSE-3RD-PARTY.txt da OpenCV (FFmpeg, LGPL): confira copy_metadata no .spec.")
+    web = DIST / PASTA_APP / "_internal" / "tela_teste" / "web"
+    faltando = [nome for nome in ("index.html", "app.css", "app.js") if not (web / nome).is_file()]
+    if faltando:
+        raise SystemExit(f"O pacote saiu sem a tela nova em {web} ({', '.join(faltando)}): confira datas no .spec (TEL-16).")
 
 
 def video_sintetico(pasta: Path) -> Path:
@@ -178,6 +182,32 @@ def teste_sem_camera() -> None:
         print("Teste sem câmera OK.")
 
 
+def teste_da_tela() -> None:
+    """TEL-16: a tela nova (spec 023) sobe no pacote. O executável roda --verificar-tela: servidor em 127.0.0.1 sem
+    janela, página, CSS, JS e /estado respondendo, e 403 sem o token. Não abre câmera."""
+    with tempfile.TemporaryDirectory() as tmp:
+        dados = Path(tmp) / "RotaGuard" / "Teste"
+        comando = [str(executavel()), "--verificar-tela", "--data-dir", str(dados)]
+        inicio = time.monotonic()
+        resultado = subprocess.run(comando, timeout=300, capture_output=True, text=True, errors="replace")
+        duracao = time.monotonic() - inicio
+        registro_caminho = dados / "registro-teste.log"
+        registro = registro_caminho.read_text(encoding="utf-8", errors="replace") if registro_caminho.exists() else ""
+        falhas = []
+        if resultado.returncode != 0:
+            falhas.append(f"código de saída {resultado.returncode}")
+        if "Verificação da tela OK" not in registro:
+            falhas.append('o registro não tem "Verificação da tela OK"')
+        if "Traceback" in registro or "Traceback" in resultado.stderr:
+            falhas.append("houve Traceback")
+        print(f"Teste da tela (tela_teste): {duracao:.1f} s, código {resultado.returncode}.")
+        if falhas:
+            print("\n".join(registro.splitlines()[-40:]))
+            print(resultado.stdout[-2000:], resultado.stderr[-2000:])
+            raise SystemExit("Teste da tela falhou: " + "; ".join(falhas))
+        print("Teste da tela OK.")
+
+
 def iscc() -> Path | None:
     candidatos = [os.environ.get("ISCC"), shutil.which("iscc"), r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
                   r"C:\Program Files\Inno Setup 6\ISCC.exe"]
@@ -195,7 +225,7 @@ def empacotar(sem_instalador: bool) -> list[Path]:
         zip_caminho = PACOTES / f"{NOME}-{destino}.zip"
         with zipfile.ZipFile(zip_caminho, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as arquivo:
             for item in sorted((DIST / PASTA_APP).rglob("*")):
-                arquivo.write(item, Path("RotaGuard Teste") / item.relative_to(DIST / PASTA_APP))
+                arquivo.write(item, Path("RotaGuard Script") / item.relative_to(DIST / PASTA_APP))
         gerados.append(zip_caminho)
         compilador = iscc()
         if compilador is None:
@@ -204,7 +234,7 @@ def empacotar(sem_instalador: bool) -> list[Path]:
             print("Inno Setup não encontrado: instalador .exe não gerado (só o .zip).")
         elif not sem_instalador:
             subprocess.run([str(compilador), f"/DVersao={versao()}", f"/DOrigem={DIST / PASTA_APP}",
-                            f"/DSaida={PACOTES}", str(AQUI / "rotaguard-teste.iss")], check=True)
+                            f"/DSaida={PACOTES}", str(AQUI / "rotaguard-script.iss")], check=True)
             gerados.append(PACOTES / f"{NOME}-{destino}-setup.exe")
     else:
         tar_caminho = PACOTES / f"{NOME}-{destino}.tar.gz"
@@ -223,19 +253,20 @@ def sha256(caminho: Path) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Monta o RotaGuard Teste para download.")
+    parser = argparse.ArgumentParser(description="Monta o RotaGuard Script para download.")
     parser.add_argument("--sem-fumaca", action="store_true", help="não roda o teste de fumaça")
     parser.add_argument("--sem-instalador", action="store_true", help="no Windows, gera só o .zip")
     parser.add_argument("--so-empacotar", action="store_true", help="reaproveita o dist/ existente")
     args = parser.parse_args()
     if sys.platform == "darwin":
-        raise SystemExit("Sem versão para Mac: o RotaGuard Teste é só para Windows e Linux (decisão de 14/09/2026).")
-    print(f"RotaGuard Teste {versao()} · {alvo()} · Python {platform.python_version()}")
+        raise SystemExit("Sem versão para Mac: o RotaGuard Script é só para Windows e Linux (decisão de 14/09/2026).")
+    print(f"RotaGuard Script {versao()} · {alvo()} · Python {platform.python_version()}")
     if not args.so_empacotar:
         rodar_pyinstaller()
     if not args.sem_fumaca:
         teste_de_fumaca()
         teste_sem_camera()
+        teste_da_tela()
     for pacote in empacotar(args.sem_instalador):
         print(f"{pacote.name}  {pacote.stat().st_size / 1_048_576:.0f} MB  sha256 {sha256(pacote)}")
     return 0

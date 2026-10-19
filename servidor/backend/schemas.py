@@ -48,6 +48,8 @@ class DeviceLiveStatus(BaseModel):
     activation_mode: Optional[str] = Field(None, max_length=12)
     activation_index: Optional[float] = Field(None, ge=0, le=1)
     activation_confidence: Optional[str] = Field(None, max_length=8)
+    # Central (spec 026): sessão de teste em andamento no RotaGuard Script (null = nenhuma).
+    sessao_uid: Optional[str] = Field(None, max_length=64)
 
     @field_validator("reasons")
     @classmethod
@@ -98,6 +100,9 @@ class LoginIn(BaseModel):
     # E-mail ou celular, conforme o acesso criado pela equipe.
     login: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=256)
+    # Painel executável (spec 026): devolve o token no corpo, sem cookie. O mesmo vale com o cabeçalho
+    # "X-RotaGuard-Cliente: painel".
+    token: bool = False
 
 
 class PasswordChangeIn(BaseModel):
@@ -114,6 +119,13 @@ class MeOut(BaseModel):
     company: Optional[Ref] = None
     driver_id: Optional[int] = None
     must_change_password: bool = False
+
+
+class LoginOut(MeOut):
+    """No login do painel vêm também o token de sessão (para o cabeçalho Authorization) e a validade dele."""
+
+    token: Optional[str] = None
+    expira_em: Optional[datetime] = None
 
 
 # ---------- empresas e usuários ----------
@@ -450,3 +462,119 @@ class AnalysisOut(BaseModel):
     error: Optional[str] = None
     summary: Optional[Dict[str, Any]] = None
     files: List[str] = Field(default_factory=list)
+
+
+# ---------- central (spec 026): contrato em português, como o script e o painel usam ----------
+
+class EmpresaRef(BaseModel):
+    uid: str
+    nome: str
+
+
+class CodigoIn(BaseModel):
+    nome: Optional[str] = Field(None, max_length=100)
+    # Só a equipe (admin) escolhe a empresa; gestor gera sempre para a própria.
+    company_id: Optional[int] = None
+
+
+class CodigoOut(BaseModel):
+    codigo: str
+    expira_em: datetime
+    aparelho_uid: str
+
+
+class TrocaIn(BaseModel):
+    codigo: str = Field(max_length=32)
+    computador: Optional[str] = Field(None, max_length=100)
+    programa: Optional[str] = Field(None, max_length=80)
+
+
+class TrocaOut(BaseModel):
+    token: str
+    aparelho_uid: str
+    empresa: EmpresaRef
+
+
+class SessaoIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    iniciada_em: datetime
+    encerrada_em: Optional[datetime] = None
+    programa: Optional[str] = Field(None, max_length=80)
+    camera: Optional[str] = Field(None, max_length=120)
+    resumo: Dict[str, Any] = Field(default_factory=dict)
+
+
+class UidOut(BaseModel):
+    uid: str
+
+
+class TrechoRecebidoOut(BaseModel):
+    uid: str
+    tamanho: int
+
+
+class AparelhoNovidade(BaseModel):
+    uid: str
+    nome: str
+    computador: Optional[str] = None
+    programa: Optional[str] = None
+    pareado_em: Optional[datetime] = None
+    ultimo_sinal: Optional[datetime] = None
+    testando_agora: bool = False
+    risco_atual: Optional[int] = None
+    sessao_atual_uid: Optional[str] = None
+    revogado_em: Optional[datetime] = None
+    alterado_em: Optional[datetime] = None
+
+
+class SessaoNovidade(BaseModel):
+    uid: str
+    aparelho_uid: Optional[str] = None
+    iniciada_em: datetime
+    encerrada_em: Optional[datetime] = None
+    programa: Optional[str] = None
+    camera: Optional[str] = None
+    resumo: Dict[str, Any] = Field(default_factory=dict)
+    alterado_em: Optional[datetime] = None
+
+
+class EventoNovidade(BaseModel):
+    uid: str
+    aparelho_uid: Optional[str] = None
+    sessao_uid: Optional[str] = None
+    tipo: str
+    nivel_risco: int
+    duracao_s: float
+    ocorrido_em: datetime
+    detalhes: Optional[Dict[str, Any]] = None
+    trecho_uid: Optional[str] = None
+    alterado_em: Optional[datetime] = None
+
+
+class TrechoNovidade(BaseModel):
+    uid: str
+    aparelho_uid: Optional[str] = None
+    sessao_uid: Optional[str] = None
+    evento_uid: Optional[str] = None
+    tipo: Optional[str] = None
+    inicio: Optional[datetime] = None
+    fim: Optional[datetime] = None
+    duracao_s: Optional[float] = None
+    formato: str
+    tamanho: int
+    sha256: str
+    recebido_em: datetime
+    apagado_em: Optional[datetime] = None
+    alterado_em: Optional[datetime] = None
+
+
+class NovidadesOut(BaseModel):
+    cursor: str
+    mais: bool
+    # Hora da central, para o painel julgar "testando agora" sem depender do relógio do computador dele.
+    agora: datetime
+    aparelhos: List[AparelhoNovidade] = Field(default_factory=list)
+    sessoes: List[SessaoNovidade] = Field(default_factory=list)
+    eventos: List[EventoNovidade] = Field(default_factory=list)
+    trechos: List[TrechoNovidade] = Field(default_factory=list)

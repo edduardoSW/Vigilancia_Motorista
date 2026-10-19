@@ -1,12 +1,20 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
+import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { abasDoAoVivo, type IdDaAba } from "./camera-regras";
+import { CameraDoAparelho } from "./camera-tela";
 import { StatusLine, TIPOS, quando } from "./live-status";
 import { nomeDoTipo, resumoDosEventos } from "./summary";
-import { eventosVisiveis, useScriptLocal } from "./use-script-local";
+import { eventosVisiveis, useScriptLocal, type ScriptLocalAoVivo } from "./use-script-local";
 
 const MOSTRAR = 100;
+// Painel instalado: script local e câmera. Painel web (transporte "servidor", na VPS): não há script local, só a câmera.
+const ABAS = abasDoAoVivo(process.env.NEXT_PUBLIC_PAINEL_TRANSPORTE);
+const RESUMO_DA_CAMERA = "Malha do rosto, sinais de sono e pulso estimado, tudo calculado neste aparelho";
 
 function duracao(segundos: number | null): string {
   if (segundos === null || segundos <= 0) return "";
@@ -14,25 +22,62 @@ function duracao(segundos: number | null): string {
   return `${Math.round(segundos / 60)} min`;
 }
 
-// Tela "Teste neste computador" (spec 018): o script da caixa rodando aqui, reconhecido sozinho, e os eventos dele.
+// Tela Ao vivo: "Teste neste computador" (spec 018, o script da caixa rodando aqui) e o teste com a câmera do
+// aparelho (spec 025). Na web, só a câmera.
 export function LiveScreen() {
-  const { estado, erro, eventos, novos } = useScriptLocal();
-  const aberto = Boolean(estado?.aberto);
-  const visiveis = eventosVisiveis(estado, eventos);
-  const linhas = visiveis.slice(0, MOSTRAR);
-  const contagem = visiveis.length === 1 ? "1 evento" : `${visiveis.length} eventos`;
-  const resumo =
-    visiveis.length === 0
-      ? aberto
-        ? "Nenhum evento nesta sessão ainda"
-        : "Nenhum evento capturado ainda"
-      : `${contagem} ${aberto ? "nesta sessão" : "capturados"} · ${resumoDosEventos(visiveis, TIPOS)}`;
+  return ABAS.length === 1 ? <SoCamera /> : <ComAbas />;
+}
+
+function SoCamera() {
+  return (
+    <section className="anim-enter max-w-[1240px] px-14 pb-16 pt-[34px]">
+      <PageHeader title="Teste com a câmera" summary={RESUMO_DA_CAMERA} />
+      <CameraDoAparelho />
+    </section>
+  );
+}
+
+function ComAbas() {
+  const script = useScriptLocal();
+  const params = useSearchParams();
+  const [escolhida, setEscolhida] = useState<IdDaAba | null>(null);
+  const aba: IdDaAba = escolhida ?? (params.get("aba") === "camera" ? "camera" : "script");
+  const rotulo = ABAS.find((item) => item.id === aba)?.rotulo;
+
+  function escolher(id: string) {
+    const nova = id === "camera" ? "camera" : "script";
+    setEscolhida(nova);
+    // A aba fica no endereço: recarregar ou mandar o link abre na mesma aba.
+    window.history.replaceState(null, "", nova === "camera" ? "?aba=camera" : window.location.pathname);
+  }
 
   return (
-    <section className="anim-enter max-w-[980px] px-14 pb-16 pt-[34px]">
-      <PageHeader title="Teste neste computador" summary={resumo} />
+    <section className={cn("anim-enter px-14 pb-16 pt-[34px]", aba === "script" ? "max-w-[980px]" : "max-w-[1240px]")}>
+      <PageHeader title="Teste neste computador" summary={aba === "script" ? resumoDoScript(script) : RESUMO_DA_CAMERA} />
+      <Tabs items={ABAS.map((item) => ({ id: item.id, label: item.rotulo }))} value={aba} onChange={escolher} label="O que testar" />
+      <div role="tabpanel" aria-label={rotulo}>
+        {aba === "script" ? <ScriptNesteComputador {...script} /> : <CameraDoAparelho />}
+      </div>
+    </section>
+  );
+}
 
-      <StatusLine estado={estado} erro={erro} className="mt-1 border-y border-fio py-4 text-[16px]" />
+function resumoDoScript({ estado, eventos }: ScriptLocalAoVivo): string {
+  const aberto = Boolean(estado?.aberto);
+  const visiveis = eventosVisiveis(estado, eventos);
+  const contagem = visiveis.length === 1 ? "1 evento" : `${visiveis.length} eventos`;
+  if (visiveis.length === 0) return aberto ? "Nenhum evento nesta sessão ainda" : "Nenhum evento capturado ainda";
+  return `${contagem} ${aberto ? "nesta sessão" : "capturados"} · ${resumoDosEventos(visiveis, TIPOS)}`;
+}
+
+// Spec 018: o script da caixa rodando aqui, reconhecido sozinho, e os eventos dele.
+function ScriptNesteComputador({ estado, erro, eventos, novos }: ScriptLocalAoVivo) {
+  const aberto = Boolean(estado?.aberto);
+  const linhas = eventosVisiveis(estado, eventos).slice(0, MOSTRAR);
+
+  return (
+    <>
+      <StatusLine estado={estado} erro={erro} className="border-b border-fio py-4 text-[16px]" />
 
       <h2 className="mt-8 text-[14px] font-bold">{aberto ? "Eventos desta sessão" : "Últimos eventos capturados"}</h2>
       {linhas.length === 0 ? (
@@ -79,6 +124,6 @@ export function LiveScreen() {
       )}
 
       {estado?.pasta && <p className="mt-6 text-[12.5px] text-grafite">Lendo os eventos de {estado.pasta}</p>}
-    </section>
+    </>
   );
 }

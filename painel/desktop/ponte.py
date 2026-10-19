@@ -9,19 +9,22 @@ from __future__ import annotations
 import functools
 import json
 import os
+import secrets
 import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import copia
+import demonstracao
 from atividades import Atividades
-from cadastros import DEMO_EMPRESA, Cadastros, Decisoes, carregar_caixas_do_arquivo, carregar_demonstracao
-from configuracoes import Configuracoes
-from contas import CUSTO_PRODUCAO, Contas, ler_chaveiro, validar_senha
+from cadastros import Cadastros, Decisoes, carregar_caixas_do_arquivo
+from central import Central
+from configuracoes import Configuracoes, validar_nome_empresa
+from contas import CUSTO_PRODUCAO, Contas, ler_chaveiro, pode, validar_senha
 from dados import Banco, ErroPainel, pasta_dados
 from preferencias import Preferencias
 
@@ -64,7 +67,7 @@ def _resposta(travar: bool = True):
 
 class Ponte:
     def __init__(self, pasta=None, relogio=time.time, custo_scrypt=CUSTO_PRODUCAO, escolher_destino=None,
-                 script_local=None, abrir_arquivo=None):
+                 script_local=None, abrir_arquivo=None, central=None):
         self._pasta = Path(pasta) if pasta is not None else None
         self._relogio = relogio
         self._custo = custo_scrypt
@@ -74,6 +77,8 @@ class Ponte:
         self._trava = threading.RLock()
         self._nucleo = None
         self._script = script_local
+        self._central_obj = central  # spec 026; criada na primeira chamada (não abre rede nem banco ao nascer)
+        self._segredo_trechos = secrets.token_urlsafe(24)  # endereço dos trechos no servidor da janela, por abertura
         self._falhas: list[str] = []
 
     # Interno ---------------------------------------------------------------------------------------------------------
@@ -88,7 +93,28 @@ class Ponte:
             self._nucleo = SimpleNamespace(banco=banco, atividades=atividades, config=config, contas=contas,
                                            cadastros=cadastros, decisoes=Decisoes(banco, atividades),
                                            preferencias=Preferencias(banco))
+            self._remover_demonstracao()
         return self._nucleo
+
+    def _remover_demonstracao(self) -> None:
+        """Spec 030, decisão 5: painel ativado na demonstração antiga perde os registros fictícios ao abrir (uma vez).
+        Falha aqui não impede o painel de abrir: nada foi apagado (transação) e a próxima abertura tenta de novo."""
+        n = self._nucleo
+        try:
+            if not demonstracao.precisa_remover(n.banco):
+                return
+            demonstracao.remover(n.banco, n.atividades, self._empresa_da_central())
+        except Exception as erro:
+            self._falhas.append(f"remover_demonstracao: {type(erro).__name__}")
+
+    def _empresa_da_central(self) -> str | None:
+        """Nome da empresa na central (spec 026), quando o painel já se ligou a ela; só lê o que está guardado."""
+        try:
+            empresa = self._central().estado().get("empresa") or {}
+        except Exception:
+            return None
+        nome = empresa.get("nome")
+        return nome.strip() if isinstance(nome, str) and nome.strip() else None
 
     def _ligar_janela(self, janela) -> None:
         self._janela = janela
@@ -150,6 +176,29 @@ class Ponte:
         except Exception as erro:
             self._falhas.append(f"script_local.parar: {type(erro).__name__}")
 
+    # Central (spec 026) ------------------------------------------------------------------------------------------------
+    def _central(self) -> Central:
+        if self._central_obj is None:
+            self._central_obj = Central(self._pasta if self._pasta is not None else pasta_dados(), relogio=self._relogio)
+        return self._central_obj
+
+    def _rota_trechos(self) -> dict:
+        """Para o servidor da janela (rotaguard_painel.py) servir os trechos baixados só com o segredo desta abertura."""
+        return {"pasta": self._central().pasta_trechos, "segredo": self._segredo_trechos}
+
+    def _iniciar_central(self) -> None:
+        try:
+            self._central().iniciar()
+        except Exception as erro:
+            self._falhas.append(f"central.iniciar: {type(erro).__name__}")
+
+    def _parar_central(self) -> None:
+        try:
+            if self._central_obj is not None:
+                self._central_obj.parar()
+        except Exception as erro:
+            self._falhas.append(f"central.parar: {type(erro).__name__}")
+
     def _ativar(self, admin, modo: str, empresa_nome: str, carregar, empresa_id=None) -> dict:
         n = self._n()
         if n.contas.ativado():
@@ -164,7 +213,7 @@ class Ponte:
                 n.banco.meta_gravar("empresa_id", str(empresa_id))
             n.banco.meta_gravar("ativado", "1")
             n.atividades.registrar("ativou o painel", dict(linha),
-                                   detalhe="demonstração" if modo == "demonstracao" else f"empresa {empresa_id}")
+                                   detalhe="sem o arquivo da empresa" if empresa_id is None else f"empresa {empresa_id}")
         usuario = n.contas.abrir_sessao(linha["id"])
         n.atividades.registrar("entrou", usuario)
         return {"codigo_recuperacao": codigo}
@@ -192,8 +241,12 @@ class Ponte:
         return self._n().preferencias.salvar(quem["id"], valores)
 
     @_resposta()
-    def ativar_demonstracao(self, admin):
-        return self._ativar(admin, "demonstracao", DEMO_EMPRESA, carregar_demonstracao)
+    def ativar_local(self, empresa, admin):
+        """Spec 030 (SDF-06): sem o arquivo da empresa, cria a empresa com o nome digitado e o administrador, sem
+        carregar nenhum registro. As caixas só chegam com o arquivo da empresa (CXA-01)."""
+        if self._n().contas.ativado():
+            raise ErroPainel(MENSAGEM_JA_ATIVADO, "conflito")
+        return self._ativar(admin, "local", validar_nome_empresa(empresa), lambda banco: None)
 
     @_resposta()
     def ativar_com_arquivo(self, conteudo, admin):
@@ -360,18 +413,51 @@ class Ponte:
         return resultado
 
     # Início ------------------------------------------------------------------------------------------------------------
-    @_resposta()
+    @_resposta(travar=False)
     def inicio_resumo(self):
-        """BKP-03 (aviso de cópia com mais de 7 dias) e Primeiros passos (spec 017, decisão 6)."""
-        self._exigir("ver_viagens")
-        banco = self._n().banco
-        ultima = banco.meta_ler("ultima_copia_em")
+        """BKP-03 (aviso de cópia com mais de 7 dias), Primeiros passos (spec 017, decisão 6) e os números de hoje
+        (spec 030, SDF-05). A central e o script local são lidos fora da trava: a tela não espera por eles."""
+        with self._trava:
+            self._exigir("ver_viagens")
+            banco = self._n().banco
+            ultima = banco.meta_ler("ultima_copia_em")
+            escondidos = banco.meta_ler(CHAVE_PASSOS_ESCONDIDOS) == "1"
         dias = None
         if ultima:
             instante = datetime.fromisoformat(ultima.replace("Z", "+00:00")).timestamp()
             dias = max(0, int((self._relogio() - instante) // 86400))
-        return {"ultima_copia_em": ultima, "dias_desde_copia": dias,
-                "primeiros_passos_escondidos": banco.meta_ler(CHAVE_PASSOS_ESCONDIDOS) == "1"}
+        return {"ultima_copia_em": ultima, "dias_desde_copia": dias, "primeiros_passos_escondidos": escondidos,
+                "hoje": self._resumo_de_hoje()}
+
+    def _resumo_de_hoje(self) -> dict:
+        """Testes, eventos e alertas do dia local (central + este computador) e quem está testando agora. Sem número
+        inventado: o que não dá para ler conta zero."""
+        inicio = datetime.fromtimestamp(self._relogio()).astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+        fim = inicio + timedelta(days=1)
+        vazio = {"sessoes": 0, "eventos": 0, "alertas": 0, "alertas_por_tipo": {}}
+        script, aberto, local = self._carregar_script(), False, dict(vazio)
+        if script is not None:
+            try:
+                aberto = bool(script.estado().get("aberto"))  # antes de contar: abre a sessão de quem acabou de abrir
+                contar = getattr(script, "resumo_do_dia", None)
+                if callable(contar):
+                    local = contar(inicio, fim)
+            except Exception as erro:
+                self._falhas.append(f"script_local.resumo_do_dia: {type(erro).__name__}")
+        central, conectada = {**vazio, "testando_agora": 0, "computadores": 0}, False
+        try:
+            conectada = bool(self._central().estado().get("conectado"))
+            central = self._central().resumo_do_dia(inicio, fim)
+        except Exception as erro:
+            self._falhas.append(f"central.resumo_do_dia: {type(erro).__name__}")
+        por_tipo = dict(central["alertas_por_tipo"])
+        for tipo, quantidade in local["alertas_por_tipo"].items():
+            por_tipo[tipo] = por_tipo.get(tipo, 0) + quantidade
+        return {"testes": central["sessoes"] + local["sessoes"], "testes_central": central["sessoes"],
+                "testes_locais": local["sessoes"], "eventos": central["eventos"] + local["eventos"],
+                "alertas": central["alertas"] + local["alertas"], "alertas_por_tipo": dict(sorted(por_tipo.items())),
+                "testando_agora": central["testando_agora"] + int(aberto), "computadores": central["computadores"],
+                "script_aberto": aberto, "central_conectada": conectada}
 
     @_resposta()
     def primeiros_passos_esconder(self, esconder):
@@ -411,6 +497,69 @@ class Ponte:
         n.atividades.registrar("abriu vídeo" if resultado["liberado"] else "vídeo trancado", quem, alvo=momento_id,
                                detalhe=None if resultado["liberado"] else resultado["motivo"])
         return resultado
+
+    # Central e testes à distância (spec 026) --------------------------------------------------------------------------
+    # A rede roda fora da trava da Ponte: a tela não congela esperando a central.
+    @_resposta(travar=False)
+    def central_estado(self):
+        with self._trava:
+            self._exigir("ver_viagens")
+        return self._central().estado()
+
+    @_resposta(travar=False)
+    def central_conectar(self, endereco, usuario, senha):
+        with self._trava:
+            quem = self._exigir("configuracoes")
+        estado = self._central().conectar(endereco, usuario, senha)
+        with self._trava:
+            nome = (estado.get("usuario") or {}).get("nome")
+            empresa = (estado.get("empresa") or {}).get("nome")
+            self._n().atividades.registrar("conectou à central", quem, alvo=estado["host"],
+                                           detalhe=f"como {nome} · {empresa}")
+        return estado
+
+    @_resposta(travar=False)
+    def central_desconectar(self):
+        with self._trava:
+            quem = self._exigir("configuracoes")
+        estado = self._central().desconectar()
+        with self._trava:
+            self._n().atividades.registrar("desconectou da central", quem, alvo=estado["host"],
+                                           detalhe="o que já foi baixado continua no painel")
+        return estado
+
+    @_resposta(travar=False)
+    def central_gerar_codigo(self, nome=None):
+        with self._trava:
+            quem = self._exigir("configuracoes")
+        codigo = self._central().gerar_codigo(nome)
+        with self._trava:  # o código em si não vai para o registro: vale 30 min e serve uma vez
+            self._n().atividades.registrar("gerou código para outro computador", quem, alvo=codigo["nome"] or "sem nome",
+                                           detalhe=f"vale {codigo['validade_min']} min")
+        return codigo
+
+    @_resposta(travar=False)
+    def remotos_listar(self):
+        with self._trava:
+            self._exigir("ver_viagens")
+        return self._central().listar()
+
+    @_resposta(travar=False)
+    def remotos_sessao(self, sessao_uid):
+        with self._trava:
+            quem = self._exigir("ver_viagens")
+        return self._central().sessao(sessao_uid, pode(quem["funcao"], "ver_video"))
+
+    @_resposta(travar=False)
+    def remotos_trecho(self, trecho_uid):
+        with self._trava:
+            quem = self._exigir("ver_video")
+        trecho = self._central().trecho(trecho_uid, self._segredo_trechos)
+        if trecho["disponivel"]:
+            with self._trava:
+                self._n().atividades.registrar("abriu trecho", quem, alvo=f"{trecho['tipo']} · {trecho['aparelho_nome']}",
+                                               detalhe=trecho["uid"])
+        return trecho
 
     # Script local (agente 2) ------------------------------------------------------------------------------------------
     @_resposta(travar=False)

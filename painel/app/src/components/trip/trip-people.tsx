@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
 import { Glyph } from "@/components/ui/glyph";
-import { motoristaDe, nomeDoVeiculo, veiculoDe, viagemDe } from "@/content";
+import { nomeDoVeiculo, type Viagem } from "@/content";
 import { bridge, type Motorista, type Veiculo } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 import { diasAte, formatarData, hojeIso, mesAno, situacaoCnh } from "@/lib/validators";
@@ -27,15 +27,14 @@ function textoDoTermo(termo: Motorista["termo"]) {
   return { texto: `${data} · ${termo.arquivo ? "com o arquivo do termo" : "sem o arquivo do termo"}`, alarme: false };
 }
 
-export function TripPeople({ viagemId }: { viagemId: string }) {
-  const viagem = viagemDe(viagemId);
+export function TripPeople({ viagem }: { viagem: Viagem }) {
   const { usuario } = useSession();
   const [motorista, setMotorista] = useState<Motorista | null | undefined>(undefined);
   const [veiculo, setVeiculo] = useState<Veiculo | null>(null);
   const usuarioId = usuario?.id ?? null;
 
   useEffect(() => {
-    if (usuarioId === null || !viagem) return;
+    if (usuarioId === null) return;
     let vivo = true;
     Promise.all([bridge.motoristas_listar(), bridge.veiculos_listar()]).then(([motoristas, veiculos]) => {
       if (!vivo) return;
@@ -47,8 +46,6 @@ export function TripPeople({ viagemId }: { viagemId: string }) {
     };
   }, [usuarioId, viagem]);
 
-  if (!viagem) return null;
-  const doDemo = veiculoDe(viagem.veiculo);
   const cnh = motorista ? textoDaCnh(motorista) : null;
   const termo = motorista ? textoDoTermo(motorista.termo) : null;
 
@@ -60,7 +57,7 @@ export function TripPeople({ viagemId }: { viagemId: string }) {
           Veículo
         </span>
         <b className="mt-1.5 block font-titulo text-[20px] font-semibold leading-tight">{nomeDoVeiculo(viagem.tipo, viagem.veiculo)}</b>
-        <span className="block text-[13.5px] text-grafite">{[veiculo?.placa, doDemo?.descricao].filter(Boolean).join(" · ") || "Sem cadastro"}</span>
+        <span className="block text-[13.5px] text-grafite">{[veiculo?.placa, veiculo?.modelo].filter(Boolean).join(" · ") || "Veículo sem cadastro neste painel"}</span>
         <dl className="mt-3 grid grid-cols-[88px_minmax(0,1fr)] gap-y-1 text-[13.5px]">
           <dt className="text-grafite">Transporta</dt>
           <dd>{viagem.tipo === "caminhao" ? "Carga" : "Passageiros"}</dd>
@@ -74,7 +71,7 @@ export function TripPeople({ viagemId }: { viagemId: string }) {
           <Glyph name="driver" size={16} />
           Motorista
         </span>
-        <b className="mt-1.5 block font-titulo text-[20px] font-semibold leading-tight">{motorista?.nome ?? motoristaDe(viagem.motorista)?.nome ?? "Não confirmado"}</b>
+        <b className="mt-1.5 block font-titulo text-[20px] font-semibold leading-tight">{motorista?.nome ?? "Não confirmado"}</b>
         <span className="block text-[13.5px] text-grafite">
           {motorista ? `Matrícula ${motorista.matricula}` : motorista === null ? "Motorista sem cadastro neste painel" : "Carregando o cadastro…"}
         </span>

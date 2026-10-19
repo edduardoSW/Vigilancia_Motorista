@@ -6,21 +6,26 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.auth import (
-    CSRF_HEADER, Principal, audit, check_password_safely, client_ip, current_principal, end_session, start_session,
-    throttle,
+    CSRF_HEADER, PANEL_CLIENT, Principal, audit, check_password_safely, client_ip, current_principal, end_session,
+    start_session, throttle,
 )
 from backend.database import User, UserSession, get_db
 from backend.identifiers import normalize_email, normalize_phone
-from backend.schemas import LoginIn, MeOut, PasswordChangeIn
+from backend.schemas import LoginIn, LoginOut, MeOut, PasswordChangeIn
 from backend.security import hash_password, password_problem, verify_password
 from backend.serializers import me_out
 
 router = APIRouter(prefix="/api/auth", tags=["sessão"])
+CLIENT_HEADER = "x-rotaguard-cliente"
 
 
-@router.post("/login", response_model=MeOut)
+@router.post("/login", response_model=LoginOut)
 def login(payload: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)):
-    if request.headers.get(CSRF_HEADER) != "1":
+    """App web: sessão no cookie (exige `X-DriveSafe: 1`). Painel executável: cabeçalho `X-RotaGuard-Cliente: painel`
+    ou `"token": true` no corpo → token no corpo da resposta e nenhum cookie. Sem cookie não há o que forjar de outro
+    site, e um corpo JSON de outro site já esbarra no CORS."""
+    panel = payload.token or (request.headers.get(CLIENT_HEADER) or "").strip().lower() == PANEL_CLIENT
+    if not panel and request.headers.get(CSRF_HEADER) != "1":
         raise HTTPException(status_code=403, detail="Requisição sem o cabeçalho de segurança do app.")
     typed = payload.login.strip()
     if "@" in typed:
@@ -46,10 +51,11 @@ def login(payload: LoginIn, request: Request, response: Response, db: Session = 
         raise HTTPException(status_code=401, detail="Login ou senha incorretos.")
 
     throttle.clear(key)
-    start_session(db, user, request, response)
-    audit(db, None, "login", target=identifier, request=request, company_id=user.company_id, user_id=user.id)
+    token, expires_at = start_session(db, user, request, response, client=PANEL_CLIENT if panel else None)
+    audit(db, None, "login", target=identifier, details={"cliente": PANEL_CLIENT} if panel else None, request=request,
+          company_id=user.company_id, user_id=user.id)
     db.commit()
-    return me_out(user)
+    return LoginOut(**me_out(user).model_dump(), token=token, expira_em=expires_at)
 
 
 @router.post("/logout", status_code=204)

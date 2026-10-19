@@ -1,5 +1,6 @@
-// Dados fictícios da prévia (spec 012) e as regras que o servidor já usa (servidor/backend/alert_types.py).
-import bruto from "./demo.json";
+// Forma da viagem lida da caixa e as regras que o servidor já usa (servidor/backend/alert_types.py).
+// Spec 030: nenhum dado fictício aqui. A viagem de exemplo da prévia (spec 012) virou fixture dos testes
+// (scripts/testes/fixtures); as telas só mostram viagem lida de verdade (spec 004, ainda por vir).
 import tiposBrutos from "./tipos-de-evento.json";
 
 export type Categoria = "sonolencia" | "celular" | "ativacao" | "jornada" | "distracao" | "sistema";
@@ -12,7 +13,7 @@ export interface Revisao {
   nota?: string;
 }
 
-/** Trecho de vídeo gravado pela caixa (spec 019, VID-01). Na prévia, fictício: só os campos, sem imagem. */
+/** Trecho de vídeo gravado pela caixa (spec 019, VID-01): os campos do trecho, sem a imagem. */
 export interface VideoBruto {
   id: string;
   inicio: string;
@@ -63,47 +64,6 @@ export interface Viagem {
   episodios: Episodio[];
 }
 
-export type SituacaoVeiculo = "coletada" | "importando" | "revisada" | "em_viagem" | "pronta" | "atencao";
-
-export interface Veiculo {
-  prefixo: string;
-  tipo: "onibus" | "caminhao";
-  descricao: string;
-  caixa: string;
-  situacao: SituacaoVeiculo;
-  detalhe: string;
-  viagem: string | null;
-}
-
-export interface Motorista {
-  id: string;
-  nome: string;
-  iniciais: string;
-  consentimento: "registrado" | "pendente";
-}
-
-export interface Coleta {
-  caixa: string;
-  veiculo: string;
-  motorista: string;
-  saida: string;
-  chegada: string;
-  conectadaEm: string;
-  progresso: number;
-  etapas: { nome: string; detalhe: string; feita: boolean }[];
-}
-
-export interface Demo {
-  aviso: string;
-  empresa: { nome: string; garagem: string };
-  agora: string;
-  motoristas: Motorista[];
-  veiculos: Veiculo[];
-  coletas: Coleta[];
-  viagens: Viagem[];
-}
-
-export const dados = bruto as unknown as Demo;
 export const tipos = tiposBrutos as Record<string, { rotulo: string; categoria: Categoria }>;
 
 // Igual ao servidor: aviso de sistema e evento de risco 1 não pedem revisão humana.
@@ -118,9 +78,6 @@ export const rotuloCurto = (tipo: string) => rotuloDe(tipo).replace(/\s*\(.*\)$/
 export const categoriaDe = (tipo: string): Categoria => tipos[tipo]?.categoria ?? "sistema";
 export const precisaRevisao = (evento: Evento) => REVISAVEIS.has(categoriaDe(evento.tipo)) && evento.risco >= RISCO_MINIMO;
 
-export const viagemDe = (id: string) => dados.viagens.find((viagem) => viagem.id === id);
-export const motoristaDe = (id: string) => dados.motoristas.find((motorista) => motorista.id === id);
-export const veiculoDe = (prefixo: string) => dados.veiculos.find((veiculo) => veiculo.prefixo === prefixo);
 export const nomeDoVeiculo = (tipo: "onibus" | "caminhao", prefixo: string) => `${tipo === "onibus" ? "Ônibus" : "Caminhão"} ${prefixo}`;
 
 const minutos = (iso: string) => Date.parse(iso) / 60000;
@@ -206,8 +163,8 @@ export interface ItemRevisao {
   viagem: Viagem;
 }
 
-export function filaDeRevisao(): ItemRevisao[] {
-  return dados.viagens.flatMap((viagem) => viagem.eventos.filter(precisaRevisao).map((evento) => ({ evento, viagem })));
+export function filaDeRevisao(viagens: readonly Viagem[]): ItemRevisao[] {
+  return viagens.flatMap((viagem) => viagem.eventos.filter(precisaRevisao).map((evento) => ({ evento, viagem })));
 }
 
 export const NOME_CATEGORIA: Record<Categoria, string> = {

@@ -8,13 +8,14 @@ import { useSession, useVisao } from "@/components/session-provider";
 import { CardGrid, CardInfo, CardTitulo } from "@/components/ui/card-grid";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Kbd } from "@/components/ui/kbd";
 import { PageHeader } from "@/components/ui/page-header";
 import { SaveButton } from "@/components/ui/save-button";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { ViewToggle } from "@/components/ui/view-toggle";
-import { veiculoDe, type SituacaoVeiculo } from "@/content";
+import { VAZIO } from "@/content/estados-vazios";
 import { bridge, type Caixa, type Veiculo } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 import { BoxDrawer } from "./box-drawer";
@@ -24,31 +25,20 @@ import { nomeDoVeiculo, quando, SITUACAO_CAIXA, SITUACAO_VEICULO, TRANSPORTA } f
 
 // Veículos e caixas (prévia 6, specs 015 e 019): duas abas, cada uma em lista ou cards, e a janela no centro.
 // Abrir um veículo mostra os dados; "Editar" troca para o formulário na mesma janela (INT-01). A caixa abre a janela
-// de troca de veículo. A coluna "Agora" ainda vem do demo.json enquanto a leitura da caixa de verdade não chega.
+// de troca de veículo. A coluna "Agora" diz só o que o painel sabe de verdade: caixa, situação e última leitura.
 
 type Aba = "veiculos" | "caixas";
 /** O que a janela do veículo mostra: o formulário do cadastro novo, os dados ou o formulário para editar. */
 type Janela = { modo: "novo" } | { modo: "ver"; id: number } | { modo: "editar"; id: number };
 
-const AGORA: Record<SituacaoVeiculo, string> = {
-  atencao: "Precisa de atenção",
-  importando: "Caixa conectada agora",
-  coletada: "Viagem para verificar",
-  em_viagem: "Em viagem",
-  pronta: "Pronto para sair",
-  revisada: "Tudo verificado",
-};
-
 const FORM_ID = "form-veiculo";
 
 function agora(veiculo: Veiculo, caixa: Caixa | undefined) {
-  if (veiculo.situacao !== "em_uso") return { texto: SITUACAO_VEICULO[veiculo.situacao], alarme: false, lendo: false };
-  if (!caixa) return { texto: "Sem caixa instalada", alarme: false, lendo: false };
-  if (caixa.situacao === "bloqueada") return { texto: "Caixa bloqueada", alarme: true, lendo: false };
-  if (caixa.situacao === "atencao") return { texto: "Precisa de atenção", alarme: true, lendo: false };
-  const demo = veiculoDe(veiculo.numero);
-  if (!demo || demo.situacao === "atencao") return { texto: "Sem novidade", alarme: false, lendo: false };
-  return { texto: AGORA[demo.situacao], alarme: false, lendo: demo.situacao === "importando" };
+  if (veiculo.situacao !== "em_uso") return { texto: SITUACAO_VEICULO[veiculo.situacao], alarme: false };
+  if (!caixa) return { texto: "Sem caixa instalada", alarme: false };
+  if (caixa.situacao === "bloqueada") return { texto: "Caixa bloqueada", alarme: true };
+  if (caixa.situacao === "atencao") return { texto: "Precisa de atenção", alarme: true };
+  return { texto: caixa.ultima_coleta ? `Caixa lida em ${quando(caixa.ultima_coleta)}` : "Caixa ainda não lida", alarme: false };
 }
 
 /** "7 veículos · 8 caixas, 1 sem veículo · 1 precisa de atenção". */
@@ -135,8 +125,9 @@ export function VehiclesScreen() {
   const linhasCaixas = [...listaCaixas].sort(
     (a, b) => Number(b.situacao !== "ok") - Number(a.situacao !== "ok") || a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true }),
   );
-  const vazioVeiculos = carregado ? "Nenhum veículo cadastrado ainda." : "Carregando…";
-  const vazioCaixas = carregado ? "Nenhuma caixa ainda. As caixas vêm do arquivo da empresa." : "Carregando…";
+  // Spec 030 (SDF-04): vazio de verdade diz o próximo passo; "fora de uso" escondido é só filtro.
+  const vazioVeiculos = !carregado ? "Carregando…" : lista.length ? "Nenhum veículo em uso." : <EmptyState estado={VAZIO.veiculos} onAcao={podeEditar ? abrirNovo : undefined} />;
+  const vazioCaixas = carregado ? <EmptyState estado={VAZIO.caixas} /> : "Carregando…";
 
   function abrirNovo() {
     setAba("veiculos");
@@ -226,10 +217,7 @@ export function VehiclesScreen() {
       cell: (veiculo: Veiculo) => {
         const situacao = agora(veiculo, caixaDe(veiculo));
         return (
-          <span className={cn("inline-flex items-center gap-2", situacao.alarme && "font-semibold text-alarme")}>
-            {situacao.lendo && <span aria-hidden="true" className="pulse-dot size-2 rounded-full bg-verde" />}
-            {situacao.texto}
-          </span>
+          <span className={cn("inline-flex items-center gap-2", situacao.alarme && "font-semibold text-alarme")}>{situacao.texto}</span>
         );
       },
     },

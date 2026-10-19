@@ -5,12 +5,21 @@
   "sonolencia": { "rotulo": "Sonolência", "categoria": "sonolencia" },
   "microssono": { "rotulo": "Microssono (olhos fechados 1 s)", "categoria": "sonolencia" },
   "sono": { "rotulo": "Sono (olhos fechados 3 s)", "categoria": "sonolencia" },
-  "nao_responsivo": { "rotulo": "Sem resposta (olhos fechados 6 s)", "categoria": "sonolencia" },
+  "nao_responsivo": { "rotulo": "Sem resposta (olhos fechados 6 s ou olhar fora da estrada depois do aviso)", "categoria": "sonolencia" },
   "olhos_esfregados": { "rotulo": "Olhos esfregados ou coçados (sinal leve de sono)", "categoria": "sonolencia" },
   "mao_no_rosto": { "rotulo": "Mão no rosto por mais de 1 s (sinal leve de sono)", "categoria": "sonolencia" },
   "celular_na_mao": { "rotulo": "Celular na mão", "categoria": "celular" },
   "celular_no_ouvido": { "rotulo": "Celular no ouvido", "categoria": "celular" },
   "olhando_celular": { "rotulo": "Olhando o celular (mais de 2 s)", "categoria": "celular" },
   "direcao_continua": { "rotulo": "Direção contínua acima de 5 h 30 min", "categoria": "jornada" },
-  "ativacao_atipica": { "rotulo": "Sinais compatíveis com ativação atípica (não é diagnóstico)", "categoria": "ativacao" }
+  "ativacao_atipica": { "rotulo": "Sinais compatíveis com ativação atípica (não é diagnóstico)", "categoria": "ativacao" },
+  "sono_rosto_perdido": { "rotulo": "Possível sono: olhos fecharam e o rosto saiu da imagem", "categoria": "sonolencia" },
+  "distracao_longa": { "rotulo": "Olhar fora da estrada por mais de 3 s", "categoria": "distracao" },
+  "distracao_repetida": { "rotulo": "Muitas olhadas fora da estrada em pouco tempo", "categoria": "distracao" },
+  "fora_da_posicao": { "rotulo": "Motorista fora da posição de dirigir", "categoria": "distracao" },
+  "pausa_sugerida": { "rotulo": "Pausa sugerida ao motorista", "categoria": "jornada" },
+  "pausa_detectada": { "rotulo": "Pausa feita pelo motorista", "categoria": "jornada" },
+  "descanso_previsto_em_atraso": { "rotulo": "Descanso previsto em atraso", "categoria": "jornada" },
+  "avisos_de_distracao_suavizados": { "rotulo": "Avisos de distração deixados mais baixos", "categoria": "sistema" },
+  "estado_aparelho": { "rotulo": "Aviso da caixa sobre o próprio funcionamento", "categoria": "sistema" }
 }

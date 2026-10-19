@@ -17,7 +17,7 @@ delete process.env.NEXT_PUBLIC_ROTAGUARD_DOWNLOADS_BASE;
 const { downloads } = await import(pathToFileURL(path.join(raiz, "site", "src", "content", "downloads.ts")).href);
 const doApp = (app) => downloads.filter((d) => d.app === app);
 
-const esperados = ["RotaGuard-Teste-windows-x64.zip", "RotaGuard-Teste-linux-x86_64.tar.gz"];
+const esperados = ["RotaGuard-Script-windows-x64.zip", "RotaGuard-Script-linux-x86_64.tar.gz"];
 const painelWindows = "RotaGuard-Painel-windows-x64.zip";
 
 test("DPA-01 site oferece o .zip do painel em /downloads", () => {
@@ -73,7 +73,7 @@ test("APT-11 site oferece Windows e Linux", () => {
 
 test("APT-11 build.py gera os mesmos nomes", () => {
   const build = ler("implantacao", "app-teste", "build.py");
-  for (const nome of [...esperados, "RotaGuard-Teste-windows-x64-setup.exe"]) {
+  for (const nome of [...esperados, "RotaGuard-Script-windows-x64-setup.exe"]) {
     assert.ok(build.includes(nome), `build.py sem ${nome}`);
   }
 });
@@ -95,12 +95,21 @@ test("APT-23 sem Mac: nada de macOS no site, no build, no workflow nem nas mensa
   assert.doesNotMatch(ler("site", "src", "content", "downloads.ts"), /macos/i);
   assert.doesNotMatch(ler("site", "src", "components", "download-area.tsx"), /macos/i);
   assert.doesNotMatch(ler("implantacao", "app-teste", "build.py"), /macos-|ditto|\.app"/);
-  assert.doesNotMatch(ler("implantacao", "app-teste", "rotaguard-teste.spec"), /BUNDLE|Info\.plist|darwin/);
+  assert.doesNotMatch(ler("implantacao", "app-teste", "rotaguard-script.spec"), /BUNDLE|Info\.plist|darwin/);
   assert.doesNotMatch(ler(".github", "workflows", "app-teste.yml"), /macos/i);
   const pasta = path.join(raiz, "site", "messages");
   for (const arquivo of readdirSync(pasta).filter((nome) => nome.endsWith(".json"))) {
     const mensagens = JSON.parse(readFileSync(path.join(pasta, arquivo), "utf8"));
     assert.ok(!("macos" in mensagens.app), `${arquivo}: app.macos ainda existe`);
     assert.doesNotMatch(JSON.stringify(mensagens.app) + mensagens.home.answer4, /macOS/, `${arquivo} ainda cita macOS`);
+  }
+});
+
+// NOM-01 (spec 031): o app de teste se chama RotaGuard Script; o nome antigo não aparece em nenhum idioma.
+test("NOM-01 nenhum texto do site diz RotaGuard Teste", () => {
+  for (const idioma of ["pt-BR", "en", "es", "fr", "zh-CN"]) {
+    const texto = readFileSync(new URL(`../../messages/${idioma}.json`, import.meta.url), "utf8");
+    assert.doesNotMatch(texto, /RotaGuard Teste|RotaGuardTeste|RotaGuard-Teste/, idioma);
+    assert.match(texto, /RotaGuard Script/, idioma);
   }
 });

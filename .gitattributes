@@ -1,0 +1,4 @@
+# Scripts de shell e arquivos da VPS sempre com LF: rodam no Linux da VPS e do Raspberry Pi (o bash recusa o CR).
+*.sh text eol=lf
+Dockerfile* text eol=lf
+*.caddy text eol=lf

@@ -1,0 +1,17 @@
+# Painel da empresa no navegador (spec 024): servidor HTTP da ponte (servidor_web.py) + núcleo de painel/desktop.
+# Versões estáveis mais recentes conferidas com `pip index versions` em 19/10/2026 e testadas no Python 3.14.5
+# (tests/test_painel_web.py e o fluxo real com uvicorn). Instalar:
+#   python -m pip install -r painel/web/requirements.txt
+starlette==1.9.0
+anyio==4.15.1
+idna==3.20
+# o anyio pede no Python até 3.14
+typing_extensions==4.16.0
+uvicorn==0.54.0
+click==8.5.0
+h11==0.16.0
+# Cópia de segurança (copia.py, AES-GCM): mesmas versões de painel/desktop/requirements.txt, porque o núcleo é o mesmo.
+# Em 19/10/2026 já havia cryptography 50.0.2 no PyPI (sem roda para Windows/cp314 no pip daqui); subir as duas juntas.
+cryptography==50.0.1
+cffi==2.1.1
+pycparser==3.0

@@ -1,4 +1,4 @@
-"""Gera o ícone do RotaGuard Teste (escudo com "A" do logotipo do site) em PNG e ICO.
+"""Gera o ícone do RotaGuard Script (escudo com "A" do logotipo do site) em PNG e ICO.
 
 Uso: python implantacao/app-teste/gerar_icone.py
 Saídas ao lado deste arquivo: rotaguard.png (512 px) e rotaguard.ico (16, 24, 32, 48, 64, 128 e 256 px).

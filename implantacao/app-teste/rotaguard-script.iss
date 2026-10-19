@@ -1,12 +1,12 @@
-; RotaGuard Teste · instalador por usuário, sem pedir administrador (spec 010).
+; RotaGuard Script · instalador por usuário, sem pedir administrador (spec 010).
 ; Compilado pelo build.py:
-;   ISCC /DVersao=0.1.0 /DOrigem=<build\app-teste\dist\RotaGuardTeste> /DSaida=<build\app-teste\pacotes> rotaguard-teste.iss
+;   ISCC /DVersao=0.1.0 /DOrigem=<build\app-teste\dist\RotaGuardScript> /DSaida=<build\app-teste\pacotes> rotaguard-script.iss
 
 #ifndef Versao
   #define Versao "0.0.0"
 #endif
 #ifndef Origem
-  #define Origem "..\..\build\app-teste\dist\RotaGuardTeste"
+  #define Origem "..\..\build\app-teste\dist\RotaGuardScript"
 #endif
 #ifndef Saida
   #define Saida "..\..\build\app-teste\pacotes"
@@ -14,26 +14,26 @@
 
 [Setup]
 AppId={{4F0C8B7E-9A61-4D3B-8E57-2C1B6A9D0F31}
-AppName=RotaGuard Teste
+AppName=RotaGuard Script
 AppVersion={#Versao}
-AppVerName=RotaGuard Teste {#Versao}
+AppVerName=RotaGuard Script {#Versao}
 AppPublisher=RotaGuard
 AppCopyright=© 2026 RotaGuard
 VersionInfoVersion={#Versao}
 VersionInfoCompany=RotaGuard
-VersionInfoDescription=Instalador do RotaGuard Teste
-VersionInfoProductName=RotaGuard Teste
+VersionInfoDescription=Instalador do RotaGuard Script
+VersionInfoProductName=RotaGuard Script
 VersionInfoProductVersion={#Versao}
 VersionInfoCopyright=© 2026 RotaGuard
-DefaultDirName={localappdata}\Programs\RotaGuard Teste
+DefaultDirName={localappdata}\Programs\RotaGuard Script
 DefaultGroupName=RotaGuard
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir={#Saida}
-OutputBaseFilename=RotaGuard-Teste-windows-x64-setup
+OutputBaseFilename=RotaGuard-Script-windows-x64-setup
 SetupIconFile=rotaguard.ico
-UninstallDisplayIcon={app}\RotaGuardTeste.exe
-UninstallDisplayName=RotaGuard Teste
+UninstallDisplayIcon={app}\RotaGuardScript.exe
+UninstallDisplayName=RotaGuard Script
 Compression=lzma2/max
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -53,8 +53,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#Origem}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\RotaGuard Teste"; Filename: "{app}\RotaGuardTeste.exe"
-Name: "{autodesktop}\RotaGuard Teste"; Filename: "{app}\RotaGuardTeste.exe"; Tasks: desktopicon
+Name: "{autoprograms}\RotaGuard Script"; Filename: "{app}\RotaGuardScript.exe"
+Name: "{autodesktop}\RotaGuard Script"; Filename: "{app}\RotaGuardScript.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\RotaGuardTeste.exe"; Description: "{cm:LaunchProgram,RotaGuard Teste}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\RotaGuardScript.exe"; Description: "{cm:LaunchProgram,RotaGuard Script}"; Flags: nowait postinstall skipifsilent

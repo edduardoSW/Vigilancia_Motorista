@@ -47,7 +47,7 @@ export const EXPLICACAO_ALERTA: Record<string, string> = {
   sonolencia: "Os olhos ficaram pesados ou fecharam várias vezes em pouco tempo.",
   microssono: "Os olhos ficaram fechados por cerca de 1 segundo com o veículo andando.",
   sono: "Os olhos ficaram fechados por cerca de 3 segundos com o veículo andando.",
-  nao_responsivo: "Os olhos ficaram fechados por cerca de 6 segundos. Veja este vídeo primeiro.",
+  nao_responsivo: "Os olhos ficaram fechados por cerca de 6 segundos, ou o olhar não voltou para a estrada 3 segundos depois do aviso de distração. Veja este vídeo primeiro.",
   olhos_esfregados: "O motorista esfregou ou coçou os olhos. Sozinho, é um sinal leve de sono.",
   mao_no_rosto: "A mão ficou no rosto por mais de 1 segundo. Sozinho, é um sinal leve de sono.",
   celular_na_mao: "A câmera viu o celular na mão do motorista com o veículo andando.",
@@ -55,6 +55,15 @@ export const EXPLICACAO_ALERTA: Record<string, string> = {
   olhando_celular: "O motorista olhou para o celular por mais de 2 segundos.",
   direcao_continua: "O motorista dirigiu sem pausa por mais tempo que o limite. A lei permite até 5 h 30 seguidas.",
   ativacao_atipica: "A caixa notou sinais fora do jeito normal daquele motorista. Não diz a causa: converse com ele antes de concluir.",
+  sono_rosto_perdido: "Os olhos fecharam e logo depois a cabeça caiu e o rosto saiu da câmera. É o jeito mais comum de um cochilo ao volante, e o alarme toca na hora.",
+  distracao_longa: "O motorista ficou mais de 3 segundos olhando para fora da estrada, sem ser espelho. Pode ser o painel, o colo ou o banco do lado.",
+  distracao_repetida: "Várias olhadas curtas para fora da estrada somaram 10 segundos em meio minuto. Cada olhada sozinha é curta, mas juntas tiram a atenção da via.",
+  fora_da_posicao: "O corpo saiu da posição normal por alguns segundos, como quem se inclina para pegar algo. Só fica registrado, sem alarme.",
+  pausa_sugerida: "Depois de sinais de sonolência, a caixa pediu ao motorista uma pausa. Um cochilo curto ou um café funcionam; abrir a janela ou ligar o rádio não.",
+  pausa_detectada: "Depois da sugestão, o motorista ficou fora do banco por tempo suficiente para descansar. Mostra que o aviso foi atendido.",
+  descanso_previsto_em_atraso: "Passou o tempo de direção previsto para o tipo de veículo sem uma pausa. Só vale quando a caixa sabe que o veículo está andando.",
+  avisos_de_distracao_suavizados: "Muitos avisos de celular ou de olhar na mesma hora: a caixa passou a usar um som mais suave para não cansar o motorista. Os avisos de sono nunca são suavizados.",
+  estado_aparelho: "A caixa conferiu o próprio funcionamento, como a saída de som ao ligar. Se aparecer \"sem saída de som\", o alarme não está tocando e a caixa precisa ser vista.",
 };
 
 const tipos = tiposDeEvento as Record<string, { rotulo: string; categoria: string }>;
@@ -71,7 +80,7 @@ export const CAPITULOS: Capitulo[] = [
         titulo: "Ativar o painel",
         passos: [
           "Abra o RotaGuard Painel neste computador.",
-          "Escolha o arquivo da empresa que a RotaGuard entregou.",
+          "Escreva o nome da empresa. Se a RotaGuard entregou o arquivo da empresa, abra o arquivo: ele traz as caixas.",
           "Crie o seu acesso de administrador: nome, usuário e uma senha com pelo menos 10 letras ou números.",
           "Anote ou imprima o código de recuperação. Ele aparece uma vez só.",
         ],
@@ -91,7 +100,7 @@ export const CAPITULOS: Capitulo[] = [
     ],
     seDerErrado: {
       problema: "O arquivo da empresa não foi aceito?",
-      solucao: "Confira se é o arquivo mais novo que a RotaGuard mandou. Se continuar, peça outro. Enquanto isso, dá para abrir a demonstração.",
+      solucao: "Confira se é o arquivo mais novo que a RotaGuard mandou. Se continuar, peça outro antes de ativar: as caixas só chegam com ele.",
     },
   },
   {

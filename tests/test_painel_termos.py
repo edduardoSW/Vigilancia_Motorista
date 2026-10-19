@@ -29,6 +29,8 @@ from contas import Contas  # noqa: E402
 from dados import Banco, ErroPainel, iso_utc  # noqa: E402
 from ponte import Ponte  # noqa: E402
 
+import demonstracao_antiga as antiga  # noqa: E402
+
 checks = 0
 CUSTO_TESTE = (2**4, 8, 1)
 T0 = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc).timestamp()
@@ -39,6 +41,7 @@ SENHA_SUP = "frase comprida de teste dois"
 SENHA_CON = "frase comprida de teste tres"
 SENHA_COPIA = "frase da copia de teste"
 ADMIN = {"nome": "Marina Lopes", "usuario": "marina.lopes", "senha": SENHA_ADM}
+EMPRESA = "Transportes Lima"  # spec 030: ativar sem arquivo cria a empresa com o nome digitado
 # Arquivos de teste: só a assinatura de cada tipo e alguns bytes.
 MARCA = b"marca-unica-do-termo-de-teste"
 PDF = b"%PDF-1.4\n% " + MARCA + b"\n1 0 obj <<>> endobj\ntrailer <<>>\n%%EOF\n"
@@ -109,9 +112,11 @@ def entrar_como(ponte, usuario, senha):
 
 
 def pronta(tmp, relogio, abertos):
-    """Demonstração ativada, com o supervisor Paulo Reis e a consulta Ana Souza; volta com o Paulo na sessão."""
+    """Painel ativado sem arquivo com os cadastros fictícios do fixture (só nos testes, spec 030), o supervisor Paulo
+    Reis e a consulta Ana Souza; volta com o Paulo na sessão."""
     ponte = nova_ponte(tmp, relogio, abertos)
-    dados(ponte.ativar_demonstracao(ADMIN), "ativar demonstração")
+    dados(ponte.ativar_local(EMPRESA, ADMIN), "ativar sem arquivo")
+    antiga.carregar_na_ponte(ponte)
     for nome, usuario, funcao, senha in (("Ana Souza", "ana.souza", "consulta", SENHA_CON),
                                          ("Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)):
         entrar_como(ponte, "marina.lopes", SENHA_ADM)
@@ -317,7 +322,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     assert dados(ponte.motorista_termos(marcos["id"])) == historico, "TER-03 supervisor vê o mesmo histórico"
     demo = dados(ponte.motorista_termos(por_ref(ponte, "m-01")["id"]))
     assert [(h["assinado"], h["registrado_por"], h["arquivo"]) for h in demo] == [(True, "Demonstração", None)], \
-        f"TER-03 termo de demonstração continua sem arquivo: {demo}"
+        f"TER-03 termo registrado antes, sem arquivo, continua sem arquivo: {demo}"
     pedro = dados(ponte.motorista_salvar({"nome": "Pedro Santos", "matricula": "0999", "cnh_numero": "12345678900",
                                           "cnh_categoria": "D", "cnh_validade": "2030-01-01"}))
     assert dados(ponte.motorista_termos(pedro["id"])) == [], "TER-03 motorista sem termo"
@@ -489,13 +494,13 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         assert antigo.versao_esquema() == 1, "TER-07 banco criado só com a migração 1"
         atividades, contas = Atividades(antigo), Contas(antigo, Atividades(antigo), lambda: t[0], CUSTO_TESTE)
         with antigo.transacao():
-            Configuracoes(antigo, atividades).iniciar(cadastros.DEMO_EMPRESA)
-            cadastros.carregar_demonstracao(antigo)
+            Configuracoes(antigo, atividades).iniciar(EMPRESA)
+            antiga.carregar(antigo)
             linha_admin, _codigo = contas.criar_admin_inicial(ADMIN)
-            antigo.meta_gravar("modo", "demonstracao")
+            antigo.meta_gravar("modo", "local")  # a remoção da demonstração (spec 030) tem teste próprio
             antigo.meta_gravar("ativado", "1")
         marina = dict(linha_admin)
-        atividades.registrar("ativou o painel", marina, detalhe="demonstração")
+        atividades.registrar("ativou o painel", marina, detalhe="sem o arquivo da empresa")
         contas.equipe_adicionar({"nome": "Paulo Reis", "usuario": "paulo.reis", "funcao": "supervisor"}, marina)
         marcos_id = antigo.um("SELECT id FROM motoristas WHERE ref = 'm-05'")["id"]
         for assinado, data in ((1, "2026-09-10"), (0, None)):
@@ -530,14 +535,14 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     assert {l["name"] for l in banco.todos("SELECT name FROM sqlite_master WHERE type = 'trigger'")} == gatilhos, \
         "TER-07 gatilhos continuam"
     assert (estado["ativado"], estado["modo"], estado["tema"], estado["preferencias"], estado["videos_dias"]) == \
-        (True, "demonstracao", "claro", None, 30), f"TER-07 estado depois de migrar: {estado}"
+        (True, "local", "claro", None, 30), f"TER-07 estado depois de migrar: {estado}"
     dados(ponte.entrar("marina.lopes", SENHA_ADM), "TER-07 a senha antiga continua entrando")
     assert dados(ponte.atividades_listar({}))["integro"] is True, "TER-07 registro de atividades íntegro depois de migrar"
     marcos = por_ref(ponte, "m-05")
     assert marcos["termo"] == {"assinado": False, "data": None, "versao": None, "arquivo": None}, \
         f"TER-07 termo revogado antes da migração: {marcos['termo']}"
     assert por_ref(ponte, "m-01")["termo"] == {"assinado": True, "data": "2026-09-02", "versao": "1", "arquivo": None}, \
-        "TER-07 termo de demonstração antigo continua assinado, sem arquivo"
+        "TER-07 termo antigo continua assinado, sem arquivo"
     assert [(h["assinado"], h["arquivo"]) for h in dados(ponte.motorista_termos(marcos["id"]))] == \
         [(False, None), (True, None)], "TER-07 histórico antigo sem arquivo"
     assert "v-2240-e-001" in [d["momento_id"] for d in dados(ponte.decisoes_listar())], "TER-07 decisão antiga"

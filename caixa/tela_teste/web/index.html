@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="rg-token" content="__TOKEN__">
+  <title>RotaGuard Teste</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="app.css?t=__TOKEN__">
+  <script src="app.js?t=__TOKEN__" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <!-- INÍCIO: escolha da câmera e das opções -->
+  <div id="tela-inicio" class="screen start" hidden>
+    <header class="start-top">
+      <span class="wordmark" aria-label="RotaGuard">
+        <svg width="22" height="24" viewBox="0 0 34 37" fill="none" aria-hidden="true">
+          <path d="M17 2 31 8v12c0 7-14 15-14 15S3 27 3 20V8L17 2Z" stroke="currentColor" stroke-width="2.4"/>
+          <path d="m10 25 5-14h5l4 14M12 20h10" stroke="currentColor" stroke-width="2.8" stroke-linejoin="round"/>
+        </svg>
+        <span>rota<span class="wordmark-light">guard</span></span>
+      </span>
+      <span class="tag">Teste</span>
+      <nav class="start-nav" aria-label="Informações">
+        <button type="button" class="btn btn-quiet btn-small" data-acao-ui="legal">Privacidade, LGPD e termos</button>
+      </nav>
+    </header>
+
+    <main id="conteudo" class="start-grid">
+      <section class="start-main" aria-labelledby="titulo-inicio">
+        <p class="eyebrow">Teste neste computador</p>
+        <h1 id="titulo-inicio">Teste da detecção com a câmera deste computador</h1>
+        <p class="lead">Roda o mesmo programa da caixa RotaGuard: sinais de sono, uso de celular, mãos no rosto e
+          frequência cardíaca estimada pela câmera. Sem conectar a uma empresa, nada sai deste computador.</p>
+
+        <div id="erro-inicio" class="alert" role="alert" hidden>
+          <p class="alert-title" id="erro-titulo"></p>
+          <p class="alert-text" id="erro-detalhe"></p>
+          <ul class="alert-tips" id="erro-dicas"></ul>
+          <div class="row">
+            <button type="button" class="btn btn-small" data-acao="procurar_cameras">Procurar câmeras de novo</button>
+          </div>
+        </div>
+
+        <fieldset class="group">
+          <legend class="group-title">Câmera</legend>
+          <div class="choice-list" id="lista-cameras" role="radiogroup" aria-label="Câmera do teste"></div>
+          <div class="video-pick" id="video-escolha" hidden>
+            <label class="field-label" for="caminho-video">Caminho do vídeo</label>
+            <input class="input" id="caminho-video" type="text" spellcheck="false" autocomplete="off"
+                   placeholder="C:\Videos\teste.mp4">
+          </div>
+          <p class="group-foot">
+            <span id="cameras-status" class="muted" aria-live="polite"></span>
+            <button type="button" class="link" data-acao="procurar_cameras" id="procurar-cameras">Procurar câmeras</button>
+          </p>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="group-title">O que medir</legend>
+          <div class="switch-list">
+            <label class="switch-row">
+              <span class="switch-text"><span class="switch-name">Celular e mãos</span>
+                <span class="switch-desc">Celular na mão ou no ouvido, olhos esfregados e mão no rosto</span></span>
+              <input type="checkbox" role="switch" class="switch" id="op-celular" checked>
+            </label>
+            <label class="switch-row">
+              <span class="switch-text"><span class="switch-name">Frequência cardíaca</span>
+                <span class="switch-desc">Pela cor da pele do rosto: estimativa pela câmera, não é medida médica</span></span>
+              <input type="checkbox" role="switch" class="switch" id="op-cardio" checked>
+            </label>
+            <label class="switch-row">
+              <span class="switch-text"><span class="switch-name">Som do alarme</span>
+                <span class="switch-desc">Sirene nos alertas de sono e de celular</span></span>
+              <input type="checkbox" role="switch" class="switch" id="op-som" checked>
+            </label>
+            <label class="switch-row">
+              <span class="switch-text"><span class="switch-name">Calibração rápida</span>
+                <span class="switch-desc">1 a 2 min em vez de 5 a 10. O microssono vale desde o começo</span></span>
+              <input type="checkbox" role="switch" class="switch" id="op-calibracao" checked>
+            </label>
+            <div class="switch-row">
+              <span class="switch-text"><span class="switch-name" id="rotulo-ir">Câmera infravermelha</span>
+                <span class="switch-desc">Libera a medida da pupila. Automática reconhece pela imagem</span></span>
+              <div class="segmented" role="radiogroup" aria-labelledby="rotulo-ir" id="op-ir">
+                <button type="button" role="radio" data-valor="auto" aria-checked="true">Automática</button>
+                <button type="button" role="radio" data-valor="sim" aria-checked="false">Sim</button>
+                <button type="button" role="radio" data-valor="nao" aria-checked="false">Não</button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="start-actions">
+          <button type="button" class="btn btn-primary btn-large" id="iniciar">Iniciar teste</button>
+          <p class="shortcuts">Durante o teste: <kbd>Q</kbd> encerra · <kbd>C</kbd> recalibra · <kbd>M</kbd> malha ·
+            <kbd>S</kbd> som · <kbd>F</kbd> tela cheia</p>
+        </div>
+      </section>
+
+      <aside class="start-side">
+        <section class="side-block" aria-labelledby="titulo-medidas">
+          <h2 id="titulo-medidas">O que a tela mostra</h2>
+          <dl class="measure-list">
+            <div><dt>Agora</dt><dd>Uma frase com o estado da pessoa: tudo normal, olhos fechando, celular na mão</dd></div>
+            <div><dt>Sono</dt><dd>Olho aberto, tempo de olho fechado, piscadas, bocejos e cabeceios</dd></div>
+            <div><dt>Atenção na estrada</dt><dd>Para onde olha, tempo olhando fora, celular e olhos esfregados</dd></div>
+            <div><dt>Coração</dt><dd>Pulso estimado pela câmera, com a confiança da leitura</dd></div>
+            <div><dt>Linha do tempo</dt><dd>Cada alerta com a hora; no fim, um relatório do teste</dd></div>
+          </dl>
+          <p class="side-note">A malha discreta marca os olhos por fora, sem cobrir o rosto. Cada medida diz o que é,
+            se está normal e o seu normal na calibração.</p>
+        </section>
+
+        <section class="side-block" aria-labelledby="titulo-central">
+          <h2 id="titulo-central">Enviar para a empresa</h2>
+          <div id="central-desconectado">
+            <p>Para a empresa ver os testes deste computador, digite o código que ela gerou no painel (Gerar código
+              para outro computador).</p>
+            <label class="field-label field-label-gap" for="central-codigo">Código</label>
+            <div class="row">
+              <input class="input input-code" id="central-codigo" type="text" placeholder="ABCD-2345" maxlength="9"
+                     autocomplete="off" spellcheck="false">
+              <button type="button" class="btn btn-small" id="central-conectar">Conectar</button>
+            </div>
+            <details class="more">
+              <summary>Outro endereço da central</summary>
+              <input class="input" id="central-endereco" type="text" spellcheck="false" autocomplete="off">
+            </details>
+            <p class="form-error" id="central-erro" role="alert" hidden></p>
+          </div>
+          <div id="central-conectado" hidden>
+            <p class="connected"><span class="status-dot" aria-hidden="true"></span>Conectado a <strong id="central-empresa"></strong></p>
+            <label class="switch-row switch-plain">
+              <span class="switch-text"><span class="switch-name">Enviar para a empresa</span>
+                <span class="switch-desc" id="central-situacao"></span></span>
+              <input type="checkbox" role="switch" class="switch" id="central-enviar">
+            </label>
+            <button type="button" class="link" id="central-desconectar">Desconectar este computador</button>
+          </div>
+          <p class="send-note">Conectado e com o envio ligado, vão para a empresa os eventos, o resumo de cada teste e
+            trechos de vídeo de 16 s dos momentos de alerta, com o rosto como a câmera viu (sem a malha) e uma faixa
+            embaixo com a hora e o tipo do alerta. A frequência cardíaca nunca sai deste computador.</p>
+        </section>
+
+        <section class="side-block" aria-labelledby="titulo-dados">
+          <h2 id="titulo-dados">Seus dados</h2>
+          <p>As imagens são analisadas só na memória. Ficam neste computador os eventos, o registro técnico e os
+            resumos que você salvar.</p>
+          <p class="path" id="pasta-dados"></p>
+          <div class="row">
+            <button type="button" class="btn btn-small" data-acao="abrir_pasta">Abrir pasta</button>
+            <button type="button" class="btn btn-small btn-danger-quiet" data-acao-ui="confirmar-apagar">Apagar dados</button>
+          </div>
+          <div class="confirm" id="confirmar-apagar" hidden>
+            <p>Apagar eventos, registro e resumos desta pasta? Não dá para desfazer.</p>
+            <div class="row">
+              <button type="button" class="btn btn-small btn-danger" data-acao="apagar_dados">Apagar</button>
+              <button type="button" class="btn btn-small btn-quiet" data-acao-ui="cancelar-apagar">Cancelar</button>
+            </div>
+          </div>
+        </section>
+        <p class="fineprint" id="versao-inicio">Protótipo em validação. Não é diagnóstico.</p>
+      </aside>
+    </main>
+  </div>
+
+  <!-- TESTE: o que está acontecendo agora (uma frase), o vídeo e as respostas às perguntas -->
+  <div id="tela-teste" class="screen test" hidden>
+    <header class="test-top">
+      <span class="wordmark wordmark-small" aria-label="RotaGuard">
+        <svg width="18" height="20" viewBox="0 0 34 37" fill="none" aria-hidden="true">
+          <path d="M17 2 31 8v12c0 7-14 15-14 15S3 27 3 20V8L17 2Z" stroke="currentColor" stroke-width="2.4"/>
+          <path d="m10 25 5-14h5l4 14M12 20h10" stroke="currentColor" stroke-width="2.8" stroke-linejoin="round"/>
+        </svg>
+        <span>rota<span class="wordmark-light">guard</span></span>
+      </span>
+      <div class="session-meta" aria-live="off">
+        <span class="live" id="ao-vivo"><span class="live-dot" aria-hidden="true"></span><span id="ao-vivo-texto">Abrindo</span></span>
+        <span class="clock" id="relogio" title="Duração do teste">00:00</span>
+        <span class="meta-text" id="camera-nome"></span>
+        <span class="tag-ir" id="tag-ir" title="Câmera infravermelha" hidden>IR</span>
+        <span class="rec-tag" id="gravando-tag" hidden><span class="rec-dot" aria-hidden="true"></span>Gravando trecho</span>
+        <span class="send-tag" id="envio-tag" hidden></span>
+      </div>
+      <div class="test-controls">
+        <span class="control-label" id="rotulo-malha">Malha</span>
+        <div class="segmented segmented-dark" role="radiogroup" aria-labelledby="rotulo-malha" id="malha"
+             title="Malha do rosto (tecla M)">
+          <button type="button" role="radio" data-valor="discreta" aria-checked="true">Discreta</button>
+          <button type="button" role="radio" data-valor="completa" aria-checked="false">Completa</button>
+          <button type="button" role="radio" data-valor="desligada" aria-checked="false">Só o rosto</button>
+        </div>
+        <button type="button" class="btn btn-small btn-dark" id="botao-som" aria-pressed="true"><span id="som-texto">Som ligado</span><kbd>S</kbd></button>
+        <button type="button" class="btn btn-small btn-dark" data-acao="recalibrar">Recalibrar<kbd>C</kbd></button>
+        <button type="button" class="btn btn-small btn-dark" data-acao-ui="tela-cheia">Tela cheia<kbd>F</kbd></button>
+        <button type="button" class="btn btn-small btn-stop" data-acao="parar">Encerrar<kbd>Q</kbd></button>
+      </div>
+    </header>
+
+    <main class="test-grid">
+      <section class="stage" aria-label="Agora, vídeo e linha do tempo">
+        <section class="now" id="agora" data-nivel="0" aria-labelledby="agora-rotulo">
+          <div class="now-text">
+            <p class="now-label" id="agora-rotulo">Agora</p>
+            <p class="now-sentence" id="agora-frase" aria-live="polite">Esperando a primeira imagem</p>
+            <p class="now-detail" id="agora-detalhe">A detecção começa assim que a câmera mandar imagem.</p>
+          </div>
+          <span class="status-word status-large" id="agora-situacao" data-nivel="n">Aguardando</span>
+          <p class="now-message" id="agora-mensagem" hidden></p>
+          <p class="now-note" id="agora-nota" hidden></p>
+          <div class="now-calibration" id="calibracao" hidden>
+            <div class="calibration-head">
+              <span class="calibration-title">Aprendendo o seu normal</span>
+              <span class="calibration-value" id="calibracao-valor">0%</span>
+            </div>
+            <div class="bar" aria-hidden="true"><span id="calibracao-barra"></span></div>
+            <p class="calibration-note" id="calibracao-texto">Olhe para a câmera e pisque normalmente.</p>
+          </div>
+        </section>
+
+        <div class="video-frame" id="quadro-video" data-nivel="0">
+          <img id="video" alt="Imagem da câmera com a malha discreta do rosto">
+          <div class="video-loading" id="video-carregando">
+            <p class="loading-title" id="etapa">Preparando o teste</p>
+            <div class="loading-bar" aria-hidden="true"><span></span></div>
+            <p class="loading-note">Na primeira vez a detecção leva alguns segundos para carregar.</p>
+          </div>
+          <div class="video-empty" id="sem-rosto" hidden>
+            <p class="empty-title" id="sem-rosto-titulo">Procurando o rosto</p>
+            <p class="empty-text" id="sem-rosto-texto">Centralize o rosto na câmera, com luz de frente.</p>
+          </div>
+        </div>
+
+        <section class="panel timeline" aria-labelledby="titulo-linha">
+          <div class="panel-head">
+            <h2 class="block-title" id="titulo-linha">Linha do tempo</h2>
+            <span class="muted small" id="eventos-total">Nenhum alerta ainda</span>
+          </div>
+          <p class="legend" id="legenda-linha">
+            <span class="legend-item"><span class="shape shape-circle" aria-hidden="true"></span>sono</span>
+            <span class="legend-item"><span class="shape shape-square" aria-hidden="true"></span>celular ou distração</span>
+            <span class="legend-item"><span class="shape shape-diamond" aria-hidden="true"></span>jornada</span>
+            <span class="legend-item"><span class="shape shape-line" aria-hidden="true"></span>aviso do sistema</span>
+            <span class="legend-colors">cor: <b class="c1">amarelo</b> atenção, <b class="c2">laranja</b> alto,
+              <b class="c3">vermelho</b> crítico</span>
+          </p>
+          <canvas class="track" id="trilha" role="img" aria-label="Alertas ao longo do teste"></canvas>
+          <ol class="event-list" id="eventos" aria-live="polite"></ol>
+          <p class="empty-events" id="eventos-vazio">Nenhum alerta ainda. Para ver um, feche os olhos por 2 segundos
+            ou pegue o celular.</p>
+        </section>
+      </section>
+
+      <aside class="readouts" id="leituras" aria-label="Medidas ao vivo">
+        <div class="cards" id="cartoes"></div>
+        <details class="details" id="detalhes">
+          <summary><span class="details-title">Detalhes</span>
+            <span class="details-sub">cabeça e boca, olhar e mãos, mais do coração, sinais experimentais e desempenho</span></summary>
+          <div class="details-body" id="detalhes-grupos"></div>
+          <p class="fineprint">Os sinais experimentais são calculados só neste computador e nunca enviados. Servem para
+            avaliar o protótipo: sinais compatíveis, não é diagnóstico.</p>
+        </details>
+      </aside>
+    </main>
+  </div>
+
+  <!-- RESUMO: relatório do teste (resposta, o que aconteceu, como a pessoa estava, detalhes técnicos) -->
+  <div id="tela-resumo" class="screen summary" hidden>
+    <header class="test-top report-top">
+      <span class="wordmark wordmark-small" aria-label="RotaGuard">
+        <svg width="18" height="20" viewBox="0 0 34 37" fill="none" aria-hidden="true">
+          <path d="M17 2 31 8v12c0 7-14 15-14 15S3 27 3 20V8L17 2Z" stroke="currentColor" stroke-width="2.4"/>
+          <path d="m10 25 5-14h5l4 14M12 20h10" stroke="currentColor" stroke-width="2.8" stroke-linejoin="round"/>
+        </svg>
+        <span>rota<span class="wordmark-light">guard</span></span>
+      </span>
+      <div class="session-meta"><span class="muted" id="resumo-quando"></span></div>
+      <div class="test-controls">
+        <button type="button" class="btn btn-small" data-acao="abrir_pasta">Abrir pasta</button>
+        <button type="button" class="btn btn-small" data-acao="salvar_resumo" id="salvar-resumo">Salvar resumo (JSON e CSV)</button>
+        <button type="button" class="btn btn-small btn-primary" data-acao="novo_teste">Novo teste</button>
+      </div>
+    </header>
+    <main class="report">
+      <section class="report-head" aria-labelledby="resumo-frase">
+        <p class="eyebrow">Resumo do teste</p>
+        <h1 class="report-title" id="resumo-frase">Teste encerrado</h1>
+        <p class="report-meta" id="resumo-meta"></p>
+        <p class="notice" id="resumo-aviso" hidden></p>
+        <p class="notice notice-ok" id="resumo-salvo" hidden></p>
+      </section>
+
+      <section class="report-section" aria-labelledby="titulo-aconteceu">
+        <div class="section-head">
+          <h2 id="titulo-aconteceu">O que aconteceu e quando</h2>
+          <p class="section-sub">Cada marca é um alerta, na hora em que aconteceu. A forma diz o tipo e a cor, a
+            gravidade.</p>
+        </div>
+        <canvas class="session-track" id="r-trilha" role="img" aria-label="Alertas ao longo do teste"></canvas>
+        <p class="legend legend-report">
+          <span class="legend-item"><span class="shape shape-circle" aria-hidden="true"></span>sono</span>
+          <span class="legend-item"><span class="shape shape-square" aria-hidden="true"></span>celular ou distração</span>
+          <span class="legend-item"><span class="shape shape-diamond" aria-hidden="true"></span>jornada</span>
+          <span class="legend-colors">cor: <b class="c1">amarelo</b> atenção, <b class="c2">laranja</b> alto,
+            <b class="c3">vermelho</b> crítico</span>
+        </p>
+        <div class="level-time">
+          <p class="level-time-title">Tempo em cada nível de risco</p>
+          <div class="stack-bar" id="r-niveis-barra" aria-hidden="true"></div>
+          <dl class="level-legend" id="r-niveis"></dl>
+        </div>
+        <table class="report-table alert-table" id="r-alertas">
+          <caption class="visually-hidden">Alertas do teste</caption>
+          <thead>
+            <tr><th scope="col">Hora</th><th scope="col">O que foi</th><th scope="col">Quanto durou</th>
+              <th scope="col">Gravidade</th><th scope="col">Vídeo</th></tr>
+          </thead>
+          <tbody id="r-alertas-corpo"></tbody>
+        </table>
+        <p class="empty-report" id="r-alertas-vazio" hidden>Nenhum alerta neste teste: nenhum sinal de sono, de
+          celular ou de distração passou do limite.</p>
+        <div class="clip-player" id="r-player-bloco" hidden>
+          <div class="clip-head">
+            <p class="clip-title" id="r-player-legenda"></p>
+            <button type="button" class="btn btn-small" id="r-player-fechar">Fechar vídeo</button>
+          </div>
+          <video id="r-player" controls preload="metadata" playsinline></video>
+          <canvas id="r-player-canvas" hidden></canvas>
+          <p class="muted small" id="r-trechos-envio"></p>
+        </div>
+      </section>
+
+      <section class="report-section" aria-labelledby="titulo-como">
+        <div class="section-head">
+          <h2 id="titulo-como">Como a pessoa estava</h2>
+          <p class="section-sub">Médias do teste comparadas com a faixa normal e, quando a calibração terminou, com o
+            normal da própria pessoa.</p>
+        </div>
+        <table class="report-table how-table">
+          <caption class="visually-hidden">Médias do teste</caption>
+          <thead>
+            <tr><th scope="col">Medida</th><th scope="col">Neste teste</th><th scope="col">Faixa normal</th>
+              <th scope="col">Situação</th></tr>
+          </thead>
+          <tbody id="r-como"></tbody>
+        </table>
+      </section>
+
+      <details class="report-section tech" id="r-detalhes">
+        <summary><span class="tech-title">Detalhes técnicos</span>
+          <span class="tech-sub">imagens por segundo, câmera, calibração, eventos por tipo e a lista completa</span></summary>
+        <dl class="tech-list" id="r-tecnico"></dl>
+        <h3 class="tech-heading">Eventos por tipo, incluindo os avisos do sistema</h3>
+        <ol class="type-list" id="r-tipos"></ol>
+        <p class="muted small" id="r-tipos-vazio" hidden>Nenhum evento neste teste.</p>
+        <h3 class="tech-heading">Todos os eventos, na ordem</h3>
+        <ol class="event-list event-list-full" id="r-linha"></ol>
+        <p class="muted small" id="r-linha-vazio" hidden>Nenhum evento neste teste.</p>
+      </details>
+
+      <p class="fineprint">Protótipo em validação: os limites ainda serão ajustados com gravações reais. Não é
+        diagnóstico. A frequência cardíaca é estimativa pela câmera, não é medida médica.</p>
+    </main>
+  </div>
+
+  <!-- Privacidade, LGPD, termos e licenças -->
+  <div class="layer" id="legal" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="legal-titulo">
+      <div class="dialog-head">
+        <h2 id="legal-titulo">Privacidade, LGPD e termos</h2>
+        <p class="muted small">Só para consulta: nada aqui precisa ser aceito para usar o app.</p>
+      </div>
+      <div class="tabs" role="tablist" id="legal-abas" aria-label="Seções"></div>
+      <div class="dialog-text" id="legal-texto" role="tabpanel" tabindex="0"></div>
+      <div class="dialog-foot">
+        <button type="button" class="btn btn-small" data-acao="abrir_pasta">Abrir pasta de dados</button>
+        <button type="button" class="btn btn-small btn-danger-quiet" data-acao-ui="confirmar-apagar-legal">Apagar dados deste computador</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-small btn-primary" data-acao-ui="fechar-legal">Fechar</button>
+        <div class="confirm" id="confirmar-apagar-legal" hidden>
+          <p>Apagar eventos, registro e resumos da pasta de dados? Não dá para desfazer.</p>
+          <div class="row">
+            <button type="button" class="btn btn-small btn-danger" data-acao="apagar_dados">Apagar</button>
+            <button type="button" class="btn btn-small btn-quiet" data-acao-ui="cancelar-apagar-legal">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="aviso" role="status" aria-live="polite" hidden></div>
+  <div class="offline" id="sem-conexao" role="alert" hidden>A tela perdeu a conexão com o programa. Feche e abra o
+    RotaGuard Teste de novo.</div>
+</body>
+</html>

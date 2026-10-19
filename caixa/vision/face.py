@@ -10,6 +10,13 @@ Convenções conferidas com o MediaPipe 1.0.1:
   da média do anel 469-472, e o 473 da média do anel 474-477, medido em duas fotos de teste.
 - Pose: pitch positivo = cabeça baixa (queixo para o peito); yaw positivo = rosto virando para a direita da
   imagem. Conferido girando em 3D uma foto de teste (±35°).
+- Blendshapes (spec 027, DMS-05): os 52 do Blendshape V2, na ordem e com o nome que o modelo devolve (lidos do
+  face_landmarker.task em 19/10/2026). Os de olho são combinados como combine_eyes: com a cabeça virada vale o olho
+  mais visível. "Left" nos nomes = olho esquerdo da pessoa = LEFT_EYE (convenção ARKit). Hipótese: conferir com uma
+  foto girada em 3D, como foi feito com a pose. Vural et al. 2010 (ICPR) e 2007 mediram AU7, AU1/AU2, AU4, AU9 e AU18
+  na sonolência com amostra pequena: entram só no registro, nunca como gatilho.
+- Translação da matriz facial (DMS-18): em centímetros na câmera virtual do MediaPipe (63° de campo vertical,
+  face_geometry_from_landmarks_graph.cc), não na lente real; vale a variação, não o valor absoluto.
 """
 from __future__ import annotations
 
@@ -63,6 +70,41 @@ YUNET_EYE_BOX_FACTOR = 0.57
 # YuNet detecta rostos de ~10 a ~300 px: o quadro é reduzido para essa largura só na detecção.
 YUNET_DETECTION_WIDTH = 320
 
+# Os 52 blendshapes do Face Landmarker, na ordem do modelo (DMS-05b: colunas do _quadros.csv).
+BLENDSHAPE_NAMES = (
+    "_neutral", "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight", "cheekPuff",
+    "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft", "eyeBlinkRight", "eyeLookDownLeft", "eyeLookDownRight",
+    "eyeLookInLeft", "eyeLookInRight", "eyeLookOutLeft", "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight",
+    "eyeSquintLeft", "eyeSquintRight", "eyeWideLeft", "eyeWideRight", "jawForward", "jawLeft", "jawOpen", "jawRight",
+    "mouthClose", "mouthDimpleLeft", "mouthDimpleRight", "mouthFrownLeft", "mouthFrownRight", "mouthFunnel",
+    "mouthLeft", "mouthLowerDownLeft", "mouthLowerDownRight", "mouthPressLeft", "mouthPressRight", "mouthPucker",
+    "mouthRight", "mouthRollLower", "mouthRollUpper", "mouthShrugLower", "mouthShrugUpper", "mouthSmileLeft",
+    "mouthSmileRight", "mouthStretchLeft", "mouthStretchRight", "mouthUpperUpLeft", "mouthUpperUpRight",
+    "noseSneerLeft", "noseSneerRight",
+)
+# Campo do FaceMetrics -> prefixo do par Left/Right do olho (combinados como combine_eyes, None sem olho).
+EYE_BLENDSHAPES = {
+    "eye_look_down": "eyeLookDown", "eye_look_up": "eyeLookUp", "eye_look_in": "eyeLookIn",
+    "eye_look_out": "eyeLookOut", "eye_squint": "eyeSquint", "eye_wide": "eyeWide", "brow_down": "browDown",
+    "brow_outer_up": "browOuterUp",
+}
+# Campos que não dependem de ver o olho: um nome só, ou a média dos dois lados.
+FACE_BLENDSHAPES = {"brow_inner_up": ("browInnerUp",), "mouth_pucker": ("mouthPucker",),
+                    "nose_sneer": ("noseSneerLeft", "noseSneerRight")}
+
+
+def blendshape_metrics(scores: dict, right_in: bool, left_in: bool, width_left: float, width_right: float) -> dict:
+    """Blendshapes combinados para o FaceMetrics (DMS-05a). Olho fora da imagem não entra."""
+    result = {}
+    for name, prefix in EYE_BLENDSHAPES.items():
+        left = scores.get(prefix + "Left") if left_in else None
+        right = scores.get(prefix + "Right") if right_in else None
+        result[name] = combine_eyes(left, right, width_left, width_right)
+    for name, keys in FACE_BLENDSHAPES.items():
+        values = [scores[key] for key in keys if key in scores]
+        result[name] = sum(values) / len(values) if values else None
+    return result
+
 
 def combine_eyes(left, right, width_left: float, width_right: float):
     """Média dos dois olhos, ou só o mais visível quando a cabeça está virada."""
@@ -107,6 +149,27 @@ class FaceMetrics:
     ambient_lux: float | None = None  # luz ambiente informada pela câmera, quando ela informa
     face_box: tuple | None = None  # (x1, y1, x2, y2) em pixels
     ear_points: np.ndarray | None = None  # lados do rosto na altura das orelhas, em pixels
+    # Os 478 pontos do Face Landmarker (478 × 2, float32, em pixels) para a malha e o cardio (spec 022). None no YuNet.
+    landmarks: np.ndarray | None = None
+    # Spec 027 · DMS-05: os 52 blendshapes crus (nome do MediaPipe -> 0 a 1) e os combinados abaixo. None no YuNet.
+    blendshapes: dict | None = None
+    eye_look_down: float | None = None  # olhar para baixo (DMS-03 e zona "colo" da distração)
+    eye_look_up: float | None = None
+    eye_look_in: float | None = None
+    eye_look_out: float | None = None
+    eye_squint: float | None = None  # AU7: sol e sorriso; só registro
+    eye_wide: float | None = None
+    brow_down: float | None = None  # AU4
+    brow_outer_up: float | None = None  # AU2
+    brow_inner_up: float | None = None  # AU1
+    mouth_pucker: float | None = None  # AU18 (Vural 2010): só registro
+    nose_sneer: float | None = None  # AU9 (Vural 2010): só registro
+    # Fenda do olho ÷ diâmetro da íris (0 fechado, ~0,8 aberto): separa olhar para baixo de olho fechado (DMS-03).
+    iris_visible_fraction: float | None = None
+    # Translação da matriz facial em cm (câmera virtual): + x = direita da imagem, z = distância (negativa). DMS-18.
+    head_x_cm: float | None = None
+    head_y_cm: float | None = None
+    head_z_cm: float | None = None
 
     @property
     def ear(self) -> float | None:
@@ -179,10 +242,12 @@ def _eye_features(points, gray, eye, iris, iris_center, infrared: bool, eye_open
     iris_diameter = (_distance(points[iris[0]], points[iris[2]]) + _distance(points[iris[1]], points[iris[3]])) / 2.0
 
     features = eye_region(gray, center, width, down)
+    opening = (_distance(points[eye[1]], points[eye[5]]) + _distance(points[eye[2]], points[eye[4]])) / 2.0
     features.update(
         gaze_x=float(offset @ right) / (width / 2.0),
         gaze_y=float(offset @ down) / (width / 2.0),
         iris_diameter_px=iris_diameter,
+        iris_visible_fraction=opening / iris_diameter if iris_diameter > 1e-6 else None,
         pupil_ratio=None,
         pupil_quality="camera_rgb",
     )
@@ -262,8 +327,11 @@ class FaceAnalyzer:
         blink_score = sum(blink_values) / len(blink_values) if blink_values and (right_in or left_in) else None
 
         pitch = yaw = roll = None
+        translation = (None, None, None)
         if result.facial_transformation_matrixes:
-            pitch, yaw, roll = rotation_to_euler(np.asarray(result.facial_transformation_matrixes[0]))
+            matrix = np.asarray(result.facial_transformation_matrixes[0])
+            pitch, yaw, roll = rotation_to_euler(matrix)
+            translation = tuple(float(value) for value in matrix[:3, 3])
 
         eye_open_prob = None
         if self._classifier is not None and (right_in or left_in):
@@ -311,6 +379,13 @@ class FaceAnalyzer:
             face_box=(float(points[:, 0].min()), float(points[:, 1].min()),
                       float(points[:, 0].max()), float(points[:, 1].max())),
             ear_points=points[list(FACE_SIDES)],
+            landmarks=points,
+            blendshapes=scores or None,
+            iris_visible_fraction=both("iris_visible_fraction"),
+            head_x_cm=translation[0],
+            head_y_cm=translation[1],
+            head_z_cm=translation[2],
+            **blendshape_metrics(scores, right_in, left_in, width_left, width_right),
         )
 
     def close(self) -> None:

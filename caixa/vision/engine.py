@@ -1,20 +1,32 @@
 """Orquestra os módulos a cada quadro. Não abre câmera nem toca som (isso fica em vision/driver_monitor.py).
 
 Ordem: visibilidade dos olhos → sonolência (módulo 1) → sinais de ativação (módulo 2) → linha de base e
-z-scores (módulo 3) → contexto, celular, fusão e alertas (módulo 4).
+z-scores (módulo 3) → contexto, distração pelo olhar (spec 027, vision/distraction.py), celular, fusão e alertas
+(módulo 4).
+
+Distração (spec 027, DMS-01/DMS-17): o DistractionAssessment vai em DriverState.distraction e os eventos
+(distracao_longa, distracao_repetida, nao_responsivo com origem "distracao", fora_da_posicao) entram em
+DriverState.events. O RiskFusion.update recebe `distraction=` e `visibility=` (pacote 1) e decide nível, alarme e
+som; se uma fusão antiga não aceitar `distraction=`, o aviso da distração sai por DriverState.alarm (ponte).
+Sem velocidade (PRD §5), a distração roda em modo "sem velocidade", escrito nos detalhes de cada evento.
 
 Privacidade (LGPD): no modo "local", os sinais de ativação só influenciam o risco dentro do dispositivo, e nenhum
 evento leva essas métricas. Só no modo "enviar", que exige base legal e consentimento, elas vão ao servidor.
+A frequência cardíaca estimada pela face (vision/cardio.py, spec 022) é dado de saúde (LGPD art. 11): fica só no
+DriverState para a tela, não entra no risco e nenhuma chave dela sai em evento, em nenhum modo.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import math
 import threading
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from vision.activation import ActivationAssessment, ActivationMonitor, assess_activation
 from vision.baseline import (
+    METRIC_FLOORS,
     MIN_TRIPS_FOR_ACCUMULATED,
     MIN_WINDOWS,
     MODULE2_METRICS,
@@ -25,9 +37,13 @@ from vision.baseline import (
     build_trip_baseline,
 )
 from vision.context import DrivingContext
+from vision.distraction import DistractionAssessment, DistractionMonitor
 from vision.drowsiness import Assessment, DrowsinessMonitor
 from vision.risk import RiskAssessment, RiskFusion
 from vision.visibility import EyeVisibility, Visibility, mask_eye_signals
+
+if TYPE_CHECKING:  # o cardio usa OpenCV e numpy; o engine continua importável só com a biblioteca padrão
+    from vision.cardio import CardioMonitor, CardioReading
 
 logger = logging.getLogger("drivesafe.engine")
 
@@ -36,8 +52,12 @@ EVALUATE_EVERY_S = 1.0
 EYES_HIDDEN_EVENT_S = 10.0
 EYES_HIDDEN_COOLDOWN_S = 600.0
 MIN_CALIBRATION_SAMPLES = 100
+# Chaves de cardio (spec 022): saem de qualquer evento, inclusive no modo "enviar" (dado de saúde, LGPD art. 11).
+CARDIO_KEYS = frozenset({"cardio", "bpm", "frequencia_cardiaca", "frequencia_cardiaca_bpm", "pulso_bpm", "snr_db",
+                         "respiracao_rpm", "rmssd_ms", "onda", "onda_pulso", "historico_bpm", "ultimo_bpm",
+                         "confianca_cardio", "progresso_cardio", "canal_cardio", "rois_cardio"})
 PRIVATE_KEYS = frozenset(MODULE2_METRICS) | {"pupila_faixa_luz", "pupila_fonte_luz", "pupila_motivo", "ativacao",
-                                              "fracao_valida_60s"}
+                                              "fracao_valida_60s"} | CARDIO_KEYS
 
 
 @dataclass
@@ -53,22 +73,41 @@ class DriverState:
     baseline_source: str | None = None
     events: list = field(default_factory=list)
     context: dict = field(default_factory=dict)
+    cardio: CardioReading | None = None  # só para a tela; fora do risco e dos eventos
+    distraction: DistractionAssessment | None = None  # canal de distração pelo olhar (spec 027)
+    # Aviso da distração que o risk.py ainda não somou (ponte provisória; False quando a fusão recebe a distração).
+    distraction_alarm: bool = False
 
     @property
     def alarm(self) -> bool:
-        return self.risk.alarm
+        return self.risk.alarm or self.distraction_alarm
 
 
 class DriverStateEngine:
     def __init__(self, drowsiness: DrowsinessMonitor, activation_mode: str = "local",
                  baseline_store: BaselineStore | None = None, context: DrivingContext | None = None,
-                 visibility: EyeVisibility | None = None, phone=None, background_baseline: bool = True):
+                 visibility: EyeVisibility | None = None, phone=None, background_baseline: bool = True,
+                 cardio: CardioMonitor | None = None, distraction: DistractionMonitor | bool | None = True):
         if activation_mode not in ACTIVATION_MODES:
             raise ValueError(f"modo dos sinais de ativação inválido: {activation_mode!r}")
         self.drowsiness = drowsiness
+        self.cardio = cardio
+        self._cardio_falhou = False
         self.activation_mode = activation_mode
         self.activation = ActivationMonitor() if activation_mode != "desligado" else None
         self.fusion = RiskFusion(share_activation=activation_mode == "enviar")
+        # Distração pelo olhar (spec 027). True = ligada com as zonas padrão; False/None = desligada.
+        if distraction is True:
+            distraction = DistractionMonitor(profile=drowsiness.profile)
+        self.distraction: DistractionMonitor | None = distraction or None
+        self._distraction_profile = drowsiness.profile
+        try:
+            parameters = inspect.signature(self.fusion.update).parameters
+        except (TypeError, ValueError):
+            parameters = {}
+        self.fusion_takes_distraction = "distraction" in parameters
+        # Óculos escuros e olhos tapados: a fusão precisa da visibilidade para o aviso "sem visão" (pacote 1).
+        self.fusion_takes_visibility = "visibility" in parameters
         self.context = context or DrivingContext()
         self.visibility = visibility or EyeVisibility()
         self.phone = phone
@@ -100,12 +139,14 @@ class DriverStateEngine:
         # Mão no olho no quadro anterior (vision/face_touch.py): o olho tapado não vira piscada, PERCLOS nem microssono.
         measured = metrics if visibility.eyes_ok and not self._eyes_covered else mask_eye_signals(metrics)
         self.drowsiness.face_hidden_by_hand = self._face_hidden
+        self._offer_duration_reference()
         drowsy = self.drowsiness.update(measured)
         if self.drowsiness.last_calibration is not None:
             self._start_trip_baseline()
         if self.activation is not None:
             self.activation.observe(measured, drowsy.openness)
         self.context.update(t, metrics.face_found)
+        distraction = self._update_distraction(measured, drowsy)
         # Parado segundo a telemetria (estacionado, por exemplo): uso de celular não é alerta.
         phone = self.phone.update(metrics, frame, moving=not self.context.stopped) if self.phone is not None else None
         touch = getattr(phone, "face_touch", None)
@@ -114,19 +155,69 @@ class DriverStateEngine:
 
         events = list(drowsy.events)
         self._eyes_hidden_event(t, visibility, events)
+        if distraction is not None:
+            events.extend(distraction.events)
         if phone is not None:
             events.extend(phone.events)
         if t >= self._next_evaluation:
             self._next_evaluation = t + EVALUATE_EVERY_S
             self._evaluate(t, drowsy)
 
-        risk = self.fusion.update(t, drowsy, self._activation, self._context, self._zscores, self._window, phone)
+        extra = {}
+        if self.fusion_takes_distraction:
+            extra["distraction"] = distraction
+        if self.fusion_takes_visibility:
+            extra["visibility"] = visibility
+        risk = self.fusion.update(t, drowsy, self._activation, self._context, self._zscores, self._window, phone,
+                                  **extra)
         events.extend(risk.events)
         baseline = self.baseline
         for event in events:
             event.details = self._decorate(event.details, risk, baseline)
         return DriverState(metrics, drowsy, risk, visibility, self._activation, phone, self._window, self._zscores,
-                           baseline.source if baseline is not None else None, events, self._context)
+                           baseline.source if baseline is not None else None, events, self._context,
+                           cardio=self._update_cardio(metrics, frame), distraction=distraction,
+                           distraction_alarm=bool(distraction is not None and distraction.alarm
+                                                  and not self.fusion_takes_distraction))
+
+    def _offer_duration_reference(self) -> None:
+        """CAL-02: a calibração em andamento compara a piscada mediana com a da linha de base acumulada (≥ 3
+        viagens). Piscada bem mais longa que o habitual da pessoa deixa a calibração suspeita."""
+        calibrator = self.drowsiness.calibrator
+        if calibrator is None or getattr(calibrator, "duration_reference", False) is not None:
+            return
+        accumulated = self.accumulated
+        if accumulated is None or accumulated.trips < MIN_TRIPS_FOR_ACCUMULATED:
+            return
+        stats = accumulated.stats.get("duracao_mediana_ms")
+        if stats is not None and stats.n >= MIN_WINDOWS:
+            calibrator.duration_reference = (stats.mean, stats.std(METRIC_FLOORS["duracao_mediana_ms"]))
+
+    def _update_distraction(self, measured, drowsy: Assessment) -> DistractionAssessment | None:
+        """Olhar e zonas (spec 027). Usa as medidas já mascaradas: sem olho visível, vale só a cabeça."""
+        if self.distraction is None:
+            return None
+        profile = self.drowsiness.profile
+        if profile is not self._distraction_profile:
+            self._distraction_profile = profile
+            if profile is not None:
+                self.distraction.set_profile(profile)
+        return self.distraction.update(measured, drowsy.openness, drowsy.frame_source,
+                                       speed_kmh=self._context.get("velocidade_kmh"))
+
+    def _update_cardio(self, metrics, frame) -> CardioReading | None:
+        """Pulso estimado pela face, só para a tela. Depois do risco e dos eventos, e uma falha aqui nunca derruba a
+        detecção de sono (o cardio é informação, não segurança)."""
+        if self.cardio is None or frame is None:
+            return None
+        try:
+            return self.cardio.update(frame, getattr(metrics, "landmarks", None), metrics.timestamp,
+                                      infrared=bool(getattr(metrics, "infrared", False)))
+        except Exception:
+            if not self._cardio_falhou:
+                logger.exception("Falha no cardio (spec 022); a detecção de sono continua.")
+                self._cardio_falhou = True
+            return None
 
     def set_activation_mode(self, mode: str) -> None:
         """Troca o modo dos sinais de ativação em execução (ex.: consentimento registrado no app)."""
@@ -158,6 +249,8 @@ class DriverStateEngine:
             window.update(self.activation.window_metrics(t, drowsy.fps))
         if self.phone is not None and hasattr(self.phone, "face_touch"):
             window.update(self.phone.face_touch.window_metrics(t))
+        if self.distraction is not None:
+            window.update(self.distraction.window_metrics(t))  # PRC e desvio do olhar (DMS-12)
         baseline = self.baseline
         self._zscores = baseline.zscores(window) if baseline is not None else {}
         self._window = window
@@ -223,11 +316,14 @@ class DriverStateEngine:
     def _decorate(self, details: dict | None, risk: RiskAssessment, baseline: Baseline | None) -> dict:
         details = dict(details or {})
         share = self.activation_mode == "enviar"
-        if not share:
-            for key in PRIVATE_KEYS & details.keys():
-                del details[key]
         details.setdefault("nivel_risco", risk.level)
         details.setdefault("nivel_risco_nome", risk.name)
+        # Canais sono × distração, sono estimado e afins da fusão (vision/risk.py, pacote 1 da spec 027).
+        for chave, valor in getattr(risk, "detalhes", {}).items():
+            details.setdefault(chave, valor)
+        # Depois de juntar tudo: nenhuma chave privada (ativação no modo local, cardio sempre) sai em evento.
+        for key in (CARDIO_KEYS if share else PRIVATE_KEYS) & details.keys():
+            del details[key]
         zscores = {name: z for name, z in self._zscores.items() if share or name not in MODULE2_METRICS}
         if zscores:
             details.setdefault("z", zscores)

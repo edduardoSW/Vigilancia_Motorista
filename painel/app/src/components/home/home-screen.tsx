@@ -2,31 +2,34 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useDecisions } from "@/components/decisions-provider";
 import { plural } from "@/components/drivers/use-list-shortcuts";
 import { mostrarPrimeirosPassos, primeirosPassos } from "@/components/home/first-steps";
+import { numerosDoInicio, resumoDoInicio, tarefasDoInicio, type NumeroDoInicio, type TarefaDoInicio } from "@/components/home/inicio-numeros";
 import { LiveScriptCard } from "@/components/live/live-script-card";
+import { resumoDosEventos, type TiposDeEvento } from "@/components/live/summary";
 import { useSession } from "@/components/session-provider";
 import { Glyph } from "@/components/ui/glyph";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast";
 import { nomeDoVeiculo as nomeNaFrota } from "@/components/vehicles/vehicle-labels";
-import { dados, dia, hora, motoristaDe, nomeDoVeiculo, veiculoDe } from "@/content";
-import { momentosDaViagem } from "@/content/moments";
+import tiposDeEvento from "@/content/tipos-de-evento.json";
 import { bridge, type Caixa, type InicioResumo, type Motorista, type Usuario, type Veiculo } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 import { diasAte, formatarData, hojeIso, situacaoCnh } from "@/lib/validators";
 
-// Início (spec 014; spec 019, INT-02): começa por "O que fazer agora", um card por tarefa, cada um com o seu botão.
-// Depois vêm os Primeiros passos numa barra (a lista abre em "Ver todos"), as viagens que faltam verificar, a caixa
-// conectada, os avisos (CNH, caixa, cópia) e o teste neste computador. Viagens e caixa vêm do demo até a leitura real existir.
+// Início (spec 014; spec 019, INT-02; spec 030): começa por "O que fazer agora", um card por tarefa, cada um com o seu
+// botão. Depois os números de hoje (testes, alertas, quem está testando e os cadastros), os Primeiros passos numa barra,
+// os avisos (CNH, caixa, cópia) e o teste neste computador. Tudo vem da ponte: zero quando não há, nada inventado.
+
+const TIPOS = tiposDeEvento as TiposDeEvento;
+/** Relê os números enquanto o Início está aberto (a central chega a cada 30 s; o script local a cada 2 s). */
+const ATUALIZAR_MS = 15_000;
 
 interface Cadastros {
   motoristas: Motorista[];
   veiculos: Veiculo[];
   caixas: Caixa[];
   pessoas: Usuario[] | null;
-  resumo: InicioResumo | null;
 }
 
 interface Aviso {
@@ -38,25 +41,7 @@ interface Aviso {
   acao: string;
 }
 
-interface Tarefa {
-  id: string;
-  titulo: string;
-  detalhe: React.ReactNode;
-  href: string;
-  acao: string;
-  principal?: boolean;
-  alarme?: boolean;
-}
-
-const VIAGENS = [...dados.viagens]
-  .sort((a, b) => Date.parse(b.chegada) - Date.parse(a.chegada))
-  .map((viagem) => ({ viagem, momentos: momentosDaViagem(viagem).map((momento) => momento.id) }));
-
-const COLETA = dados.coletas[0];
-const VEICULO_DA_COLETA = COLETA ? veiculoDe(COLETA.veiculo) : undefined;
-const NOME_DA_COLETA = COLETA ? (VEICULO_DA_COLETA ? nomeDoVeiculo(VEICULO_DA_COLETA.tipo, VEICULO_DA_COLETA.prefixo) : COLETA.caixa) : "";
-
-function avisosDe(cadastros: Cadastros, administra: boolean, hoje: string): Aviso[] {
+function avisosDe(cadastros: Cadastros, resumo: InicioResumo | null, administra: boolean, hoje: string): Aviso[] {
   const avisos: Aviso[] = [];
   for (const motorista of cadastros.motoristas) {
     if (motorista.situacao !== "ativo") continue;
@@ -95,28 +80,24 @@ function avisosDe(cadastros: Cadastros, administra: boolean, hoje: string): Avis
       acao: "Ver caixas",
     });
   }
-  const dias = cadastros.resumo?.dias_desde_copia;
+  const dias = resumo?.dias_desde_copia;
   if (administra && typeof dias === "number" && dias > 7) {
     avisos.push({
       id: "copia",
       tipo: "copia",
       titulo: `A última cópia de segurança foi há ${dias} dias`,
       detalhe: "Faça uma cópia nova e guarde fora deste computador.",
-      href: "/configuracoes/",
+      href: "/configuracoes/?secao=copia",
       acao: "Fazer cópia agora",
     });
   }
   return avisos;
 }
 
-/** "6 momentos para verificar · 1 CNH pede atenção · 1 caixa precisa de atenção". */
-function resumo(pendentes: number, avisos: Aviso[]) {
-  const partes = [pendentes ? plural(pendentes, "momento para verificar", "momentos para verificar") : "Nenhum momento para verificar"];
-  const cnh = avisos.filter((aviso) => aviso.tipo === "cnh").length;
-  const caixas = avisos.filter((aviso) => aviso.tipo === "caixa").length;
-  if (cnh) partes.push(cnh === 1 ? "1 CNH pede atenção" : `${cnh} CNHs pedem atenção`);
-  if (caixas) partes.push(caixas === 1 ? "1 caixa precisa de atenção" : `${caixas} caixas precisam de atenção`);
-  return partes.join(" · ");
+/** "2 de sono e 1 de celular", a partir da contagem de alertas por tipo. */
+function detalheDosAlertas(porTipo: Record<string, number>) {
+  const eventos = Object.entries(porTipo).flatMap(([tipo, quantidade]) => Array.from({ length: quantidade }, () => ({ tipo })));
+  return eventos.length ? resumoDosEventos(eventos, TIPOS) : undefined;
 }
 
 function BarraDeProgresso({ valor, rotulo, className }: { valor: number; rotulo: string; className?: string }) {
@@ -127,7 +108,7 @@ function BarraDeProgresso({ valor, rotulo, className }: { valor: number; rotulo:
   );
 }
 
-function OQueFazerAgora({ tarefas }: { tarefas: Tarefa[] }) {
+function OQueFazerAgora({ tarefas }: { tarefas: TarefaDoInicio[] }) {
   return (
     <section aria-labelledby="fazer-agora">
       <h2 id="fazer-agora" className="font-titulo text-[20px] font-semibold">
@@ -148,43 +129,35 @@ function OQueFazerAgora({ tarefas }: { tarefas: Tarefa[] }) {
   );
 }
 
-function CaixaConectada() {
-  if (!COLETA) return null;
-  const motorista = motoristaDe(COLETA.motorista);
-  const feitas = COLETA.etapas.filter((etapa) => etapa.feita).length;
-
+// Números de hoje (spec 030, SDF-05): rótulo, valor e uma linha de detalhe; cada um leva à tela de onde veio.
+function NumerosDeHoje({ numeros }: { numeros: NumeroDoInicio[] }) {
   return (
-    <section id="caixa-conectada" aria-labelledby="caixa-titulo" className="scroll-mt-6 rounded-[12px] border border-fio bg-superficie p-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <h2 id="caixa-titulo" className="flex items-center gap-2.5 font-titulo text-[17px] font-semibold">
-          <span aria-hidden="true" className="pulse-dot" />
-          Caixa do {NOME_DA_COLETA} conectada
-        </h2>
-        <span className="text-[13.5px] tabular-nums text-grafite">{COLETA.progresso}% lido</span>
-      </div>
-      <p className="mt-1 text-[13.5px] text-grafite">
-        Viagem de {dia(COLETA.saida)} às {hora(COLETA.saida)} até {dia(COLETA.chegada)} às {hora(COLETA.chegada)} · motorista{" "}
-        <b className="font-semibold text-tinta">{motorista?.nome ?? "não confirmado"}</b>
-      </p>
-      <BarraDeProgresso valor={COLETA.progresso} rotulo="Lendo o registro da caixa" className="mt-3" />
-      <ol className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
-        {COLETA.etapas.map((etapa, indice) => (
-          <li key={etapa.nome} className={cn("flex items-center gap-1.5", indice === feitas ? "font-semibold text-tinta" : "text-grafite")}>
-            {etapa.feita ? <Glyph name="check" size={14} className="text-verde" /> : <span className="tabular-nums">{indice + 1}.</span>}
-            {etapa.nome}
+    <section aria-labelledby="numeros-de-hoje">
+      <h2 id="numeros-de-hoje" className="font-titulo text-[20px] font-semibold">
+        Hoje
+      </h2>
+      <ul className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-[12px] border border-fio bg-fio">
+        {numeros.map((numero) => (
+          <li key={numero.id} data-numero={numero.id} className="min-w-0 bg-superficie">
+            <Link href={numero.href} className="flex h-full flex-col px-4 py-3.5 transition-colors hover:bg-lateral">
+              <span className="text-[13px] text-grafite">{numero.rotulo}</span>
+              <span className={cn("mt-0.5 text-[28px] font-semibold leading-tight", numero.alarme ? "text-alarme" : "text-tinta")}>
+                {numero.valor === null ? <span className="text-apagado">…</span> : numero.valor.toLocaleString("pt-BR")}
+              </span>
+              <span className="mt-0.5 truncate text-[12.5px] text-grafite">{numero.detalhe}</span>
+            </Link>
           </li>
         ))}
-      </ol>
-      <p className="mt-3 text-[13px] text-grafite">Fica pronto em cerca de 1 minuto. Enquanto isso, dá para verificar as outras viagens.</p>
+      </ul>
     </section>
   );
 }
 
 export function HomeScreen() {
-  const { usuario, pode } = useSession();
-  const { decisions } = useDecisions();
+  const { estado, usuario, pode } = useSession();
   const { toast } = useToast();
   const [cadastros, setCadastros] = useState<Cadastros | null>(null);
+  const [resumo, setResumo] = useState<InicioResumo | null>(null);
   const [escondidos, setEscondidos] = useState<boolean | null>(null);
   const [verTodos, setVerTodos] = useState(false);
   const usuarioId = usuario?.id ?? null;
@@ -197,29 +170,38 @@ export function HomeScreen() {
       bridge.motoristas_listar(),
       bridge.veiculos_listar(),
       bridge.caixas_listar(),
-      bridge.inicio_resumo(),
       administra ? bridge.equipe_listar() : Promise.resolve(null),
-    ]).then(([motoristas, veiculos, caixas, inicio, equipe]) => {
+    ]).then(([motoristas, veiculos, caixas, equipe]) => {
       if (!vivo) return;
       setCadastros({
         motoristas: motoristas.ok ? motoristas.dados : [],
         veiculos: veiculos.ok ? veiculos.dados : [],
         caixas: caixas.ok ? caixas.dados : [],
-        resumo: inicio.ok ? inicio.dados : null,
         pessoas: equipe && equipe.ok ? equipe.dados : null,
       });
     });
+    const lerResumo = () =>
+      bridge.inicio_resumo().then((resposta) => {
+        if (vivo && resposta.ok) setResumo(resposta.dados);
+      });
+    void lerResumo();
+    const vigia = window.setInterval(() => void lerResumo(), ATUALIZAR_MS);
     return () => {
       vivo = false;
+      window.clearInterval(vigia);
     };
   }, [usuarioId, administra]);
 
-  const paraVerificar = VIAGENS.map(({ viagem, momentos }) => ({ viagem, pendentes: momentos.filter((id) => !decisions[id]).length })).filter(
-    (item) => item.pendentes > 0,
-  );
-  const pendentes = paraVerificar.reduce((soma, item) => soma + item.pendentes, 0);
-  const avisos = cadastros ? avisosDe(cadastros, administra, hojeIso()) : [];
+  const hoje = hojeIso();
+  const avisos = cadastros ? avisosDe(cadastros, resumo, administra, hoje) : [];
   const ativos = cadastros?.motoristas.filter((motorista) => motorista.situacao === "ativo") ?? [];
+  const numeros = numerosDoInicio({
+    hoje: resumo?.hoje ?? null,
+    motoristasAtivos: cadastros ? ativos.length : null,
+    veiculosEmUso: cadastros ? cadastros.veiculos.filter((veiculo) => veiculo.situacao === "em_uso").length : null,
+    cnhPedemAtencao: cadastros ? ativos.filter((motorista) => situacaoCnh(motorista.cnh_validade, hoje) !== "ok").length : null,
+    detalheDosAlertas: resumo ? detalheDosAlertas(resumo.hoje.alertas_por_tipo) : undefined,
+  });
   const passos = cadastros
     ? primeirosPassos({
         veiculos: cadastros.veiculos.length,
@@ -227,32 +209,14 @@ export function HomeScreen() {
         motoristasAtivos: ativos.length,
         motoristasSemTermo: ativos.filter((motorista) => !motorista.termo.assinado).length,
         pessoas: cadastros.pessoas?.length ?? 1,
-        ultimaCopiaEm: cadastros.resumo?.ultima_copia_em ?? null,
+        ultimaCopiaEm: resumo?.ultima_copia_em ?? null,
       })
     : [];
-  const verPassos = administra && cadastros !== null && mostrarPrimeirosPassos(passos, escondidos ?? cadastros.resumo?.primeiros_passos_escondidos ?? false);
+  const verPassos = administra && cadastros !== null && resumo !== null && mostrarPrimeirosPassos(passos, escondidos ?? resumo.primeiros_passos_escondidos);
   const proximo = passos.find((passo) => !passo.feito);
   const feitos = passos.filter((passo) => passo.feito).length;
 
-  const tarefas: Tarefa[] = [];
-  const primeira = paraVerificar[0];
-  tarefas.push(
-    primeira
-      ? {
-          id: "verificar",
-          principal: true,
-          titulo: plural(pendentes, "momento para verificar", "momentos para verificar"),
-          detalhe: (
-            <>
-              Comece pelo <b className="font-semibold text-tinta">{nomeDoVeiculo(primeira.viagem.tipo, primeira.viagem.veiculo)}</b>, motorista{" "}
-              {motoristaDe(primeira.viagem.motorista)?.nome ?? "não confirmado"}, que chegou {dia(primeira.viagem.chegada)} às {hora(primeira.viagem.chegada)}.
-            </>
-          ),
-          href: `/viagens/${primeira.viagem.id}/`,
-          acao: "Verificar agora",
-        }
-      : { id: "verificar", titulo: "Tudo verificado", detalhe: "As viagens novas aparecem aqui quando a caixa for lida.", href: "/viagens/", acao: "Ver viagens" },
-  );
+  const tarefas: TarefaDoInicio[] = resumo ? tarefasDoInicio({ hoje: resumo.hoje, administra, empresaSemNome: !estado?.empresa?.nome }) : [];
   if (verPassos && proximo) {
     tarefas.push({
       id: "instalacao",
@@ -272,15 +236,6 @@ export function HomeScreen() {
       acao: avisos[0].acao,
     });
   }
-  if (COLETA) {
-    tarefas.push({
-      id: "caixa",
-      titulo: `Caixa do ${NOME_DA_COLETA} conectada`,
-      detalhe: `Lendo o registro: ${COLETA.progresso}%. Fica pronto em cerca de 1 minuto.`,
-      href: "#caixa-conectada",
-      acao: "Acompanhar a leitura",
-    });
-  }
 
   async function esconderPassos(esconder: boolean) {
     const resposta = await bridge.primeiros_passos_esconder(esconder);
@@ -291,10 +246,12 @@ export function HomeScreen() {
 
   return (
     <section className="max-w-[900px] px-14 pb-16 pt-[34px]">
-      <PageHeader title="Início" summary={resumo(pendentes, avisos)} guide={{ capitulo: "primeiros-passos" }} />
+      <PageHeader title="Início" summary={resumoDoInicio(resumo?.hoje ?? null)} guide={{ capitulo: "primeiros-passos" }} />
 
       <div className="flex flex-col gap-8">
-        <OQueFazerAgora tarefas={tarefas} />
+        {tarefas.length > 0 && <OQueFazerAgora tarefas={tarefas} />}
+
+        <NumerosDeHoje numeros={numeros} />
 
         {verPassos && (
           <section aria-labelledby="primeiros-passos" className="rounded-[12px] border border-fio bg-superficie px-4 py-3">
@@ -340,44 +297,6 @@ export function HomeScreen() {
             )}
           </section>
         )}
-
-        <section aria-labelledby="para-verificar">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 id="para-verificar" className="font-titulo text-[20px] font-semibold">
-              Para verificar
-            </h2>
-            <Link href="/viagens/" className="text-[13px] font-semibold text-verde hover:underline">
-              Ver todas as viagens
-            </Link>
-          </div>
-          {paraVerificar.length === 0 ? (
-            <p className="mt-2 text-[14.5px] text-grafite">Tudo verificado. As viagens novas aparecem aqui quando a caixa for lida.</p>
-          ) : (
-            <ul className="mt-3 border-t border-fio">
-              {paraVerificar.map(({ viagem, pendentes: faltam }) => (
-                <li key={viagem.id}>
-                  <Link
-                    href={`/viagens/${viagem.id}/`}
-                    className="grid h-14 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-5 border-b border-fio px-2 transition-colors hover:bg-lateral"
-                  >
-                    <span className="min-w-0">
-                      <b className="block truncate text-[15px] font-semibold">{nomeDoVeiculo(viagem.tipo, viagem.veiculo)}</b>
-                      <span className="block truncate text-[13px] text-grafite">
-                        Motorista <b className="font-semibold text-tinta">{motoristaDe(viagem.motorista)?.nome ?? "não confirmado"}</b> · {viagem.linha}
-                      </span>
-                    </span>
-                    <span className="text-[13px] tabular-nums text-grafite">
-                      Chegou {dia(viagem.chegada)} às {hora(viagem.chegada)}
-                    </span>
-                    <span className="rounded-[7px] bg-lima px-2 py-[3px] text-[12.5px] font-bold tabular-nums text-sobre-lima">{faltam} para ver</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <CaixaConectada />
 
         {avisos.length > 0 && (
           <section aria-labelledby="avisos">

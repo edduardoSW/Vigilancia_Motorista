@@ -1,23 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDecisions } from "@/components/decisions-provider";
 import { plural, semAcento, useListShortcuts } from "@/components/drivers/use-list-shortcuts";
-import { useVisao } from "@/components/session-provider";
+import { useSession, useVisao } from "@/components/session-provider";
 import { CardGrid, CardInfo, CardTitulo } from "@/components/ui/card-grid";
 import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Glyph } from "@/components/ui/glyph";
 import { Kbd } from "@/components/ui/kbd";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { ViewToggle } from "@/components/ui/view-toggle";
-import { dados, dia, duracao, hora, minutosEntre, motoristaDe, nomeDoVeiculo, type Viagem } from "@/content";
+import { dia, duracao, hora, minutosEntre, nomeDoVeiculo, type Viagem } from "@/content";
+import { VAZIO } from "@/content/estados-vazios";
 import { momentosDaViagem } from "@/content/moments";
+import { bridge, type Motorista } from "@/lib/bridge";
+import { useViagens } from "@/lib/viagens";
 
 // Viagens (spec 014, áreas do painel): as viagens lidas das caixas, com o que falta verificar, busca e dia da chegada.
 // Em lista ou cards (spec 019, VIS-01), com o motorista em destaque (VIA-01). Enter ou clique abre o relatório.
-// Enquanto a leitura da caixa de verdade não chega, as viagens vêm do demo.json.
+// Spec 030: só viagem lida de verdade (src/lib/viagens.ts); sem nenhuma, o estado vazio diz o próximo passo.
 
 type Aba = "pendentes" | "revisadas" | "todas";
 
@@ -29,18 +33,13 @@ interface Linha {
 
 const ABAS: Aba[] = ["pendentes", "revisadas", "todas"];
 const NOME_ABA: Record<Aba, string> = { pendentes: "Para verificar", revisadas: "Revisadas", todas: "Todas" };
-const VAZIO: Record<Aba, string> = {
+const NADA_NA_ABA: Record<Aba, string> = {
   pendentes: "Nenhuma viagem para verificar.",
   revisadas: "Nenhuma viagem revisada ainda.",
-  todas: "Nenhuma viagem lida ainda. Elas aparecem aqui quando a caixa for lida neste computador.",
+  todas: "Nenhuma viagem lida ainda.",
 };
 
-const VIAGENS = [...dados.viagens]
-  .sort((a, b) => Date.parse(b.chegada) - Date.parse(a.chegada))
-  .map((viagem) => ({ viagem, momentos: momentosDaViagem(viagem).map((momento) => momento.id) }));
-
 const naAba = (aba: Aba, linha: Linha) => aba === "todas" || (aba === "pendentes" ? linha.pendentes > 0 : linha.pendentes === 0);
-const nomeDoMotorista = (viagem: Viagem) => motoristaDe(viagem.motorista)?.nome ?? "Não confirmado";
 
 function Situacao({ linha }: { linha: Linha }) {
   if (linha.pendentes > 0) {
@@ -52,6 +51,29 @@ function Situacao({ linha }: { linha: Linha }) {
 export function TripsScreen() {
   const router = useRouter();
   const { decisions } = useDecisions();
+  const { usuario } = useSession();
+  const lidas = useViagens();
+  const viagens = useMemo(
+    () =>
+      [...lidas]
+        .sort((a, b) => Date.parse(b.chegada) - Date.parse(a.chegada))
+        .map((viagem) => ({ viagem, momentos: momentosDaViagem(viagem).map((momento) => momento.id) })),
+    [lidas],
+  );
+  // Quem dirigiu: o nome vem do cadastro de motoristas (a viagem traz só a referência do motorista).
+  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
+  const usuarioId = usuario?.id ?? null;
+  useEffect(() => {
+    if (usuarioId === null || !lidas.length) return;
+    let vivo = true;
+    bridge.motoristas_listar().then((resposta) => {
+      if (vivo && resposta.ok) setMotoristas(resposta.dados);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [usuarioId, lidas.length]);
+  const nomeDoMotorista = (viagem: Viagem) => motoristas.find((item) => item.ref === viagem.motorista)?.nome ?? "Não confirmado";
   const [visao, setVisao] = useVisao("viagens");
   const [aba, setAba] = useState<Aba>("pendentes");
   const [busca, setBusca] = useState("");
@@ -60,7 +82,7 @@ export function TripsScreen() {
   const buscaRef = useRef<HTMLInputElement>(null);
   useListShortcuts({ searchRef: buscaRef });
 
-  const linhas: Linha[] = VIAGENS.map(({ viagem, momentos }) => ({
+  const linhas: Linha[] = viagens.map(({ viagem, momentos }) => ({
     viagem,
     total: momentos.length,
     pendentes: momentos.filter((id) => !decisions[id]).length,
@@ -75,8 +97,8 @@ export function TripsScreen() {
       const { viagem } = linha;
       return semAcento(`${nomeDoVeiculo(viagem.tipo, viagem.veiculo)} ${viagem.linha} ${nomeDoMotorista(viagem)}`).includes(termo);
     });
-  const vazio = termo || chegada ? "Nenhuma viagem com esse filtro." : VAZIO[aba];
-  const abrir = (linha: Linha) => router.push(`/viagens/${linha.viagem.id}/`);
+  const vazio = termo || chegada ? "Nenhuma viagem com esse filtro." : NADA_NA_ABA[aba];
+  const abrir = (linha: Linha) => router.push(`/viagens/relatorio/?id=${encodeURIComponent(linha.viagem.id)}`);
 
   const colunas = [
     {
@@ -115,10 +137,18 @@ export function TripsScreen() {
     <section className="px-14 pb-16 pt-[34px]">
       <PageHeader
         title="Viagens"
-        summary={`${plural(linhas.length, "viagem", "viagens")} · ${pendentes ? plural(pendentes, "momento para verificar", "momentos para verificar") : "tudo verificado"}`}
+        summary={
+          linhas.length
+            ? `${plural(linhas.length, "viagem", "viagens")} · ${pendentes ? plural(pendentes, "momento para verificar", "momentos para verificar") : "tudo verificado"}`
+            : "Nenhuma viagem lida neste computador"
+        }
         guide={{ capitulo: "verificar-momentos" }}
       />
 
+      {!linhas.length ? (
+        <EmptyState estado={VAZIO.viagens} className="mt-2 rounded-[12px] border border-fio bg-superficie px-5 py-6" />
+      ) : (
+        <>
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <Tabs
           label="Viagens por situação"
@@ -193,6 +223,8 @@ export function TripsScreen() {
           />
         )}
       </div>
+        </>
+      )}
     </section>
   );
 }

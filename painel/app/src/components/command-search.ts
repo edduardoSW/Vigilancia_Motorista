@@ -6,7 +6,7 @@ export interface ItemBusca {
   grupo: string;
   titulo: string;
   detalhe?: string;
-  /** Texto que também conta na busca sem aparecer (por exemplo, "onibus" para "Ônibus 2240"). */
+  /** Texto que também conta na busca sem aparecer (por exemplo, "onibus" para "Ônibus 1020"). */
   palavras?: string;
   href: string;
 }

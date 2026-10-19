@@ -202,74 +202,9 @@ def regra_descanso(transporta: str) -> dict:
     return dict(REGRAS_DESCANSO[transporta])
 
 
-# Demonstração ----------------------------------------------------------------------------------------------------------
-DEMO_EMPRESA = "Viação Demonstração"
-DEMO_MOTORISTAS = (
-    ("m-01", "Carlos Menezes", "Carlos M.", "0412", "D", "2028-03-31", "2026-09-02"),
-    ("m-02", "Juliana Prado", "Juliana P.", "0388", "D", "2027-11-30", "2026-09-02"),
-    ("m-03", "Rogério Lima", "Rogério L.", "0291", "E", "2026-09-26", "2026-09-03"),
-    ("m-04", "Aline Costa", "Aline C.", "0455", "D", "2029-06-30", "2026-09-02"),
-    ("m-05", "Marcos Teixeira", "Marcos T.", "0467", "D", "2030-01-15", None),
-)
-DEMO_VEICULOS = (  # número, tipo, transporta, placa, caixa, modelo (descrição do demo.json)
-    ("3302", "caminhao", "carga", "BRA2E19", "RG-0129", "Cavalo mecânico"),
-    ("2258", "onibus", "passageiros", "BRA3F27", "RG-0139", "Rodoviário executivo"),
-    ("2240", "onibus", "passageiros", "BRA1C84", "RG-0142", "Rodoviário 2 andares"),
-    ("3310", "caminhao", "carga", "BRA5H02", "RG-0133", "Cavalo mecânico"),
-    ("2251", "onibus", "passageiros", "BRA4D66", "RG-0150", "Rodoviário 2 andares"),
-    ("2263", "onibus", "passageiros", "BRA7B31", "RG-0147", "Rodoviário leito"),
-    ("1187", "onibus", "passageiros", "BRA8A12", "RG-0118", "Rodoviário executivo"),
-)
-DEMO_CAIXA_LIVRE = "RG-0155"
-DEMO_DETALHE_RG_0129 = "A caixa esquentou demais na última viagem (passou de 70 °C). Vale conferir a instalação."
-# Iguais às da tela (painel/app/src/content/demo.json, viagem v-1187: e-202 alarme falso; e-203 "orientado", que vira
-# confirmado com orientação). Entram sem linha no registro de atividades, como no lado TypeScript.
-DEMO_DECISOES = (("v-1187-e-202", "alarme_falso", False), ("v-1187-e-203", "confirmado", True))
-DEMO_DECISAO_POR, DEMO_DECISAO_EM = "Marina (gestora)", "2026-09-14T06:58"
-
-
-def cnh_demo(indice: int) -> str:
-    """Número fictício e determinístico, válido pelo dígito verificador."""
-    base = 40_000_000 + indice * 7919
-    while True:
-        numero = completar_cnh(f"{base:09d}")
-        if numero and len(set(numero)) > 1:
-            return numero
-        base += 1
-
-
-def carregar_demonstracao(banco: Banco) -> None:
-    carregar_cadastros_demonstracao(banco)
-    with banco.transacao():
-        for momento_id, resultado, orientado in DEMO_DECISOES:
-            banco.inserir("decisoes", {"momento_id": momento_id, "resultado": resultado, "orientado": int(orientado),
-                                       "por": DEMO_DECISAO_POR, "funcao": "administrador", "em": DEMO_DECISAO_EM,
-                                       "ativa": 1})
-
-
-def carregar_cadastros_demonstracao(banco: Banco) -> None:
-    with banco.transacao():
-        for indice, (ref, nome, curto, matricula, categoria, validade, termo) in enumerate(DEMO_MOTORISTAS, 1):
-            motorista_id = banco.inserir("motoristas", {
-                "ref": ref, "nome": nome, "nome_curto": curto, "matricula": matricula, "cpf": None, "telefone": None,
-                "cnh_numero": cnh_demo(indice), "cnh_categoria": categoria, "cnh_validade": validade,
-                "situacao": "ativo", "observacoes": None})
-            if termo:
-                banco.inserir("termos", {"motorista_id": motorista_id, "assinado": 1, "data": termo,
-                                         "versao": VERSAO_TERMO_PADRAO, "registrado_por": "Demonstração"})
-        for numero, tipo, transporta, placa, codigo, modelo in DEMO_VEICULOS:
-            veiculo_id = banco.inserir("veiculos", {"numero": numero, "placa": placa, "tipo": tipo,
-                                                    "transporta": transporta, "modelo": modelo, "ano": None,
-                                                    "situacao": "em_uso"})
-            atencao = codigo == "RG-0129"
-            caixa_id = banco.inserir("caixas", {"codigo": codigo, "veiculo_id": veiculo_id,
-                                                "situacao": "atencao" if atencao else "ok",
-                                                "detalhe": DEMO_DETALHE_RG_0129 if atencao else None})
-            banco.inserir("caixa_vinculos", {"caixa_id": caixa_id, "veiculo_id": veiculo_id, "de": banco.agora(),
-                                             "ate": None, "por": "Demonstração"})
-        banco.inserir("caixas", {"codigo": DEMO_CAIXA_LIVRE, "veiculo_id": None, "situacao": "ok", "detalhe": None})
-
-
+# Ativação ---------------------------------------------------------------------------------------------------------------
+# Spec 030: o painel não carrega mais nada fictício. A demonstração antiga só é reconhecida para ser apagada
+# (demonstracao.py); os dados dela ficam no fixture dos testes.
 def carregar_caixas_do_arquivo(banco: Banco, caixas: list[dict]) -> None:
     """CXA-01: as caixas só nascem aqui, a partir do arquivo da empresa."""
     with banco.transacao():

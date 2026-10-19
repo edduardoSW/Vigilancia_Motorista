@@ -238,8 +238,10 @@ def drowsy(level, reasons=(), alarm=False):
 
 fusion = RiskFusion()
 levels = [fusion.update(float(t), drowsy(2 if t < 10 else 0, ["x"])).level for t in range(200)]
-assert levels[5] == 2 and levels[69] == 2 and levels[70] == 1 and levels[129] == 1 and levels[130] == 0, levels[60:135]
-ok("histerese: risco alto cai para atenção 60 s depois do motivo sumir e para normal mais 60 s depois")
+# Spec 027 (ALM-07, memória de sonolência): depois de nível 2 por sono, o risco não volta a 0 sem pausa de 15 min ou
+# 30 min sem sinais; por isso fica em 1 aos 130 s (antes caía para 0).
+assert levels[5] == 2 and levels[69] == 2 and levels[70] == 1 and levels[129] == 1 and levels[130] == 1, levels[60:135]
+ok("histerese: risco alto cai para atenção 60 s depois do motivo sumir e fica em atenção pela memória de sonolência")
 
 fusion = RiskFusion()
 night = [fusion.update(float(t), drowsy(1, ["fechamento_longo"]), context={"madrugada": True}) for t in range(400)]
@@ -267,7 +269,9 @@ def rebound(share):
 
 sustained, early_events, result = rebound(share=False)
 assert sustained.activation_sustained and sustained.level == 1 and not early_events
-assert result.level == 2 and result.alarm and [e.alert_type for e in result.events] == ["sonolencia_abrupta"]
+# Spec 027 (CTX-01): a sonolência agora sugere pausa no mesmo quadro.
+assert result.level == 2 and result.alarm and [e.alert_type for e in result.events] == ["sonolencia_abrupta",
+                                                                                         "pausa_sugerida"]
 assert "ativacao" not in result.events[0].details
 plain = RiskFusion().update(1900.0, drowsy(1, ["fechamento_longo"]))
 assert plain.level == 1 and not plain.events

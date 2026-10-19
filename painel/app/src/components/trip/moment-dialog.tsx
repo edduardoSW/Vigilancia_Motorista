@@ -115,7 +115,7 @@ export function MomentDialog({
         <p className="text-[15px] font-semibold">
           Trecho {Math.min(trecho, momento.videos.length - 1) + 1} de {momento.videos.length} · {segundos(video.duracaoS)}
         </p>
-        <p className="text-[13px] opacity-75">Prévia: vídeo fictício, sem imagem. No app de verdade, aqui toca o trecho que a caixa gravou.</p>
+        <p className="text-[13px] opacity-75">O trecho gravado pela caixa toca aqui quando a leitura dos vídeos da caixa estiver pronta.</p>
       </>
     );
   }

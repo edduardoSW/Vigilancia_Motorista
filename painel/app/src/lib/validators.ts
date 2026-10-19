@@ -18,7 +18,7 @@ function contagem(nome: string, digitos: string, total: number) {
 const repetido = (digitos: string) => /^(\d)\1+$/.test(digitos);
 
 /**
- * CNH: 11 números, os 2 últimos são dígitos verificadores (módulo 11), na mesma variante do demo-backend.ts.
+ * CNH: 11 números, os 2 últimos são dígitos verificadores (módulo 11), na mesma variante do Python (cadastros.py).
  * 1º: pesos 9..1; resto ≥ 10 vira 0 e dá desconto 2 no 2º. 2º: pesos 1..9; resto ≥ 10 vira 0, senão resto − desconto
  * (negativo: aquela base não tem CNH válida).
  */
@@ -90,7 +90,7 @@ export function normalizarPlaca(valor: string) {
 const PARTICULAS = new Set(["de", "da", "das", "do", "dos", "e"]);
 const capitalizar = (palavra: string) => palavra.charAt(0).toLocaleUpperCase("pt-BR") + palavra.slice(1).toLocaleLowerCase("pt-BR");
 
-/** Nome nos relatórios sugerido (MOT-03): "Carlos Menezes" → "Carlos M.". */
+/** Nome nos relatórios sugerido (MOT-03): "Pedro Santos" → "Pedro S.". */
 export function nomeCurto(nomeCompleto: string) {
   const partes = nomeCompleto.trim().split(/\s+/).filter(Boolean);
   if (!partes.length) return "";
@@ -205,7 +205,7 @@ export interface TermoParaFrase {
 
 /**
  * Situação do termo em frase, na janela do motorista:
- * "Assinado em 02/09/2026 · versão 1 · termo-carlos.pdf (212 KB), importado por Marina Lopes em 15/09/2026";
+ * "Assinado em 02/09/2026 · versão 1 · termo-pedro.pdf (212 KB), importado por Maria Santos em 15/09/2026";
  * "Assinado em 02/09/2026 · sem o arquivo do termo"; "Falta registrar. Os vídeos ficam trancados." (em alarme).
  */
 export function fraseDoTermo(termo: TermoParaFrase): { texto: string; alarme: boolean } {

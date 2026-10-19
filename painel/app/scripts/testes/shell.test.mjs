@@ -248,7 +248,8 @@ test("ESC-02 texto e texto secundário com contraste de 4,5:1 ou mais sobre o fu
   }
 });
 
-const demo = JSON.parse(ler("src", "content", "demo.json"));
+// Spec 030: a viagem de exemplo mora só nos testes (fixture), para as regras do vídeo continuarem conferidas.
+const demo = JSON.parse(ler("scripts", "testes", "fixtures", "demo.json"));
 const CAMPOS_DO_VIDEO = ["Início", "Fim", "Duração", "Câmera", "Caixa", "Coletado em", "Fica guardado até", "Situação"];
 
 test("VID-01 todo momento tem o campo Vídeo; com vídeo, a janela mostra os 8 campos; sem vídeo, diz o motivo", () => {

@@ -1,11 +1,13 @@
-"""RotaGuard Teste: o script da caixa num app, para testar a detecção com a câmera de qualquer computador (spec 010).
+"""RotaGuard Script (antes RotaGuard Teste, spec 031): o script da caixa num app, para testar a detecção com a câmera de qualquer computador (spec 010).
 
-Sem argumentos abre a tela de início. Com "--monitor" (ou com qualquer argumento) roda o monitoramento com esses
-argumentos, no mesmo formato do run_monitor.py. A tela de início chama o próprio executável com "--monitor" num
-processo separado, para a janela do OpenCV e a do Tkinter não disputarem a linha principal (exigência do macOS).
+Sem argumentos abre a tela nova (spec 023): uma janela HTML do pywebview (sem ele, o navegador padrão) servida por um
+servidor só em 127.0.0.1, com o monitoramento numa thread deste processo e a malha do rosto desenhada no vídeo.
+Com "--monitor" (ou com qualquer argumento) roda o monitoramento direto, no mesmo formato do run_monitor.py.
+"--janela-opencv" sozinho roda o teste na janela antiga do OpenCV, com as opções padrão do app.
 
 Exemplos fora do pacote:
   python caixa/app_teste.py
+  python caixa/app_teste.py --janela-opencv
   python caixa/app_teste.py --monitor --camera 0 --window --sem-servidor
 """
 from __future__ import annotations
@@ -20,15 +22,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-import textos_legais
-
-NOME_APP = "RotaGuard Teste"
+NOME_APP = "RotaGuard Script"
 ROTULO_LEGAL = "Privacidade, LGPD e termos"
 ARQUIVO_REGISTRO = "registro-teste.log"
 CAMERAS = ("Automática (recomendado)", "Câmera 1", "Câmera 2", "Câmera 3", "Câmera 4")
 # Sem imagem por 15 s o teste termina com aviso, em vez de ficar esperando sem janela.
 ESPERA_CAMERA_S = 15
-SAIDA_SEM_CAMERA = 3  # o mesmo de run_monitor.SAIDA_SEM_CAMERA; a tela não importa o monitor
+SAIDA_SEM_CAMERA = 3  # o mesmo de run_monitor.SAIDA_SEM_CAMERA; este arquivo não importa o monitor no início
 FASES = {
     "camera": "Câmera encontrada. Abrindo a janela do teste…",
     "rodando": "Teste em andamento. Na janela da câmera: Q ou Esc encerra, C recalibra.",
@@ -42,6 +42,8 @@ class OpcoesTeste:
     som: bool = True
     calibracao_rapida: bool = True
     camera_ir: str = "auto"
+    # Frequência cardíaca pela câmera (spec 022): ligada no app de teste, desligada na caixa.
+    cardio: bool = True
 
 
 def pasta_dados(sistema: str | None = None, ambiente: Mapping[str, str] | None = None, home: Path | None = None) -> Path:
@@ -51,22 +53,24 @@ def pasta_dados(sistema: str | None = None, ambiente: Mapping[str, str] | None =
     home = Path.home() if home is None else home
     if sistema.startswith("win"):
         base = Path(ambiente["LOCALAPPDATA"]) if ambiente.get("LOCALAPPDATA") else home / "AppData" / "Local"
-        return base / "RotaGuard" / "Teste"
+        return base / "RotaGuard" / "Script"
     if sistema == "darwin":
-        return home / "Library" / "Application Support" / "RotaGuard" / "Teste"
+        return home / "Library" / "Application Support" / "RotaGuard" / "Script"
     base = Path(ambiente["XDG_DATA_HOME"]) if ambiente.get("XDG_DATA_HOME") else home / ".local" / "share"
-    return base / "rotaguard" / "teste"
+    return base / "rotaguard" / "script"
 
 
-def argumentos_monitor(opcoes: OpcoesTeste, pasta: Path) -> list[str]:
+def argumentos_monitor(opcoes: OpcoesTeste, pasta: Path, janela: bool = True) -> list[str]:
+    """Linha do run_monitor para as opções do app. janela=False: a tela nova mostra o vídeo, sem janela do OpenCV."""
     argumentos = [
         "--camera", str(opcoes.camera),
-        "--window",
+        "--window" if janela else "--no-window",
         "--sem-servidor",
         "--data-dir", str(pasta),
         "--driver-key", "teste",
         "--camera-ir", opcoes.camera_ir,
         "--espera-camera", str(ESPERA_CAMERA_S),
+        "--cardio" if opcoes.cardio else "--sem-cardio",
     ]
     if not opcoes.celular:
         argumentos.append("--sem-celular")
@@ -99,7 +103,7 @@ def mensagem_saida(codigo: int) -> str:
 
 
 def fase_do_registro(texto: str) -> str | None:
-    """Em que ponto está o teste, pelo registro escrito desde o clique em Iniciar."""
+    """Em que ponto está o teste, pelo registro escrito desde o clique em Iniciar (monitor em outro processo)."""
     if "Monitoramento iniciado" in texto:
         return "rodando"
     if "Câmera aberta" in texto or "Câmera encontrada" in texto:
@@ -150,16 +154,21 @@ def configurar_registro(pasta: Path) -> Path:
     return caminho
 
 
-def rodar_monitor(argumentos: list[str]) -> int:
-    pasta = pasta_do_argumento(argumentos)
-    if pasta is None:
-        pasta = pasta_dados()
-        argumentos = [*argumentos, "--data-dir", str(pasta)]
+def preparar_registro(pasta: Path) -> Path:
     caminho = configurar_registro(pasta)
     if sys.stdout is None or sys.stderr is None:
         fluxo = open(caminho, "a", encoding="utf-8", buffering=1)  # noqa: SIM115 - fica aberto até o processo sair
         sys.stdout = sys.stdout or fluxo
         sys.stderr = sys.stderr or fluxo
+    return caminho
+
+
+def rodar_monitor(argumentos: list[str]) -> int:
+    pasta = pasta_do_argumento(argumentos)
+    if pasta is None:
+        pasta = pasta_dados_do_app()
+        argumentos = [*argumentos, "--data-dir", str(pasta)]
+    preparar_registro(pasta)
     import run_monitor
 
     return int(run_monitor.main(argumentos) or 0)
@@ -192,10 +201,31 @@ def avisos_de_terceiros() -> str:
     return ""
 
 
+def migrar_pasta_antiga(nova: Path) -> bool:
+    """Spec 031 (NOM-04): o app se chamava RotaGuard Teste e guardava tudo em .../RotaGuard/Teste. Se só a pasta antiga
+    existe, ela vira a nova (eventos, resumos, trechos e a conexão com a empresa vão juntos). Com as duas, nada muda.
+    Falha (pasta em uso, sem permissão) nunca impede o app de abrir: ele segue com a pasta nova."""
+    antiga = nova.with_name("teste" if nova.name.islower() else "Teste")
+    try:
+        if nova.exists() or not antiga.is_dir():
+            return False
+        os.replace(antiga, nova)
+        return True
+    except OSError:
+        return False
+
+
+def pasta_dados_do_app() -> Path:
+    """Pasta de dados de verdade (não nos testes): já com a pasta antiga trazida para o nome novo."""
+    pasta = pasta_dados()
+    migrar_pasta_antiga(pasta)
+    return pasta
+
+
 def apagar_dados(pasta: Path) -> int:
-    """Eliminação dos dados (LGPD, art. 18): apaga eventos, registro, sirene e perfis da pasta do teste.
-    Só aceita a pasta do app (.../RotaGuard/Teste ou .../rotaguard/teste), que continua existindo, vazia."""
-    if pasta.name.lower() != "teste" or pasta.parent.name.lower() != "rotaguard":
+    """Eliminação dos dados (LGPD, art. 18): apaga eventos, registro, sirene, resumos e perfis da pasta do teste.
+    Só aceita a pasta do app (.../RotaGuard/Script, ou a antiga .../RotaGuard/Teste), que continua existindo, vazia."""
+    if pasta.name.lower() not in ("script", "teste") or pasta.parent.name.lower() != "rotaguard":
         raise ValueError(f"pasta inesperada para apagar: {pasta}")
     if not pasta.exists():
         return 0
@@ -214,223 +244,32 @@ def caminho_recurso(nome: str) -> Path:
     return base / nome
 
 
-class TelaInicio:
-    VERDE = "#103e31"
-    LIMA = "#d5f669"
-    PAPEL = "#fafcf7"
-    CINZA = "#5c6a59"
+def abrir_tela_teste(pasta: Path | None = None) -> int:
+    """Tela nova (spec 023). O registro vai para registro-teste.log, como no monitor."""
+    pasta = pasta_dados_do_app() if pasta is None else pasta
+    preparar_registro(pasta)
+    from tela_teste.app import executar
 
-    def __init__(self, tk, ttk, filedialog, messagebox):
-        self.tk, self.ttk, self.filedialog, self.messagebox = tk, ttk, filedialog, messagebox
-        self.processo: subprocess.Popen | None = None
-        self._janela_legal = None
-        self._inicio_registro = 0
-        self._fase: str | None = None
-        self.pasta = pasta_dados()
-        self.raiz = tk.Tk()
-        self.raiz.title(NOME_APP)
-        self.raiz.configure(bg=self.PAPEL, padx=26, pady=22)
-        self.raiz.resizable(False, False)
-        icone = caminho_recurso("rotaguard.png")
-        if icone.exists():
-            try:
-                self._icone = tk.PhotoImage(file=str(icone))
-                self.raiz.iconphoto(True, self._icone)
-            except tk.TclError:
-                pass
-        self.camera = tk.StringVar(value=CAMERAS[0])
-        self.celular = tk.BooleanVar(value=True)
-        self.som = tk.BooleanVar(value=True)
-        self.calibracao_rapida = tk.BooleanVar(value=True)
-        self.camera_ir = tk.StringVar(value="auto")
-        self.status = tk.StringVar(value="Pronto para testar.")
-        self._montar()
-        self.raiz.protocol("WM_DELETE_WINDOW", self._fechar)
-
-    def _rotulo(self, pai, texto, tamanho=10, cor=None, negrito=False, **opcoes):
-        fonte = ("Segoe UI" if sys.platform.startswith("win") else "Helvetica", tamanho, "bold" if negrito else "normal")
-        return self.tk.Label(pai, text=texto, font=fonte, bg=self.PAPEL, fg=cor or self.VERDE, justify="left", **opcoes)
-
-    def _montar(self):
-        tk = self.tk
-        self._rotulo(self.raiz, "rotaguard", 22, negrito=True).grid(row=0, column=0, columnspan=3, sticky="w")
-        self._rotulo(self.raiz, "Teste da câmera neste computador", 11, cor=self.CINZA).grid(
-            row=1, column=0, columnspan=3, sticky="w", pady=(0, 14))
-        self._rotulo(
-            self.raiz,
-            "Roda o script do RotaGuard com a câmera deste computador: sinais de sono e uso de celular, "
-            "com alarme sonoro. Nada é enviado para servidor.",
-            10, cor=self.CINZA, wraplength=400,
-        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 16))
-
-        self._rotulo(self.raiz, "Câmera", negrito=True).grid(row=3, column=0, sticky="w")
-        self.lista_cameras = self.ttk.Combobox(self.raiz, textvariable=self.camera, values=CAMERAS, width=28)
-        self.lista_cameras.grid(row=3, column=1, sticky="w", padx=(10, 0))
-        tk.Button(self.raiz, text="Vídeo gravado…", command=self._escolher_video, relief="flat", bg="#e7ede3",
-                  fg=self.VERDE, activebackground=self.LIMA, padx=8).grid(row=3, column=2, sticky="w", padx=(8, 0))
-
-        linha = 4
-        for texto, variavel in (("Detectar uso de celular", self.celular), ("Som do alarme", self.som),
-                                ("Calibração rápida (1 a 2 min)", self.calibracao_rapida)):
-            tk.Checkbutton(self.raiz, text=texto, variable=variavel, bg=self.PAPEL, fg=self.VERDE,
-                           activebackground=self.PAPEL, selectcolor="white", anchor="w").grid(
-                row=linha, column=0, columnspan=3, sticky="w", pady=(8 if linha == 4 else 2, 0))
-            linha += 1
-        self._rotulo(self.raiz, "Câmera infravermelha").grid(row=linha, column=0, sticky="w", pady=(8, 0))
-        self.ttk.Combobox(self.raiz, textvariable=self.camera_ir, values=("auto", "sim", "nao"), width=8,
-                          state="readonly").grid(row=linha, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
-        linha += 1
-
-        self.botao = tk.Button(self.raiz, text="Iniciar teste  ↗", command=self._iniciar, bg=self.VERDE, fg=self.PAPEL,
-                               activebackground="#285641", activeforeground=self.PAPEL, relief="flat",
-                               font=("Segoe UI" if sys.platform.startswith("win") else "Helvetica", 11, "bold"),
-                               padx=16, pady=10, cursor="hand2")
-        self.botao.grid(row=linha, column=0, columnspan=3, sticky="we", pady=(20, 6))
-        linha += 1
-        self._rotulo(self.raiz, "Na janela da câmera: Q ou Esc encerra · C recalibra", 9, cor=self.CINZA).grid(
-            row=linha, column=0, columnspan=3, sticky="w")
-        linha += 1
-        self._rotulo(self.raiz, "", 10, textvariable=self.status, wraplength=400).grid(
-            row=linha, column=0, columnspan=3, sticky="w", pady=(12, 4))
-        linha += 1
-        self.detalhes = tk.Text(self.raiz, height=8, width=58, font=("Consolas" if sys.platform.startswith("win") else "Menlo", 8),
-                                bg="#f0f4ed", fg=self.VERDE, relief="flat", wrap="word")
-        self.detalhes.grid(row=linha, column=0, columnspan=3, sticky="we")
-        self.detalhes.grid_remove()
-        linha += 1
-        rodape = tk.Frame(self.raiz, bg=self.PAPEL)
-        rodape.grid(row=linha, column=0, columnspan=3, sticky="we", pady=(8, 0))
-        for texto, comando, lado in (("Abrir pasta de registros", lambda: abrir_pasta(self.pasta), "left"),
-                                     (ROTULO_LEGAL, self._abrir_legal, "right")):
-            tk.Button(rodape, text=texto, command=comando, relief="flat", bg=self.PAPEL, fg=self.VERDE,
-                      activebackground=self.LIMA, cursor="hand2").pack(side=lado)
-
-    def _abrir_legal(self):
-        """Seção só para consulta (pedido de 14/09/2026): nada aqui bloqueia ou condiciona o uso do app."""
-        if self._janela_legal is not None and self._janela_legal.winfo_exists():
-            self._janela_legal.lift()
-            return
-        tk, ttk = self.tk, self.ttk
-        janela = self._janela_legal = tk.Toplevel(self.raiz)
-        janela.title(f"{NOME_APP} · {ROTULO_LEGAL}")
-        janela.configure(bg=self.PAPEL, padx=16, pady=14)
-        janela.geometry("760x580")
-        abas = ttk.Notebook(janela)
-        abas.pack(fill="both", expand=True)
-        fonte = ("Segoe UI" if sys.platform.startswith("win") else "Helvetica", 10)
-        for titulo, conteudo in textos_legais.secoes(self.pasta, avisos_de_terceiros()):
-            quadro = tk.Frame(abas, bg=self.PAPEL)
-            barra = tk.Scrollbar(quadro)
-            barra.pack(side="right", fill="y")
-            texto = tk.Text(quadro, wrap="word", font=fonte, bg="white", fg="#1d2a24", relief="flat", padx=14, pady=12,
-                            yscrollcommand=barra.set)
-            texto.insert("1.0", conteudo)
-            texto.configure(state="disabled")
-            texto.pack(side="left", fill="both", expand=True)
-            barra.configure(command=texto.yview)
-            abas.add(quadro, text=titulo)
-        botoes = tk.Frame(janela, bg=self.PAPEL)
-        botoes.pack(fill="x", pady=(10, 0))
-        for texto, comando in (("Abrir pasta de dados", lambda: abrir_pasta(self.pasta)),
-                               ("Apagar dados deste computador", self._apagar_dados)):
-            tk.Button(botoes, text=texto, command=comando, relief="flat", bg="#e7ede3", fg=self.VERDE,
-                      activebackground=self.LIMA, padx=10, cursor="hand2").pack(side="left", padx=(0, 8))
-        tk.Button(botoes, text="Fechar", command=janela.destroy, relief="flat", bg=self.VERDE, fg=self.PAPEL,
-                  activebackground="#285641", activeforeground=self.PAPEL, padx=14, cursor="hand2").pack(side="right")
-
-    def _apagar_dados(self):
-        janela = self._janela_legal
-        pai = janela if janela is not None and janela.winfo_exists() else self.raiz
-        if self.processo is not None and self.processo.poll() is None:
-            self.messagebox.showinfo(NOME_APP, "Encerre o teste antes de apagar os dados.", parent=pai)
-            return
-        if not self.messagebox.askyesno(NOME_APP, f"Apagar eventos, registro e demais arquivos do teste em\n{self.pasta}?",
-                                        parent=pai):
-            return
-        try:
-            removidos = apagar_dados(self.pasta)
-        except (OSError, ValueError) as exc:
-            self.messagebox.showerror(NOME_APP, f"Não foi possível apagar: {exc}", parent=pai)
-            return
-        self.messagebox.showinfo(NOME_APP, f"Pronto: {removidos} arquivo(s) apagado(s).", parent=pai)
-
-    def _escolher_video(self):
-        caminho = self.filedialog.askopenfilename(
-            title="Escolher vídeo gravado",
-            filetypes=[("Vídeos", "*.mp4 *.avi *.mov *.mkv *.webm"), ("Todos os arquivos", "*.*")],
-        )
-        if caminho:
-            self.camera.set(caminho)
-
-    def _opcoes(self) -> OpcoesTeste:
-        return OpcoesTeste(camera=camera_escolhida(self.camera.get()), celular=self.celular.get(), som=self.som.get(),
-                           calibracao_rapida=self.calibracao_rapida.get(), camera_ir=self.camera_ir.get())
-
-    def _iniciar(self):
-        if self.processo is not None:
-            return
-        registro = self.pasta / ARQUIVO_REGISTRO
-        self._inicio_registro = registro.stat().st_size if registro.exists() else 0
-        self._fase = None
-        comando = comando_monitor(argumentos_monitor(self._opcoes(), self.pasta))
-        opcoes = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform.startswith("win") else {}
-        try:
-            self.processo = subprocess.Popen(comando, **opcoes)
-        except OSError as exc:
-            self.status.set(f"Não foi possível iniciar o teste: {exc}")
-            return
-        self.detalhes.grid_remove()
-        self.botao.configure(state="disabled", text="Teste em andamento…")
-        self.status.set("Procurando a câmera e carregando a detecção. A janela do teste abre em alguns segundos.")
-        self.raiz.after(500, self._acompanhar)
-
-    def _acompanhar(self):
-        if self.processo is None:
-            return
-        codigo = self.processo.poll()
-        if codigo is None:
-            fase = fase_do_registro(texto_desde(self.pasta / ARQUIVO_REGISTRO, self._inicio_registro))
-            if fase is not None and fase != self._fase:
-                self._fase = fase
-                self.status.set(FASES[fase])
-            self.raiz.after(500, self._acompanhar)
-            return
-        self.processo = None
-        self.botao.configure(state="normal", text="Iniciar teste  ↗")
-        self.status.set(mensagem_saida(codigo))
-        if codigo == 0:
-            return
-        self.detalhes.configure(state="normal")
-        self.detalhes.delete("1.0", "end")
-        self.detalhes.insert("1.0", ultimas_linhas(self.pasta / ARQUIVO_REGISTRO) or "Registro vazio.")
-        self.detalhes.configure(state="disabled")
-        self.detalhes.grid()
-
-    def _fechar(self):
-        if self.processo is not None and self.processo.poll() is None:
-            self.processo.terminate()
-        self.raiz.destroy()
-
-    def executar(self):
-        self.raiz.mainloop()
+    return executar(pasta)
 
 
-def abrir_tela_inicio() -> int:
-    try:
-        import tkinter as tk
-        from tkinter import filedialog, messagebox, ttk
-    except ImportError:
-        print("Tela de início indisponível (Tkinter ausente). Use: --monitor --camera 0 --window --sem-servidor")
-        return 2
-    TelaInicio(tk, ttk, filedialog, messagebox).executar()
-    return 0
+def verificar_tela(pasta: Path) -> int:
+    """Teste de fumaça da tela (build.py, TEL-16): sobe o servidor sem janela e confere as rotas. 0 = tudo certo."""
+    preparar_registro(pasta)
+    from tela_teste.app import verificar
+
+    return verificar(pasta)
 
 
 def main(argv: list[str] | None = None, rodar: Callable[[list[str]], int] = rodar_monitor,
-         tela: Callable[[], int] = abrir_tela_inicio) -> int:
+         tela: Callable[[], int] = abrir_tela_teste, verificar: Callable[[Path], int] = verificar_tela) -> int:
     argumentos = sys.argv[1:] if argv is None else list(argv)
     if not argumentos:
         return tela()
+    if argumentos[0] == "--verificar-tela":
+        return verificar(pasta_do_argumento(argumentos[1:]) or pasta_dados())
+    if argumentos == ["--janela-opencv"]:
+        return rodar(argumentos_monitor(OpcoesTeste(), pasta_dados_do_app(), janela=True))
     if argumentos[0] == "--monitor":
         argumentos = argumentos[1:]
     return rodar(argumentos)

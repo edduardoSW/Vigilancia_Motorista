@@ -24,6 +24,8 @@ import contas  # noqa: E402
 from dados import Banco, iso_utc  # noqa: E402
 from ponte import Ponte  # noqa: E402
 
+import demonstracao_antiga  # noqa: E402
+
 checks = 0
 CUSTO_TESTE = (2**4, 8, 1)
 T0 = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc).timestamp()
@@ -35,6 +37,7 @@ SENHA_ERRADA = "frase errada de teste"
 SENHA_COPIA = "frase da copia de teste"
 SENHA_NO_USUARIO = "frase secreta digitada no campo usuario"
 ADMIN = {"nome": "Marina Lopes", "usuario": "marina.lopes", "senha": SENHA_ADM}
+EMPRESA = "Transportes Lima"  # spec 030: ativar sem arquivo cria a empresa com o nome digitado
 B64 = base64.b64encode(bytes(range(32))).decode()
 
 
@@ -133,7 +136,7 @@ def caixa_alterada(indice, **mudar):
     return json.dumps(arquivo)
 
 
-# ENT-01 · sem banco: tela de ativação; sem arquivo da empresa, só a demonstração abre
+# ENT-01 · sem banco: tela de ativação; sem arquivo da empresa, ativa com o nome da empresa (spec 030)
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
@@ -147,15 +150,15 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         resposta = erro(ponte.ativar_com_arquivo(vazio, ADMIN), "invalido", "ENT-01 sem arquivo da empresa")
         assert resposta["erro"] == contas.MENSAGEM_ARQUIVO_INVALIDO, f"ENT-01 mensagem do arquivo: {resposta}"
     assert dados(ponte.estado())["ativado"] is False, "ENT-01 arquivo vazio não ativa"
-    codigo = dados(ponte.ativar_demonstracao(ADMIN))["codigo_recuperacao"]
+    codigo = dados(ponte.ativar_local(EMPRESA, ADMIN))["codigo_recuperacao"]
     estado = dados(ponte.estado())
-    assert estado["ativado"] is True and estado["modo"] == "demonstracao", f"ENT-01 demonstração ativa: {estado}"
-    assert estado["empresa"] == {"nome": "Viação Demonstração"} and estado["sessao"]["usuario"] == "marina.lopes", \
-        f"ENT-01 demonstração já entra com o administrador: {estado}"
-    erro(ponte.ativar_demonstracao(ADMIN), "conflito", "ENT-01 ativar de novo")
+    assert estado["ativado"] is True and estado["modo"] == "local", f"ENT-01 ativado sem arquivo: {estado}"
+    assert estado["empresa"] == {"nome": EMPRESA} and estado["sessao"]["usuario"] == "marina.lopes", \
+        f"ENT-01 ativar já entra com o administrador: {estado}"
+    erro(ponte.ativar_local(EMPRESA, ADMIN), "conflito", "ENT-01 ativar de novo")
     erro(ponte.ativar_com_arquivo(json.dumps(chaveiro()), ADMIN), "conflito", "ENT-01 arquivo depois de ativado")
     fechar(ponte)
-ok("ENT-01 sem banco pede ativação; entrar e cadastros recusados; sem arquivo só a demonstração ativa (uma vez)")
+ok("ENT-01 sem banco pede ativação; entrar e cadastros recusados; sem arquivo ativa com o nome da empresa (uma vez)")
 
 # ENT-02 · arquivo inválido ou alterado é recusado e nada é gravado
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
@@ -184,7 +187,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     assert estado["modo"] == "empresa" and estado["empresa"] == {"nome": "Empresa 7"}, f"ENT-02 empresa: {estado}"
     assert ponte._n().banco.meta_ler("empresa_id") == "7" and contar(ponte, "caixas") == 2, "ENT-02 caixas do arquivo"
     assert dados(ponte.decisoes_listar()) == [] and contar(ponte, "motoristas") == 0, \
-        "ENT-02 ativar com arquivo não traz dados de demonstração"
+        "ENT-02 ativar com arquivo só traz as caixas do arquivo"
     fechar(ponte)
 print("-- ENT-02 parcial: o formato rotaguard-chaveiro-coleta/1 (spec 003, §4.3) não tem assinatura da RotaGuard nem "
       "nome da empresa; arquivo alterado com estrutura válida ou de outra empresa não tem como ser detectado")
@@ -204,7 +207,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
     respostas = [ponte.estado()]
-    codigo = dados(ponte.ativar_demonstracao(ADMIN))["codigo_recuperacao"]
+    codigo = dados(ponte.ativar_local(EMPRESA, ADMIN))["codigo_recuperacao"]
     novo = dados(ponte.equipe_adicionar({"nome": "Paulo Reis", "usuario": "paulo.reis", "funcao": "supervisor"}))
     temporaria = novo["senha_temporaria"]
     respostas += [ponte.sair(), ponte.entrar("paulo.reis", SENHA_ERRADA), ponte.entrar("paulo.reis", temporaria),
@@ -238,12 +241,12 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                             ("Password123", contas.MENSAGEM_SENHA_COMUM), ("SENHA123456", contas.MENSAGEM_SENHA_COMUM),
                             ("aaaaaaaaaaaa", contas.MENSAGEM_SENHA_COMUM),
                             ("marina.lopes-2026", contas.MENSAGEM_SENHA_COMUM)):
-        resposta = erro(ponte.ativar_demonstracao({**ADMIN, "senha": senha}), "invalido", f"ENT-04 {senha!r}")
+        resposta = erro(ponte.ativar_local(EMPRESA, {**ADMIN, "senha": senha}), "invalido", f"ENT-04 {senha!r}")
         assert resposta["erro"] == mensagem and resposta["campo"] == "senha", f"ENT-04 {senha!r}: {resposta}"
-    longa = erro(ponte.ativar_demonstracao({**ADMIN, "senha": "x1" * 101}), "invalido", "ENT-04 senha enorme")
+    longa = erro(ponte.ativar_local(EMPRESA, {**ADMIN, "senha": "x1" * 101}), "invalido", "ENT-04 senha enorme")
     assert "200" in longa["erro"], longa
     assert dados(ponte.estado())["ativado"] is False and contar(ponte, "usuarios") == 0, "ENT-04 nada gravado"
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     resposta = erro(ponte.trocar_senha(SENHA_ADM, "curta"), "invalido", "ENT-04 troca curta")
     assert resposta["campo"] == "nova" and resposta["erro"] == contas.MENSAGEM_SENHA_CURTA, resposta
     assert erro(ponte.trocar_senha(SENHA_ADM, SENHA_ADM), "invalido")["campo"] == "nova", "ENT-04 nova igual à atual"
@@ -254,7 +257,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     resposta = erro(ponte.motoristas_listar(), "sem_permissao", "ENT-04 senha temporária sem trocar")
     assert resposta["campo"] == "nova", resposta
     dados(ponte.trocar_senha(novo["senha_temporaria"], SENHA_CON))
-    assert dados(ponte.estado())["sessao"]["trocar_senha"] is False and dados(ponte.motoristas_listar()), \
+    assert dados(ponte.estado())["sessao"]["trocar_senha"] is False and dados(ponte.motoristas_listar()) == [], \
         "ENT-04 depois de trocar a senha a pessoa usa o painel"
     ponte.sair()
     resposta = erro(ponte.recuperar_acesso("marina.lopes", "AAAAA", "curta"), "invalido", "ENT-04 recuperar curta")
@@ -267,7 +270,7 @@ ok("ENT-04 senha curta, comum, repetida ou com o usuário é recusada com frase 
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     ponte.sair()
     for numero in range(1, 5):
         resposta = erro(ponte.entrar("marina.lopes", SENHA_ERRADA), "invalido", f"ENT-05 {numero}º erro")
@@ -307,7 +310,7 @@ ok("ENT-05 relógio falso: 4 erros sem espera, 5º com 30 s (nem a senha certa p
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     ponte.sair()
     erro(ponte.entrar(SENHA_NO_USUARIO, SENHA_ERRADA), "invalido", "ENT-03 senha no campo de usuário ao entrar")
     erro(ponte.recuperar_acesso(SENHA_NO_USUARIO, "AAAAA-BBBBB", "frase nova de teste cinco"), "invalido",
@@ -327,7 +330,7 @@ ok("ENT-03 senha digitada por engano no campo de usuário (entrar e recuperar ac
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     supervisor_id = criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
     dados(ponte.equipe_alterar(supervisor_id, {"ativo": False}))
     ponte.sair()
@@ -347,7 +350,7 @@ ok("ENT-06 desativado recebe a mesma resposta com senha certa ou errada, sem esp
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     primeira = nova_ponte(tmp, t)
-    dados(primeira.ativar_demonstracao(ADMIN))
+    dados(primeira.ativar_local(EMPRESA, ADMIN))
     assert dados(primeira.estado())["sessao"]["usuario"] == "marina.lopes", "ENT-07 entrou na ativação"
     fechar(primeira)
     reaberta = nova_ponte(tmp, t)
@@ -399,17 +402,25 @@ def chamadas(ids):
         ("config_salvar", "configuracoes", ("acesso", {"bloqueio_min": 15})),
         ("copia_fazer", "configuracoes", (SENHA_COPIA,)),
         ("primeiros_passos_esconder", "configuracoes", (False,)),
+        # Spec 026: central e testes à distância. Sem rede: endereço vazio é recusado antes de qualquer pedido.
+        ("central_estado", "ver_viagens", ()),
+        ("remotos_listar", "ver_viagens", ()),
+        ("remotos_sessao", "ver_viagens", ("0" * 32,)),
+        ("remotos_trecho", "ver_video", ("0" * 32,)),
+        ("central_conectar", "configuracoes", ("", "gestor@empresa.test", "senha-que-nao-sai-daqui")),
+        ("central_desconectar", "configuracoes", ()),
+        ("central_gerar_codigo", "configuracoes", (None,)),
     ]
 
 
-SEM_ACAO = {"estado", "ativar_demonstracao", "ativar_com_arquivo", "entrar", "sair", "bloquear", "tocar", "desbloquear",
+SEM_ACAO = {"estado", "ativar_local", "ativar_com_arquivo", "entrar", "sair", "bloquear", "tocar", "desbloquear",
             "trocar_senha", "recuperar_acesso", "preferencias_salvar"}  # preferências: qualquer sessão (spec 019, PRF-01)
 
 # ENT-08 · bloqueio depois do tempo configurado; desbloquear exige a senha de quem entrou
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
     t[0] += 15 * 60 - 1
     assert dados(ponte.estado())["bloqueado"] is False, "ENT-08 14 min 59 s ainda aberto"
@@ -447,13 +458,13 @@ ok("ENT-08 relógio falso: bloqueia com 15 min sem tocar (e com 5 min configurad
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    codigo = dados(ponte.ativar_demonstracao(ADMIN))["codigo_recuperacao"]
+    codigo = dados(ponte.ativar_local(EMPRESA, ADMIN))["codigo_recuperacao"]
     assert re.fullmatch(r"[A-Z2-9]{5}(-[A-Z2-9]{5}){3}", codigo), f"ENT-09 formato do código: {codigo}"
     guardado = ponte._n().banco.meta_ler("recuperacao_hash")
     assert guardado.startswith("scrypt$") and contas.normalizar_codigo(codigo) not in guardado, "ENT-09 só hash"
     outras = json.dumps([ponte.estado(), ponte.equipe_listar(), ponte.atividades_listar({}), ponte.config_ler()])
     assert codigo not in outras and contas.normalizar_codigo(codigo) not in outras, "ENT-09 código aparece uma vez só"
-    erro(ponte.ativar_demonstracao(ADMIN), "conflito", "ENT-09 não dá para pedir o código de novo")
+    erro(ponte.ativar_local(EMPRESA, ADMIN), "conflito", "ENT-09 não dá para pedir o código de novo")
     criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
     ponte.sair()
     nova = "frase nova de recuperacao"
@@ -487,7 +498,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     destinos = []
     ponte = nova_ponte(tmp, t, destinos)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     ids = {"supervisor": criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP),
            "consulta": criar_pessoa(ponte, "Ana Souza", "ana.souza", "consulta", SENHA_CON)}
     publicos = {nome for nome in dir(ponte) if not nome.startswith("_")}
@@ -513,17 +524,18 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             assert len(destinos) == dialogos, f"{contexto} abriu o diálogo de salvar sem permissão"
     assert not ponte._falhas, f"EQP-01 falha interna: {ponte._falhas}"
     fechar(ponte)
-ok("EQP-01 administrador, supervisor e consulta × 28 métodos que exigem ação: permitido passa, sem permissão devolve "
+ok("EQP-01 administrador, supervisor e consulta × 35 métodos que exigem ação: permitido passa, sem permissão devolve "
    "sem_permissao e registra 'tentou sem permissão'; nenhum método público fora da matriz")
 
 # EQP-03 · ninguém é apagado; desativar mantém o nome nas revisões; o último administrador ativo fica
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     admin_id = dados(ponte.estado())["sessao"]["id"]
     apagar = [nome for nome in dir(ponte) if any(p in nome for p in ("apagar", "excluir", "remover", "deletar"))]
-    assert apagar == [], f"EQP-03 a ponte não tem como apagar: {apagar}"
+    # Spec 030: a única remoção é interna (sem "_" não chega ao JavaScript) e só tira a demonstração antiga, ao abrir.
+    assert apagar == ["_remover_demonstracao"], f"EQP-03 a ponte não tem como apagar: {apagar}"
     for mudanca, campo in (({"ativo": False}, "ativo"), ({"funcao": "supervisor"}, "funcao"),
                            ({"funcao": "consulta", "ativo": False}, "funcao")):
         resposta = erro(ponte.equipe_alterar(admin_id, mudanca), "conflito", f"EQP-03 último administrador {mudanca}")
@@ -554,7 +566,7 @@ ok("EQP-03 ponte sem método de apagar; desativado continua na equipe e nas revi
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
     entrar_como(ponte, "paulo.reis", SENHA_SUP)
     t[0] += 60
@@ -595,7 +607,7 @@ def ponte_na_pasta(pasta, relogio):
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
     banco = ponte._n().banco
     for sql in ("UPDATE atividades SET acao = 'nada' WHERE id = 1", "DELETE FROM atividades WHERE id = 1"):
@@ -665,7 +677,8 @@ MOTORISTA_NOVO = {"nome": "Pedro Santos", "matricula": "0999", "cnh_numero": "12
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
+    demonstracao_antiga.carregar_na_ponte(ponte)  # motorista m-01 com termo, para o vídeo abrir
     supervisor_id = criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
     marina = "Marina Lopes"
 
@@ -722,7 +735,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     destinos = []
     ponte = nova_ponte(tmp, t, destinos)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
     entrar_como(ponte, "paulo.reis", SENHA_SUP)
     erro(ponte.atividades_exportar(), "sem_permissao", "ATV-03 supervisor não exporta")
@@ -750,11 +763,14 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
     erro(ponte.inicio_resumo(), "sem_sessao", "INI-01 sem sessão")
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     resumo = dados(ponte.inicio_resumo())
-    assert list(resumo) == ["ultima_copia_em", "dias_desde_copia", "primeiros_passos_escondidos"], f"INI-01 {resumo}"
-    assert resumo == {"ultima_copia_em": None, "dias_desde_copia": None, "primeiros_passos_escondidos": False}, \
+    assert list(resumo) == ["ultima_copia_em", "dias_desde_copia", "primeiros_passos_escondidos", "hoje"], \
+        f"INI-01 {resumo}"
+    assert {chave: valor for chave, valor in resumo.items() if chave != "hoje"} == \
+        {"ultima_copia_em": None, "dias_desde_copia": None, "primeiros_passos_escondidos": False}, \
         f"INI-01 sem cópia: {resumo}"
+    assert resumo["hoje"]["testes"] == 0 and resumo["hoje"]["alertas"] == 0, f"SDF-05 números de hoje: {resumo}"
     t[0] += 60  # menos que o bloqueio de 15 min
     dados(ponte.copia_fazer(SENHA_COPIA))
     copia_em = iso_utc(t[0])
@@ -774,7 +790,7 @@ ok("INI-01 inicio_resumo exige sessão; sem cópia nulos; depois da cópia conta
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     criar_pessoa(ponte, "Ana Souza", "ana.souza", "consulta", SENHA_CON)
     for valor in ("sim", 1, None):
         assert erro(ponte.primeiros_passos_esconder(valor), "invalido", f"INI-02 {valor!r}")["campo"] == "esconder"
@@ -807,7 +823,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     ponte = nova_ponte(tmp, t)
     estado = dados(ponte.estado())
     assert list(estado) == ORDEM_ESTADO and estado["texto_maior"] is False, f"CFG-09 sem ativação: {estado}"
-    dados(ponte.ativar_demonstracao(ADMIN))
+    dados(ponte.ativar_local(EMPRESA, ADMIN))
     estado = dados(ponte.estado())
     assert list(estado) == ORDEM_ESTADO and estado["texto_maior"] is False, f"CFG-09 padrão: {estado}"
     dados(ponte.config_salvar("aparencia", {"texto_maior": True}))

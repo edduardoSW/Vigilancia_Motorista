@@ -18,7 +18,9 @@ from backend.auth import SESSION_COOKIE, principal_from_token  # noqa: E402
 from backend.database import Device, SessionLocal, User, init_db  # noqa: E402
 from backend.identifiers import format_phone, normalize_phone  # noqa: E402
 from backend.live import Subscriber, hub  # noqa: E402
-from backend.routes import admin, alerts, auth_routes, device_api, fleet, people, test_mode  # noqa: E402
+from backend.routes import (  # noqa: E402
+    admin, alerts, auth_routes, device_api, fleet, pareamento, people, sessoes, sync_painel, test_mode, trechos,
+)
 from backend.schemas import AppInfoOut, ContactOut  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -50,6 +52,9 @@ class SecurityHeaders:
                 headers.setdefault("Referrer-Policy", "same-origin")
                 headers.setdefault("X-Frame-Options", "DENY")
                 headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+                if path.startswith("/api/"):
+                    # Respostas da API (com sessão, token ou trecho de vídeo) não ficam em cache de ninguém.
+                    headers.setdefault("Cache-Control", "no-store")
                 if not path.startswith(DOCS_PATHS):
                     websocket = f"ws://{host} wss://{host}" if host else ""
                     headers.setdefault("Content-Security-Policy", CSP.format(websocket=websocket))
@@ -80,11 +85,12 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="DriveSafe AI", version=config.APP_VERSION, lifespan=lifespan)
 app.add_middleware(SecurityHeaders)
 for router in (device_api.router, auth_routes.router, admin.router, people.router, fleet.router, alerts.router,
-               test_mode.router):
+               test_mode.router, pareamento.router, sessoes.router, trechos.router, sync_painel.router):
     app.include_router(router)
 
 
 @app.get("/health", include_in_schema=False)
+@app.get("/api/health", include_in_schema=False)  # na VPS só /api/* é publicado (Caddy e monitoramento)
 def health():
     return {"status": "ok", "version": config.APP_VERSION}
 

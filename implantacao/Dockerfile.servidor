@@ -1,10 +1,14 @@
-# Servidor central DriveSafe AI (API + app instalável).
+# Servidor central RotaGuard (API; na VPS só /api/* é publicado pelo Caddy — spec 026).
 # Contexto de build: a raiz do repositório (implantacao/docker-compose.yml, ou na raiz:
 #   docker build -f implantacao/Dockerfile.servidor .).
-FROM python:3.14.7-slim-trixie
+#
+# Dados no volume montado em /app/data: banco (drivesafe.db), trechos de vídeo (trechos/<uid da empresa>/) e o
+# segredo dos códigos de pareamento (segredo-central.key, criado na primeira vez). Nada disso entra na imagem.
+FROM python:3.14.8-slim-trixie
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    DRIVESAFE_TRECHOS_DIR=/app/data/trechos
 
 WORKDIR /app
 
@@ -17,8 +21,9 @@ COPY servidor/manage.py ./servidor/
 COPY painel/webapp ./painel/webapp
 
 RUN useradd --system --uid 10001 --home-dir /app drivesafe \
-    && mkdir -p /app/data \
-    && chown drivesafe /app/data
+    && mkdir -p /app/data/trechos \
+    && chown -R drivesafe /app/data \
+    && chmod 700 /app/data/trechos
 USER drivesafe
 
 WORKDIR /app/servidor
@@ -26,6 +31,6 @@ WORKDIR /app/servidor
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"
 
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -36,7 +36,9 @@ class EventStore:
         self._conn = sqlite3.connect(str(self.path), timeout=10, check_same_thread=False, isolation_level=None)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA synchronous=NORMAL")  # menos gravações no cartão SD, seguro com WAL
+        # FULL (spec 027, FIL-01): com WAL, NORMAL mantém a base íntegra num corte de energia, mas pode perder o último
+        # evento já confirmado. Eventos são raros e o FULL custa ~2 ms por INSERT (medido na pesquisa de 19/10/2026).
+        self._conn.execute("PRAGMA synchronous=FULL")
         strict = " STRICT" if sqlite3.sqlite_version_info >= (3, 37, 0) else ""
         self._conn.execute(
             f"""

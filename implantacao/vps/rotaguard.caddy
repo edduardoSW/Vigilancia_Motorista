@@ -1,0 +1,38 @@
+# rotaguard.acexpartners.com.br — site e central de dados do RotaGuard (specs 021 e 026).
+# Containers na rede `edge` (projeto /root/rotaguard). O proxy usa o nome do SERVIÇO (único na VPS), não o do
+# container: o nome do container muda pelo CONTAINER_PREFIXO do .env e este arquivo não precisa mudar.
+#
+# DNS: registro A `rotaguard` -> 187.127.41.22 na zona da Hostinger (NS dns-parking.com), sem AAAA.
+# O domínio raiz acexpartners.com.br continua na Vercel: não mexer.
+#
+# ATIVAR SÓ DEPOIS DE O DNS APONTAR PARA A VPS: antes disso o Caddy tenta emitir o certificado, falha e passa a tentar
+# cada vez mais espaçado. Copiar para /root/edge/conf/sites/, validar e recarregar (README.md desta pasta).
+
+rotaguard.acexpartners.com.br {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Central de dados (spec 026): só a API. O app web antigo do servidor não é publicado.
+	@central path /api/*
+	handle @central {
+		# Trecho de vídeo de até 25 MB (PUT /api/trechos/{uid}).
+		request_body {
+			max_size 26MB
+		}
+		reverse_proxy rotaguard_central:8000
+	}
+
+	handle {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy rotaguard_site:3000
+	}
+}

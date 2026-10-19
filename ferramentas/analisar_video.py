@@ -7,7 +7,7 @@ Exemplos:
   python analisar_video.py video_ir.mp4 --camera-ir sim
 
 Gera (ao lado do vídeo ou em --saida), em CSV com vírgula e ponto decimal:
-  <nome>_quadros.csv   medidas quadro a quadro
+  <nome>_quadros.csv   medidas quadro a quadro, com os 52 blendshapes do MediaPipe no fim (nome do modelo; spec 027)
   <nome>_piscadas.csv  cada piscada: início, fim, duração, amplitude, velocidades da pálpebra e AVR
   <nome>_janelas.csv   uma linha por segundo: métricas de janela, z-scores, sinais de ativação e nível de risco
   <nome>_eventos.csv   alertas que o dispositivo teria disparado
@@ -32,6 +32,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "caixa"))  # vision
 
 os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+
+from vision.face import BLENDSHAPE_NAMES as BLENDSHAPE_COLUMNS  # noqa: E402  (DMS-05b: as 52 colunas, na ordem do modelo)
 
 RISK_NAMES = ("normal", "atenção", "alto", "crítico")
 
@@ -78,7 +80,10 @@ def _window_row(t: float, state) -> dict:
 
 
 def _phone_measures(state) -> dict:
-    """Confiança e tamanho da caixa do celular em larguras de rosto, para o avaliar_celular.py."""
+    """Confiança e tamanho da caixa do celular em larguras de rosto, para o avaliar_celular.py, e os números das
+    verificações (fração de pele, fora da mão, confiança na orelha...; spec 028) para calibrar com gravações."""
+    from vision.phone import check_columns
+
     phone, metrics = state.phone, state.metrics
     measures = {"celular_confianca": phone.phone_score, "celular_largura_rosto": None,
                 "celular_altura_rosto": None, "celular_proporcao": None}
@@ -88,6 +93,7 @@ def _phone_measures(state) -> dict:
         face_width = face[2] - face[0]
         measures.update(celular_largura_rosto=(x2 - x1) / face_width, celular_altura_rosto=(y2 - y1) / face_width,
                         celular_proporcao=(y2 - y1) / (x2 - x1) if x2 > x1 else None)
+    measures.update(check_columns(phone))
     return measures
 
 
@@ -199,7 +205,7 @@ def main(argv=None) -> int:
     engine = DriverStateEngine(DrowsinessMonitor(profile=profile, calibrator=calibrator), activation_mode="local",
                                phone=phone, background_baseline=False)
 
-    samples, frame_info, window_rows, events, latencies = [], [], [], [], []
+    samples, frame_info, window_rows, events, latencies, blendshapes = [], [], [], [], [], []
     last_window = None
     calibration_end = None
     index = 0
@@ -218,6 +224,7 @@ def main(argv=None) -> int:
 
             measured = metrics if state.visibility.eyes_ok else mask_eye_signals(metrics)
             samples.append(Sample.from_metrics(measured))
+            blendshapes.append(getattr(metrics, "blendshapes", None) or {})
             if calibrator is not None and calibration_end is None and not state.drowsiness.calibrating:
                 calibration_end = t
             frame_info.append({
@@ -280,15 +287,16 @@ def main(argv=None) -> int:
 
     with open(f"{base}_quadros.csv", "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        extra = list(frame_info[0].keys())
+        extra = list(dict.fromkeys(key for info in frame_info for key in info))  # união, na ordem de chegada
         writer.writerow(["tempo_s", "rosto", "ear", "abertura", "pontuacao_piscada", "prob_olho_aberto",
-                         "boca_aberta", "pitch", "yaw", "distancia_olhos_px", *extra])
-        for sample, openness, info in zip(samples, openness_values, frame_info):
+                         "boca_aberta", "pitch", "yaw", "distancia_olhos_px", *extra, *BLENDSHAPE_COLUMNS])
+        for sample, openness, info, scores in zip(samples, openness_values, frame_info, blendshapes):
             writer.writerow([
                 f"{sample.timestamp:.3f}", int(sample.face_found), _fmt(sample.ear, 4), _fmt(openness),
                 _fmt(sample.blink_score), _fmt(sample.eye_open_prob), _fmt(sample.jaw_open),
                 _fmt(sample.pitch, 1), _fmt(sample.yaw, 1), _fmt(sample.eye_distance_px, 1),
-                *(_fmt(info[name], 1 if name in ("iris_px", "luminancia_olho", "latencia_ms") else 3) for name in extra),
+                *(_fmt(info.get(name), 1 if name in ("iris_px", "luminancia_olho", "latencia_ms") else 3) for name in extra),
+                *(_fmt(scores.get(name), 4) for name in BLENDSHAPE_COLUMNS),
             ])
 
     with open(f"{base}_piscadas.csv", "w", newline="", encoding="utf-8") as handle:

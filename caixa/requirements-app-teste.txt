@@ -1,0 +1,15 @@
+# RotaGuard Script (spec 023): o que a caixa usa + a janela da tela nova (pywebview, com o WebView2 do Windows).
+# Mesmas versões do painel (painel/desktop/requirements.txt). pywebview 6.2.1 é a última estável no PyPI
+# (conferido com `pip index versions pywebview` em 19/10/2026), testada no Python 3.14.5.
+# No Linux, sem GTK ou Qt, a tela abre no navegador padrão: o pywebview não é obrigatório para rodar.
+#   python -m pip install -r caixa/requirements-app-teste.txt pyinstaller==6.22.3
+-r requirements.txt
+pywebview==6.2.1
+bottle==0.13.4
+proxy_tools==0.1.0
+typing_extensions==4.16.0
+# No Windows, o pywebview abre a janela WinForms com o WebView2 pelo .NET Framework (pythonnet)
+pythonnet==3.1.0 ; sys_platform == "win32"
+clr_loader==0.3.1 ; sys_platform == "win32"
+cffi==2.1.1 ; sys_platform == "win32"
+pycparser==3.0 ; sys_platform == "win32"

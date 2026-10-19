@@ -26,7 +26,7 @@ export const SITUACAO_CAIXA: Record<Caixa["situacao"], string> = {
   bloqueada: "Bloqueada pela RotaGuard",
 };
 
-/** "Ônibus 2240": o número do veículo é o nome usado em todo o painel. */
+/** "Ônibus 1020": o número do veículo é o nome usado em todo o painel. */
 export const nomeDoVeiculo = (veiculo: Pick<Veiculo, "tipo" | "numero">) => `${TIPO_VEICULO[veiculo.tipo]} ${veiculo.numero}`;
 
 /** "14/09/2026 às 05:48"; data sem hora fica só com a data. */

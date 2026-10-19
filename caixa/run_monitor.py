@@ -4,15 +4,20 @@ Exemplo:
   python run_monitor.py --server-url http://192.168.0.10:8000
 
 Todas as opções aceitam variáveis de ambiente DRIVESAFE_* (recomendado para o token).
+
+main() monta e roda tudo na linha principal. A tela do app de teste (caixa/tela_teste, spec 023) usa a mesma
+classe Monitoramento numa thread: montar → abrir_camera → rodar → fechar.
 """
 from __future__ import annotations
 
 import argparse
+import inspect
 import logging
 import os
 import re
 import signal
 import sys
+import threading
 from pathlib import Path
 
 # Reduz o log interno do MediaPipe / TensorFlow Lite; precisa vir antes de importá-los.
@@ -98,8 +103,14 @@ def parse_args(argv=None):
     phone.add_argument("--sem-celular", dest="celular", action="store_false", help="desliga a detecção de celular")
     parser.add_argument("--telemetria", default=env("DRIVESAFE_TELEMETRIA_ARQUIVO"),
                         help="arquivo JSON com a velocidade do veículo, escrito por outro processo (DRIVESAFE_TELEMETRIA_ARQUIVO)")
+    cardio = parser.add_mutually_exclusive_group()
+    cardio.add_argument("--cardio", dest="cardio", action="store_true", default=env_bool("DRIVESAFE_CARDIO", False),
+                        help="estima a frequência cardíaca pela câmera (spec 022): ligado no app de teste, desligado "
+                             "na caixa até a validação (DRIVESAFE_CARDIO)")
+    cardio.add_argument("--sem-cardio", dest="cardio", action="store_false", help="desliga a frequência cardíaca")
     window = parser.add_mutually_exclusive_group()
-    window.add_argument("--window", dest="window", action="store_true", default=None, help="mostra a janela da câmera")
+    window.add_argument("--window", "--janela-opencv", dest="window", action="store_true", default=None,
+                        help="mostra a janela da câmera do OpenCV (no app de teste, no lugar da tela nova)")
     window.add_argument("--no-window", dest="window", action="store_false", help="roda sem janela (Raspberry Pi sem tela)")
     buzzer = env("DRIVESAFE_BUZZER_PIN")
     parser.add_argument("--buzzer-pin", type=int, default=int(buzzer) if buzzer else None,
@@ -131,139 +142,214 @@ def create_phone_monitor():
         return None
 
 
+def create_cardio_monitor():
+    """Frequência cardíaca pela câmera (vision/cardio.py, spec 022). Falha aqui só desliga o cardio."""
+    try:
+        from vision.cardio import CardioMonitor
+    except ImportError as exc:
+        logger.warning("Frequência cardíaca desligada: módulo indisponível (%s).", exc)
+        return None
+    try:
+        return CardioMonitor()
+    except (RuntimeError, ValueError) as exc:
+        logger.warning("Frequência cardíaca desligada: %s", exc)
+        return None
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    return Monitoramento(args).executar(resolve_window(args))
 
-    from vision import __version__
-    from vision.alarm import Alarm
-    from vision.baseline import BaselineStore
-    from vision.calibration import Calibrator
-    from vision.camera import CameraIndisponivel, open_camera
-    from vision.context import DrivingContext
-    from vision.driver_monitor import DriverMonitor
-    from vision.drowsiness import DrowsinessMonitor
-    from vision.em_execucao import AnuncioExecucao, descrever_camera, nome_do_programa
-    from vision.engine import DriverStateEngine
-    from vision.event_queue import EventStore
-    from vision.eyes import DriverProfile
-    from vision.face import create_face_analyzer
-    from vision.sync import ServerClient, SyncWorker
-    from vision.visibility import EyeVisibility
 
-    data_dir = Path(args.data_dir).expanduser()
-    data_dir.mkdir(parents=True, exist_ok=True)
-    # Sem o nome do computador no registro (pedido de 14/09): o registro pode ir para quem avalia o teste.
-    logger.info("RotaGuard %s. Dados locais em %s.", __version__, data_dir)
-    if not deve_sincronizar(args):
-        logger.info("Modo sem servidor: os eventos ficam só na fila deste computador.")
-    elif not args.token:
-        logger.warning("Sem token do dispositivo: os eventos ficam na fila local até configurar DRIVESAFE_DEVICE_TOKEN.")
+class Monitoramento:
+    """Fila, anúncio (spec 018), análise do rosto, motor, alarme e monitor de uma execução.
 
-    store = EventStore(data_dir / "eventos.db")
-    # Spec 018: o painel da empresa reconhece que o script está aberto por em_execucao.json na pasta de dados.
-    anuncio = AnuncioExecucao(data_dir, nome_do_programa())
-    anuncio.iniciar()
-    analyzer = sync = engine = None
-    try:
-        alarm = Alarm(data_dir / "sirene.wav", buzzer_pin=args.buzzer_pin, muted=args.mute)
-        # DRIVESAFE_FACE_BACKEND: auto (MediaPipe e, se faltar, YuNet), mediapipe ou yunet.
-        analyzer = create_face_analyzer(backend=env("DRIVESAFE_FACE_BACKEND", "auto").lower(),
-                                        use_classifier=not env_bool("DRIVESAFE_NO_EYE_CLASSIFIER"),
-                                        infrared=args.camera_ir)
+    main() usa executar() na linha principal. A tela do app de teste chama montar(), abrir_camera() e rodar() numa
+    thread e sempre fechar() no fim, como o finally de executar()."""
 
-        key = safe_key(args.driver_key)
-        profile_path = data_dir / "perfis" / f"{key}.json"
-        profile = None
-        if args.consentimento_perfil and analyzer.supports_calibration:
-            profile = DriverProfile.load(profile_path)
-            if profile is not None:
-                logger.info("Perfil de calibração '%s' carregado (criado em %s).", args.driver_key, profile.created_at)
-        elif profile_path.exists():
-            logger.info("Existe perfil salvo de '%s', mas sem consentimento (DRIVESAFE_CONSENTIMENTO_PERFIL) ele não é usado.",
-                        args.driver_key)
-        logger.info("Perfil e linha de base entre viagens: %s.",
-                    "guardados neste dispositivo (com consentimento)" if args.consentimento_perfil
-                    else "não guardados; a calibração vale só para esta viagem")
+    def __init__(self, args):
+        self.args = args
+        self.data_dir: Path | None = None
+        self.store = self.anuncio = self.alarm = self.analyzer = self.engine = self.monitor = self.sync = None
+        self.drowsiness = None
 
-        def new_calibrator():
-            if not analyzer.supports_calibration:
-                return None
-            return Calibrator(min_seconds=args.calibration_min, max_seconds=args.calibration_max)
+    def montar(self) -> None:
+        args = self.args
+        from vision import __version__
+        from vision.alarm import Alarm
+        from vision.baseline import BaselineStore
+        from vision.calibration import Calibrator
+        from vision.context import DrivingContext
+        from vision.driver_monitor import DriverMonitor
+        from vision.drowsiness import DrowsinessMonitor
+        from vision.em_execucao import AnuncioExecucao, nome_do_programa
+        from vision.engine import DriverStateEngine
+        from vision.event_queue import EventStore
+        from vision.eyes import DriverProfile
+        from vision.face import create_face_analyzer
+        from vision.sync import ServerClient, SyncWorker
+        from vision.visibility import EyeVisibility
 
-        if args.no_calibration and profile is None and analyzer.supports_calibration:
-            logger.warning("--no-calibration precisa de perfil salvo com consentimento para '%s': calibrando mesmo assim.",
-                           args.driver_key)
-        calibrator = None if (args.no_calibration and profile is not None) else new_calibrator()
-        if calibrator is not None:
-            def as_text(seconds):
-                return f"{seconds / 60:.0f} min" if seconds >= 60 else f"{seconds:.0f} s"
+        data_dir = self.data_dir = Path(args.data_dir).expanduser()
+        data_dir.mkdir(parents=True, exist_ok=True)
+        # Sem o nome do computador no registro (pedido de 14/09): o registro pode ir para quem avalia o teste.
+        logger.info("RotaGuard %s. Dados locais em %s.", __version__, data_dir)
+        if not deve_sincronizar(args):
+            logger.info("Modo sem servidor: os eventos ficam só na fila deste computador.")
+        elif not args.token:
+            logger.warning("Sem token do dispositivo: os eventos ficam na fila local até configurar DRIVESAFE_DEVICE_TOKEN.")
 
-            logger.info("Calibrando por %s a %s com o rosto visível. Microssono já é detectado nesse período.",
-                        as_text(args.calibration_min), as_text(args.calibration_max))
+        self.store = EventStore(data_dir / "eventos.db")
+        # Spec 018: o painel da empresa reconhece que o script está aberto por em_execucao.json na pasta de dados.
+        self.anuncio = AnuncioExecucao(data_dir, nome_do_programa())
+        self.anuncio.iniciar()
+        try:
+            self.alarm = Alarm(data_dir / "sirene.wav", buzzer_pin=args.buzzer_pin, muted=args.mute)
+            # ALM-05: toca o som "info" uma vez ao ligar; sem saída de som, registra estado_aparelho na fila.
+            autoteste = getattr(self.alarm, "autoteste", None)
+            if autoteste is not None:
+                autoteste(self.store)
+            # DRIVESAFE_FACE_BACKEND: auto (MediaPipe e, se faltar, YuNet), mediapipe ou yunet.
+            analyzer = self.analyzer = create_face_analyzer(backend=env("DRIVESAFE_FACE_BACKEND", "auto").lower(),
+                                                            use_classifier=not env_bool("DRIVESAFE_NO_EYE_CLASSIFIER"),
+                                                            infrared=args.camera_ir)
 
-        drowsiness = DrowsinessMonitor(profile=profile, calibrator=calibrator,
-                                       profile_path=profile_path if args.consentimento_perfil else None)
-        baseline_store = BaselineStore(data_dir / "linhas_de_base" / f"{key}.json") if args.consentimento_perfil else None
-        engine = DriverStateEngine(
-            drowsiness,
-            activation_mode=args.sinais_ativacao,
-            baseline_store=baseline_store,
-            context=DrivingContext(args.telemetria),
-            visibility=EyeVisibility(detect_sunglasses=env_bool("DRIVESAFE_DETECTAR_OCULOS_ESCUROS", True)),
-            phone=create_phone_monitor() if args.celular else None,
-        )
-        logger.info(ACTIVATION_LOG[args.sinais_ativacao])
-        monitor = DriverMonitor(analyzer, engine, alarm, store, calibrator_factory=new_calibrator)
+            key = safe_key(args.driver_key)
+            profile_path = data_dir / "perfis" / f"{key}.json"
+            profile = None
+            if args.consentimento_perfil and analyzer.supports_calibration:
+                profile = DriverProfile.load(profile_path)
+                if profile is not None:
+                    logger.info("Perfil de calibração '%s' carregado (criado em %s).", args.driver_key, profile.created_at)
+            elif profile_path.exists():
+                logger.info("Existe perfil salvo de '%s', mas sem consentimento (DRIVESAFE_CONSENTIMENTO_PERFIL) ele não "
+                            "é usado.", args.driver_key)
+            logger.info("Perfil e linha de base entre viagens: %s.",
+                        "guardados neste dispositivo (com consentimento)" if args.consentimento_perfil
+                        else "não guardados; a calibração vale só para esta viagem")
 
-        policy = None
-        if args.token and deve_sincronizar(args):
-            from vision.remote_policy import RemotePolicy
+            def new_calibrator():
+                if not analyzer.supports_calibration:
+                    return None
+                return Calibrator(min_seconds=args.calibration_min, max_seconds=args.calibration_max)
 
-            # Com servidor, motorista vinculado, consentimento e modo dos sinais de ativação vêm do app.
-            policy = RemotePolicy(engine, data_dir, fallback_key=args.driver_key, calibrator_factory=new_calibrator)
-            monitor.policy = policy
-            logger.info("Consentimentos e motorista vinculado passam a seguir o cadastro no app do servidor.")
-        if deve_sincronizar(args):
-            sync = SyncWorker(store, ServerClient(args.server_url, args.token),
-                              status_provider=lambda: {"camera_ok": monitor.camera_ok, "status": monitor.live_status()},
-                              heartbeat_interval=float(env("DRIVESAFE_HEARTBEAT_S", "15")),
-                              policy_handler=policy.submit if policy is not None else None)
-            sync.start()
-        if hasattr(signal, "SIGTERM"):
-            signal.signal(signal.SIGTERM, lambda *_: monitor.stop())
+            if args.no_calibration and profile is None and analyzer.supports_calibration:
+                logger.warning("--no-calibration precisa de perfil salvo com consentimento para '%s': calibrando mesmo "
+                               "assim.", args.driver_key)
+            calibrator = None if (args.no_calibration and profile is not None) else new_calibrator()
+            if calibrator is not None:
+                def as_text(seconds):
+                    return f"{seconds / 60:.0f} min" if seconds >= 60 else f"{seconds:.0f} s"
 
+                logger.info("Calibrando por %s a %s com o rosto visível. Microssono já é detectado nesse período.",
+                            as_text(args.calibration_min), as_text(args.calibration_max))
+
+            self.drowsiness = DrowsinessMonitor(profile=profile, calibrator=calibrator,
+                                                profile_path=profile_path if args.consentimento_perfil else None)
+            baseline_store = BaselineStore(data_dir / "linhas_de_base" / f"{key}.json") if args.consentimento_perfil else None
+            opcoes_motor = {}
+            if getattr(args, "cardio", False):
+                cardio = create_cardio_monitor()
+                if cardio is not None and "cardio" in inspect.signature(DriverStateEngine).parameters:
+                    opcoes_motor["cardio"] = cardio
+                    logger.info("Frequência cardíaca pela câmera ligada: estimativa só neste dispositivo, fora do "
+                                "nível de risco e de qualquer evento.")
+                elif cardio is not None:
+                    logger.warning("Frequência cardíaca desligada: o motor desta versão não recebe o cardio.")
+            self.engine = engine = DriverStateEngine(
+                self.drowsiness,
+                activation_mode=args.sinais_ativacao,
+                baseline_store=baseline_store,
+                context=DrivingContext(args.telemetria),
+                visibility=EyeVisibility(detect_sunglasses=env_bool("DRIVESAFE_DETECTAR_OCULOS_ESCUROS", True)),
+                phone=create_phone_monitor() if args.celular else None,
+                **opcoes_motor,
+            )
+            logger.info(ACTIVATION_LOG[args.sinais_ativacao])
+            monitor = self.monitor = DriverMonitor(analyzer, engine, self.alarm, self.store,
+                                                   calibrator_factory=new_calibrator)
+
+            policy = None
+            if args.token and deve_sincronizar(args):
+                from vision.remote_policy import RemotePolicy
+
+                # Com servidor, motorista vinculado, consentimento e modo dos sinais de ativação vêm do app.
+                policy = RemotePolicy(engine, data_dir, fallback_key=args.driver_key, calibrator_factory=new_calibrator)
+                monitor.policy = policy
+                logger.info("Consentimentos e motorista vinculado passam a seguir o cadastro no app do servidor.")
+            if deve_sincronizar(args):
+                self.sync = SyncWorker(self.store, ServerClient(args.server_url, args.token),
+                                       status_provider=lambda: {"camera_ok": monitor.camera_ok,
+                                                                "status": monitor.live_status()},
+                                       heartbeat_interval=float(env("DRIVESAFE_HEARTBEAT_S", "15")),
+                                       policy_handler=policy.submit if policy is not None else None)
+                self.sync.start()
+        except BaseException:
+            self.fechar()
+            raise
+
+    def abrir_camera(self):
+        from vision.camera import CameraIndisponivel, open_camera
+        from vision.em_execucao import descrever_camera
+
+        args = self.args
         camera = open_camera(args.camera, args.width, args.height)
         if args.espera_camera > 0 and getattr(camera, "aberta", True) is False:
             camera.release()
             raise CameraIndisponivel(f"A câmera {args.camera} não abriu. Confira se ela está conectada e se outro "
                                      "programa (Teams, Zoom, navegador) não está usando, ou use a câmera automática.")
-        anuncio.definir_camera(descrever_camera(camera, args.camera))
-        monitor.run(camera, resolve_window(args), espera_camera_s=args.espera_camera or None)
-        if monitor.sem_imagem:
+        self.anuncio.definir_camera(descrever_camera(camera, args.camera))
+        return camera
+
+    def rodar(self, camera, janela: bool) -> int:
+        """Roda até parar (stop, fim do vídeo ou sem imagem). 0, ou SAIDA_SEM_CAMERA se desistiu por falta de imagem."""
+        monitor = self.monitor
+        # signal só pode ser registrado na linha principal; na thread da tela, quem para é a própria tela.
+        if hasattr(signal, "SIGTERM") and threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGTERM, lambda *_: monitor.stop())
+        monitor.run(camera, janela, espera_camera_s=self.args.espera_camera or None)
+        return SAIDA_SEM_CAMERA if monitor.sem_imagem else 0
+
+    def executar(self, janela: bool) -> int:
+        from vision.camera import CameraIndisponivel
+
+        try:
+            self.montar()
+            return self.rodar(self.abrir_camera(), janela)
+        except KeyboardInterrupt:
+            logger.info("Interrompido pelo usuário.")
+        except CameraIndisponivel as exc:
+            logger.error("%s", exc)
             return SAIDA_SEM_CAMERA
-    except KeyboardInterrupt:
-        logger.info("Interrompido pelo usuário.")
-    except CameraIndisponivel as exc:
-        logger.error("%s", exc)
-        return SAIDA_SEM_CAMERA
-    except RuntimeError as exc:
-        logger.error("%s", exc)
-        return 1
-    finally:
-        anuncio.parar()
-        if sync is not None:
-            sync.stop()
-            sync.join(timeout=15)
-        if engine is not None:
-            engine.close()
-        if analyzer is not None:
-            analyzer.close()
-        store.close()
-    return 0
+        except RuntimeError as exc:
+            logger.error("%s", exc)
+            return 1
+        finally:
+            self.fechar()
+        return 0
+
+    def fechar(self) -> None:
+        """Encerramento normal: apaga o anúncio, para a sincronização e fecha modelos e fila. Pode ser chamado de novo."""
+        if self.anuncio is not None:
+            self.anuncio.parar()
+            self.anuncio = None
+        if self.sync is not None:
+            self.sync.stop()
+            self.sync.join(timeout=15)
+            self.sync = None
+        if self.engine is not None:
+            self.engine.close()
+            self.engine = None
+        if self.analyzer is not None:
+            self.analyzer.close()
+            self.analyzer = None
+        if self.store is not None:
+            self.store.close()
+            self.store = None
 
 
 if __name__ == "__main__":

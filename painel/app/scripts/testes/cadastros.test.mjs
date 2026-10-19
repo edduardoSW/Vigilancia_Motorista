@@ -26,7 +26,7 @@ import {
   validarPlaca,
 } from "../../src/lib/validators.ts";
 
-// CNH: 9 números + 2 dígitos verificadores, na mesma variante do src/lib/demo-backend.ts (o Python deve usar a mesma).
+// CNH: 9 números + 2 dígitos verificadores, na mesma variante de painel/desktop/cadastros.py (cnh_valida).
 // Calculados à mão:
 // 123456789 → soma 165 (peso 9..1) resto 0 → 1º dígito 0; soma 285 (peso 1..9) resto 10 → 2º dígito 0.
 // 100000001 → soma 10 resto 10 → 1º dígito 0 com desconto 2; soma 10 resto 10 (≥ 10) → 2º dígito 0.

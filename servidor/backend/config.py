@@ -1,7 +1,7 @@
 """Configuração do servidor central, lida de variáveis de ambiente."""
 import os
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 
 # Raiz do repositório (este arquivo fica em servidor/backend/). Os dados continuam em data/ na raiz.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,3 +36,32 @@ MAX_UPLOAD_BYTES = int(os.environ.get("DRIVESAFE_MAX_UPLOAD_MB", "4096")) * 1024
 INTERNAL_URL = os.environ.get("DRIVESAFE_URL_INTERNA", "").strip().rstrip("/")
 # O vídeo enviado é apagado depois da análise (fica só a planilha de medidas), a menos que isto esteja ligado.
 KEEP_ANALYSIS_VIDEOS = os.environ.get("DRIVESAFE_MANTER_VIDEOS", "").strip().lower() in ("1", "true", "sim")
+
+# ---------- central (spec 026): o script envia, o painel executável busca ----------
+
+# Trechos de vídeo recebidos dos aparelhos: trechos/<uid da empresa>/<uid do trecho>.<formato>, fora de pasta pública.
+CLIPS_DIR = os.environ.get("DRIVESAFE_TRECHOS_DIR", "").strip() or os.path.join(DATA_DIR, "trechos")
+CLIP_MAX_BYTES = int(os.environ.get("DRIVESAFE_TRECHO_MAX_MB", "25")) * 1024 * 1024
+CLIPS_PER_SESSION = 20
+# Teto por aparelho em 24 h, mesmo trocando de sessão: um token vazado não enche o disco da VPS.
+CLIPS_PER_DEVICE_DAY = int(os.environ.get("DRIVESAFE_TRECHOS_POR_DIA", "100"))
+# Prazo de guarda padrão dos trechos (manage.py apagar-trechos-antigos).
+CLIP_RETENTION_DAYS = 30
+
+# Segredo do servidor para guardar os códigos de pareamento só como HMAC. Sem a variável, fica num arquivo da pasta de
+# dados (criado na primeira vez, só o dono lê). Nunca vai para o banco: banco vazado não revela código.
+SECRET = os.environ.get("DRIVESAFE_SEGREDO_CENTRAL", "").strip()
+SECRET_FILE = os.environ.get("DRIVESAFE_SEGREDO_ARQUIVO", "").strip() or os.path.join(DATA_DIR, "segredo-central.key")
+
+PAIRING_CODE_MINUTES = 30
+# Trocas de código erradas por IP antes de responder 429.
+PAIRING_MAX_FAILURES = 10
+PAIRING_WINDOW_S = 60
+# Códigos ainda válidos por empresa (evita gerar milhares).
+PAIRING_MAX_ACTIVE = 20
+
+# "Testando agora": último sinal de vida há menos disto e sessão aberta.
+TESTING_WINDOW_S = 30
+
+# Sessão do painel executável (token no cabeçalho): vale 30 dias desde o último uso.
+PANEL_SESSION_DAYS = 30

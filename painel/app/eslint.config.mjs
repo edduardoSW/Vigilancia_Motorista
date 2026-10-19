@@ -5,5 +5,6 @@ import nextTs from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "out/**", "next-env.d.ts"]),
+  // out-web: saída do build da web (spec 024, distDir). public/mediapipe: WASM do MediaPipe copiado no build (spec 025).
+  globalIgnores([".next/**", "out/**", "out-web/**", "next-env.d.ts", "public/mediapipe/**"]),
 ]);

@@ -7,6 +7,8 @@ navegador, barra de endereço ou servidor.
 Uso:
   python painel/desktop/rotaguard_painel.py              abre o painel
   python painel/desktop/rotaguard_painel.py --verificar  teste de fumaça com janela oculta: uma linha JSON, código 0 se ok
+                                                         (use ROTAGUARD_PAINEL_DADOS com uma pasta de teste: a janela
+                                                         abre o banco da pasta de dados)
   python painel/desktop/rotaguard_painel.py --depurar    fora do pacote: liga as ferramentas de desenvolvedor
 """
 from __future__ import annotations
@@ -24,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
+from central import servir_trecho  # spec 026: trechos baixados da central, servidos só com o segredo da abertura
 from ponte import Ponte  # js_api: login, cadastros e decisões passam pela ponte, não por rota HTTP (spec 014)
 
 AQUI = Path(__file__).resolve().parent
@@ -35,7 +38,8 @@ LARGURA_MINIMA, ALTURA_MINIMA = 1200, 760
 HOST = "127.0.0.1"
 MOTOR_ESPERADO = "edgechromium"
 IDIOMA_ESPERADO = "pt-BR"
-AVISO_OBRIGATORIO = "dados fictícios"
+MARCA_OBRIGATORIA = "RotaGuard"  # aparece em toda tela (rodapé de fora e menu): a interface montou
+TEXTO_PROIBIDO = "dados fictícios"  # spec 030 (SDF-02): a faixa da prévia não pode voltar
 TEMPO_LIMITE_VERIFICACAO_S = 60
 MARGEM_FECHAMENTO_S = 5.0  # sobra do limite para fechar a janela e imprimir o resultado
 SAIDA_OK, SAIDA_FALHA = 0, 1
@@ -58,6 +62,8 @@ TIPOS_MIME = {
     ".map": "application/json",
     # Payloads RSC da exportação: no modo export, o roteador do Next aceita text/plain (fetch-server-response.js).
     ".txt": "text/plain; charset=utf-8",
+    # Motor da câmera do aparelho (spec 025): o WebAssembly do MediaPipe só compila em streaming com este tipo.
+    ".wasm": "application/wasm",
     ".woff2": "font/woff2",
     ".woff": "font/woff",
     ".svg": "image/svg+xml",
@@ -73,9 +79,12 @@ TIPO_PADRAO = "application/octet-stream"
 # Só o que vem do próprio app (sem rede externa). Scripts e estilos em linha: a exportação do Next depende deles.
 POLITICA_DE_CONTEUDO = "; ".join((
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    # 'wasm-unsafe-eval' libera só compilar WebAssembly (MediaPipe da câmera, spec 025), nunca eval de JavaScript.
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "worker-src 'self' blob:",
     "font-src 'self' data:",
     "connect-src 'self'",
     "object-src 'none'",
@@ -177,6 +186,9 @@ class ManipuladorInterface(BaseHTTPRequestHandler):
         self._responder(com_corpo=False)
 
     def _responder(self, com_corpo: bool) -> None:
+        if self.path.startswith("/__trechos/"):
+            self._responder_trecho(com_corpo)
+            return
         resposta = resolver(self.server.raiz, self.path)
         if resposta.arquivo is None:
             dados, tipo = "Não encontrado".encode("utf-8"), "text/plain; charset=utf-8"
@@ -187,6 +199,19 @@ class ManipuladorInterface(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(dados)))
         self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", POLITICA_DE_CONTEUDO)
+        self.end_headers()
+        if com_corpo:
+            self.wfile.write(dados)
+
+    def _responder_trecho(self, com_corpo: bool) -> None:
+        """Vídeo (com Range, para o player avançar) ou quadro do .rgclip; sem o segredo certo, 404."""
+        status, cabecalhos, dados = servir_trecho(getattr(self.server, "trechos", None), self.path,
+                                                  self.headers.get("Range"))
+        self.send_response(status)
+        for chave, valor in cabecalhos.items():
+            self.send_header(chave, valor)
+        self.send_header("Content-Length", str(len(dados)))
         self.send_header("Content-Security-Policy", POLITICA_DE_CONTEUDO)
         self.end_headers()
         if com_corpo:
@@ -206,6 +231,7 @@ class ServidorInterface(ThreadingHTTPServer):
     def __init__(self, raiz, porta: int = 0) -> None:
         self.raiz = Path(raiz).resolve()
         self.linha: threading.Thread | None = None
+        self.trechos: dict | None = None  # {"pasta", "segredo"} da Ponte (spec 026); sem ele, /__trechos/ dá 404
         super().__init__((HOST, porta), ManipuladorInterface)
 
     def server_bind(self) -> None:
@@ -265,15 +291,20 @@ def aceitar_motor(motor) -> bool:
 # Verificação oculta (--verificar)
 # ---------------------------------------------------------------------------------------------------------------------
 def resultado_verificacao(idioma, texto, scripts=None) -> dict:
-    """ok só com lang pt-BR e o aviso "dados fictícios" no texto (sem diferenciar maiúsculas: innerText aplica CSS)."""
+    """ok só com lang pt-BR, a marca RotaGuard no texto e sem "dados fictícios" (sem diferenciar maiúsculas: o
+    innerText aplica o CSS)."""
     texto = texto if isinstance(texto, str) else ""
-    aviso = AVISO_OBRIGATORIO in texto.casefold()
+    marca = MARCA_OBRIGATORIA.casefold() in texto.casefold()
+    sem_ficticios = TEXTO_PROIBIDO not in texto.casefold()
     motivos = []
     if idioma != IDIOMA_ESPERADO:
         motivos.append(f"lang={idioma!r}, esperado {IDIOMA_ESPERADO!r}")
-    if not aviso:
-        motivos.append(f"o texto da página não tem {AVISO_OBRIGATORIO!r}")
-    resultado = {"ok": not motivos, "lang": idioma, "aviso_dados_ficticios": aviso, "caracteres": len(texto)}
+    if not marca:
+        motivos.append(f"o texto da página não tem {MARCA_OBRIGATORIA!r}")
+    if not sem_ficticios:
+        motivos.append(f"o texto da página tem {TEXTO_PROIBIDO!r} (spec 030)")
+    resultado = {"ok": not motivos, "lang": idioma, "marca": marca, "sem_dados_ficticios": sem_ficticios,
+                 "caracteres": len(texto)}
     if scripts is not None:
         resultado["scripts"] = bool(scripts)
     if motivos:
@@ -354,7 +385,7 @@ def ler_argumentos(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="RotaGuardPainel", description="Painel da empresa RotaGuard em janela própria.")
     parser.add_argument("--verificar", action="store_true",
                         help="teste de fumaça com janela oculta: imprime uma linha JSON e sai com 0 se a interface "
-                             "carregou em pt-BR com o aviso de dados fictícios")
+                             "carregou em pt-BR, com a marca RotaGuard e sem dados fictícios")
     parser.add_argument("--depurar", action="store_true",
                         help="fora do pacote: liga as ferramentas de desenvolvedor do WebView2")
     # parse_known_args: argumento desconhecido não derruba o app (o executável de janela não tem onde mostrar o erro).
@@ -388,6 +419,8 @@ def main(argv=None, webview_mod=None, raiz=None, congelado: bool | None = None, 
         if webview_mod is None:
             import webview as webview_mod
         ponte = ponte if ponte is not None else Ponte()  # não grava nada até a tela chamar
+        rota_trechos = getattr(ponte, "_rota_trechos", None)
+        servidor.trechos = rota_trechos() if callable(rota_trechos) else None
         janela = webview_mod.create_window(**opcoes_da_janela(url, oculta=args.verificar), js_api=ponte)
         ponte._ligar_janela(janela)  # privado de propósito: o pywebview expõe ao JavaScript só o que é público
 
@@ -401,9 +434,11 @@ def main(argv=None, webview_mod=None, raiz=None, congelado: bool | None = None, 
             webview_mod.start(func=_verificar_e_fechar, args=(janela, estado, inicio), **opcoes)
         else:
             ponte._iniciar_script()  # vigia do script local (agente 2); falha nele não impede o painel
+            ponte._iniciar_central()  # spec 026: busca na central a cada 30 s, só se estiver conectado
             try:
                 webview_mod.start(**opcoes)
             finally:
+                ponte._parar_central()
                 ponte._parar_script()
     except Exception as erro:  # pythonnet, WebView2 ou pywebview falhando: vira mensagem, não Traceback mudo
         estado["erro"] = f"{type(erro).__name__}: {erro}"

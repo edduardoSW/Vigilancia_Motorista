@@ -12,6 +12,10 @@ O que se sabe, e o que não:
   entropia do olhar (Shiferaw et al., 2019). Aumento acima do normal é associado a interferência, como ansiedade.
 - Estresse, cafeína, pouca luz, conversa e medicamentos causam os mesmos sinais. Por isso vários sinais precisam
   convergir, tudo é comparado com a linha de base da própria pessoa e a saída traz nível de confiança.
+- Conflito registrado (spec 027, DMS-12): a entropia estacionária do olhar SOBE com a privação de sono (Shiferaw
+  et al., 2018, 9 pessoas, pista fechada). O olhar pode mudar antes do PERCLOS e das piscadas; por isso a entropia
+  só conta como sinal de ativação quando não há piscada lenta (duração ≥ 1,1× a base, z da duração ≥ +1 ou um
+  fechamento longo em 5 min). PRC e desvio do olhar (Victor et al., 2005) vão para o registro (vision/gaze.py).
 
 Sem dados de motoristas sob efeito de anfetamina, pesos e limiares são hipóteses de trabalho. Validar exige coleta
 com aprovação de comitê de ética (CEP/CONEP).
@@ -57,6 +61,10 @@ INDEX_COMPATIBLE = 0.55
 MIN_CONFIDENCE = 0.35
 CONFIDENCE_LABELS = ((0.6, "alta"), (0.35, "media"), (0.0, "baixa"))
 MIN_FPS_FULL_CONFIDENCE = 25.0
+# DMS-12: sinais de piscada lenta que tiram a entropia do olhar do índice (Shiferaw et al., 2018). Hipótese.
+SLOW_BLINK_DURATION_RATIO = 1.10
+SLOW_BLINK_DURATION_Z = 1.0
+GAZE_ENTROPY_METRICS = ("entropia_transicao_bits",)
 
 WINDOW_S = 60.0
 GAZE_SAMPLE_S = 0.2  # 5 Hz: aproxima uma amostra por fixação para a entropia de transição
@@ -277,7 +285,11 @@ def assess_activation(zscores: dict, window: dict, baseline_quality: float, drow
     weights = dict(WEIGHTS)
     if window.get("pupila_fonte_luz") == "imagem":
         weights["pupila_iris"] = PUPIL_WEIGHT_IMAGE_LIGHT
-    available = {name: z for name, z in zscores.items() if name in weights and z is not None}
+    slow_blink = ((window.get("razao_duracao") or 0.0) >= SLOW_BLINK_DURATION_RATIO
+                  or (zscores.get("duracao_mediana_ms") or 0.0) >= SLOW_BLINK_DURATION_Z
+                  or (window.get("fechamentos_longos_5min") or 0) >= 1)
+    available = {name: z for name, z in zscores.items() if name in weights and z is not None
+                 and not (slow_blink and name in GAZE_ENTROPY_METRICS)}
     if not available:
         return ActivationAssessment(reason="sem_metricas_comparaveis")
 

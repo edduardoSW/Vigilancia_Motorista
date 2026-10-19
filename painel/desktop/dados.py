@@ -110,13 +110,19 @@ MIGRACOES = (
 
 
 class Banco:
-    """Uma conexão só, protegida por trava: a ponte do pywebview chama de threads diferentes."""
+    """Uma conexão só, protegida por trava: a ponte do pywebview chama de threads diferentes.
 
-    def __init__(self, pasta: Path | str | None = None, relogio=time.time):
+    `nome` e `migracoes` servem a outro banco da mesma pasta com o mesmo jeito de trabalhar (spec 026: `central.db`,
+    o que vem da central fica fora do `painel.db` e da cópia de segurança). Sem eles, é o `painel.db` com MIGRACOES.
+    """
+
+    def __init__(self, pasta: Path | str | None = None, relogio=time.time, nome: str = NOME_BANCO,
+                 migracoes: tuple | None = None):
         self.pasta = Path(pasta) if pasta is not None else pasta_dados()
         self.pasta.mkdir(parents=True, exist_ok=True)
-        self.caminho = self.pasta / NOME_BANCO
+        self.caminho = self.pasta / nome
         self.relogio = relogio
+        self._migracoes = migracoes
         self.trava = threading.RLock()
         self._con = sqlite3.connect(self.caminho, check_same_thread=False, isolation_level=None)
         self._con.row_factory = sqlite3.Row
@@ -129,9 +135,10 @@ class Banco:
             return self._con.execute("PRAGMA user_version").fetchone()[0]
 
     def migrar(self) -> None:
+        migracoes = MIGRACOES if self._migracoes is None else self._migracoes  # lida agora: os testes trocam MIGRACOES
         with self.trava:
             atual = self.versao_esquema()
-            for numero, script in enumerate(MIGRACOES[atual:], start=atual + 1):
+            for numero, script in enumerate(migracoes[atual:], start=atual + 1):
                 self._con.executescript(f"BEGIN IMMEDIATE; {script}; PRAGMA user_version = {numero}; COMMIT;")
 
     # Consultas ---------------------------------------------------------------------------------------------------

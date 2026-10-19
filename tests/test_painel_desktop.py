@@ -52,7 +52,8 @@ def escrever(caminho, texto):
 def interface_de_teste(base):
     """Exportação mínima com a forma de painel/app/out: trailingSlash, RSC em .txt, _next/static e 404.html."""
     raiz = base / "out"
-    escrever(raiz / "index.html", '<!DOCTYPE html><html lang="pt-BR"><body>Chegadas · dados fictícios</body></html>')
+    escrever(raiz / "index.html", '<!DOCTYPE html><html lang="pt-BR"><body>RotaGuard Painel · Os dados ficam guardados neste '
+                                  'computador.</body></html>')
     escrever(raiz / "index.txt", "0:rsc-da-home")
     escrever(raiz / "404.html", '<html lang="pt-BR"><body>Página não encontrada</body></html>')
     escrever(raiz / "veiculos" / "index.html", "<html><body>Veículos</body></html>")
@@ -114,6 +115,16 @@ for nome, tipo in {"a.html": "text/html", "A.HTML": "text/html", "a.js": "text/j
 assert "charset=utf-8" in rp.tipo_mime(Path("a.html")) and "charset=utf-8" in rp.tipo_mime(Path("a.txt"))
 ok("PAC-03 tipos MIME: html, js, css, json, txt (RSC como text/plain), woff2, svg, png, ico e octet-stream")
 
+# CAM-12 (spec 025) · a câmera do aparelho no painel instalado: o WASM do MediaPipe precisa vir como application/wasm
+# e a política tem de permitir compilar WebAssembly, vídeo e worker em blob:, sem liberar eval de JavaScript e sem
+# deixar nada sair para fora (connect-src 'self' barra a telemetria do MediaPipe).
+assert rp.tipo_mime(Path("vision_wasm_internal.wasm")).split(";")[0] == "application/wasm"
+diretivas = {d.split()[0]: d.split()[1:] for d in rp.POLITICA_DE_CONTEUDO.split("; ")}
+assert "'wasm-unsafe-eval'" in diretivas["script-src"] and "'unsafe-eval'" not in diretivas["script-src"], diretivas
+assert diretivas["media-src"] == ["'self'", "blob:"] and diretivas["worker-src"] == ["'self'", "blob:"], diretivas
+assert diretivas["connect-src"] == ["'self'"], diretivas
+ok("CAM-12 painel instalado: .wasm como application/wasm; CSP com wasm-unsafe-eval, media e worker em blob:, sem eval")
+
 # PAC-04 · servidor real na porta 0, só em 127.0.0.1, parado de forma limpa
 with tempfile.TemporaryDirectory() as tmp:
     raiz = interface_de_teste(Path(tmp))
@@ -125,7 +136,7 @@ with tempfile.TemporaryDirectory() as tmp:
         with abrir(url, timeout=5) as resposta:
             corpo = resposta.read().decode("utf-8")
             assert resposta.status == 200 and resposta.headers["Content-Type"].startswith("text/html")
-            assert "dados fictícios" in corpo
+            assert "RotaGuard Painel" in corpo
             politica = resposta.headers["Content-Security-Policy"]
             assert "default-src 'self'" in politica and "connect-src 'self'" in politica, politica
             assert "http" not in politica, "a política não pode liberar origem externa"
@@ -222,8 +233,8 @@ class WebviewFalso:
             func(*(args or ()))
 
 
-RESPOSTAS_OK = {rp.SCRIPT_IDIOMA: "pt-BR", rp.SCRIPT_TEXTO: "Chegadas\nDADOS FICTÍCIOS · não é diagnóstico",
-                rp.SCRIPT_SCRIPTS: True}
+RESPOSTAS_OK = {rp.SCRIPT_IDIOMA: "pt-BR", rp.SCRIPT_SCRIPTS: True,
+                rp.SCRIPT_TEXTO: "Ativar o painel\nROTAGUARD PAINEL 0.1.0 · Os dados ficam guardados neste computador."}
 
 with tempfile.TemporaryDirectory() as tmp:
     raiz = interface_de_teste(Path(tmp))
@@ -257,7 +268,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert "icon" not in rp.opcoes_de_inicio(congelado=False, depurar=False, icone=Path(tmp) / "nao-existe.ico")
     ok("PAC-07 janela RotaGuard 1440x900 (mínimo 1200x760), sem devtools no pacote e servidor só com a janela aberta")
 
-    # PAC-08 · --verificar: uma linha JSON, código 0 só com pt-BR e "dados fictícios"
+    # PAC-08 · --verificar: uma linha JSON, código 0 só com pt-BR, a marca RotaGuard e sem "dados fictícios" (SDF-02)
     def verificar(falso, raiz_usada=raiz):
         saidas, alertas = [], []
         codigo = rp.main(["--verificar"], webview_mod=falso, raiz=raiz_usada, congelado=True, imprimir=saidas.append,
@@ -268,11 +279,13 @@ with tempfile.TemporaryDirectory() as tmp:
     certo = WebviewFalso(RESPOSTAS_OK)
     codigo, resultado = verificar(certo)
     assert codigo == 0 and resultado["ok"] is True, resultado
-    assert resultado["lang"] == "pt-BR" and resultado["aviso_dados_ficticios"] is True and resultado["scripts"] is True
+    assert resultado["lang"] == "pt-BR" and resultado["marca"] is True and resultado["sem_dados_ficticios"] is True         and resultado["scripts"] is True, resultado
     assert resultado["url"].startswith("http://127.0.0.1:") and resultado["motor"] == "edgechromium", resultado
     assert certo.criacoes[0]["hidden"] is True and certo.inicios[0]["debug"] is False and certo.janela.destruida
     for respostas, motivo in (({**RESPOSTAS_OK, rp.SCRIPT_IDIOMA: "en"}, "lang"),
-                              ({**RESPOSTAS_OK, rp.SCRIPT_TEXTO: "Chegadas sem o aviso"}, "dados fictícios"),
+                              ({**RESPOSTAS_OK, rp.SCRIPT_TEXTO: "Página em branco"}, "RotaGuard"),
+                              ({**RESPOSTAS_OK, rp.SCRIPT_TEXTO: "RotaGuard · Prévia com DADOS FICTÍCIOS"},
+                               "dados fictícios"),
                               ({}, "lang")):
         falso = WebviewFalso(respostas)
         codigo, resultado = verificar(falso)
@@ -287,9 +300,11 @@ with tempfile.TemporaryDirectory() as tmp:
     sem_interface = WebviewFalso(RESPOSTAS_OK)
     codigo, resultado = verificar(sem_interface, vazia)
     assert codigo == 1 and "interface" in resultado["erro"] and sem_interface.criacoes == [], resultado
-    assert rp.resultado_verificacao("pt-BR", "Painel · Dados fictícios")["ok"] is True
+    assert rp.resultado_verificacao("pt-BR", "RotaGuard Painel · Entrar")["ok"] is True
+    assert rp.resultado_verificacao("pt-BR", "RotaGuard Painel · Dados fictícios")["ok"] is False, "SDF-02 na janela"
     assert rp.resultado_verificacao("pt-BR", None)["ok"] is False and rp.resultado_verificacao(None, None)["ok"] is False
-    ok("PAC-08 --verificar: uma linha JSON, código 0 só com lang pt-BR e 'dados fictícios'; falhas saem com 1")
+    ok("PAC-08 --verificar: uma linha JSON, código 0 só com lang pt-BR, a marca RotaGuard e sem 'dados fictícios' "
+       "(SDF-02); falhas saem com 1")
 
     # PAC-09 · sem WebView2 o pywebview cairia no MSHTML: o app recusa
     sem_webview2 = WebviewFalso(RESPOSTAS_OK, motor="mshtml")

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EVENTO_BUSCA } from "@/components/command-palette";
 import { useDecisions } from "@/components/decisions-provider";
 import { Wordmark } from "@/components/icons";
@@ -11,15 +11,15 @@ import { useSession } from "@/components/session-provider";
 import { OPCOES_TEMA } from "@/components/theme-options";
 import { Glyph } from "@/components/ui/glyph";
 import { Kbd } from "@/components/ui/kbd";
-import { dados, nomeDoVeiculo, veiculoDe } from "@/content";
 import { momentosDaViagem } from "@/content/moments";
-import { NOME_FUNCAO } from "@/lib/bridge";
+import { bridge, type CentralEstado, NOME_FUNCAO, PAINEL_NA_WEB } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
+import { useViagens } from "@/lib/viagens";
 
-// Menu da janela (spec 014, áreas do painel; spec 019): a busca, uma linha curta com a caixa conectada enquanto houver, as
+// Menu da janela (spec 014, áreas do painel; spec 019): a busca, a situação real da caixa e da central (spec 030), as
 // áreas na ordem da spec (sem as que a função não abre) e, embaixo, o teste neste computador, o guia, quem entrou e o tema.
 // A barrinha desliza até a tela aberta. Viagens mostra quantos momentos faltam verificar; os outros itens não têm contador.
-const MOMENTOS = dados.viagens.flatMap((viagem) => momentosDaViagem(viagem).map((momento) => momento.id));
+const CENTRAL_MS = 30_000;
 
 export function Sidebar() {
   const rota = usePathname() || "/";
@@ -27,9 +27,10 @@ export function Sidebar() {
   const { decisions } = useDecisions();
   const itens = itensDoMenu(pode);
   const ativo = itemAtivo(rota, itens);
-  const paraVer = MOMENTOS.filter((id) => !decisions[id]).length;
-  const coleta = dados.coletas[0];
-  const veiculoDaColeta = coleta ? veiculoDe(coleta.veiculo) : undefined;
+  const viagens = useViagens();
+  const momentos = useMemo(() => viagens.flatMap((viagem) => momentosDaViagem(viagem).map((momento) => momento.id)), [viagens]);
+  const paraVer = momentos.filter((id) => !decisions[id]).length;
+  const central = useCentral(usuario?.id ?? null);
 
   const coluna = useRef<HTMLElement>(null);
   const [barra, setBarra] = useState<{ top: number; height: number } | null>(null);
@@ -93,19 +94,35 @@ export function Sidebar() {
         <Kbd className="ml-auto">Ctrl K</Kbd>
       </button>
 
-      {/* Caixa conectada numa linha só (spec 019, INT-02): o andamento completo fica no Início. */}
-      {coleta && (
+      {/* Situação real (spec 030, SDF-03): a leitura da caixa ainda não existe, então nenhuma caixa está conectada; a
+          central aparece quando o painel está ligado a ela. Cada uma numa linha só (spec 019, INT-02). */}
+      <div className="mt-2 grid gap-0.5">
         <Link
-          href="/#caixa-conectada"
-          data-caixa-conectada
-          title={`Caixa do ${veiculoDaColeta ? nomeDoVeiculo(veiculoDaColeta.tipo, veiculoDaColeta.prefixo) : coleta.caixa} conectada: lendo o registro`}
-          className="mt-2 flex h-9 items-center gap-2.5 rounded-[9px] px-3 text-[13px] text-grafite transition-colors hover:bg-superficie/60 hover:text-tinta"
+          href="/guia/?capitulo=veiculo-chega"
+          data-caixa
+          title="Como ler a caixa quando o veículo chega"
+          className="flex h-8 items-center gap-2.5 rounded-[9px] px-3 text-[13px] text-grafite transition-colors hover:bg-superficie/60 hover:text-tinta"
         >
-          <span aria-hidden="true" className="pulse-dot" />
-          <span className="min-w-0 flex-1 truncate">Caixa conectada</span>
-          <span className="tabular-nums">{coleta.progresso}%</span>
+          <span aria-hidden="true" className="size-2 shrink-0 rounded-full border border-grafite/60" />
+          <span className="min-w-0 flex-1 truncate">Nenhuma caixa conectada</span>
         </Link>
-      )}
+        {central?.conectado && (
+          <Link
+            href="/remotos/"
+            data-central
+            title={central.sem_conexao ? (central.ultimo_erro ?? "Sem conexão com a central") : `Central em ${central.host}`}
+            className={cn(
+              "flex h-8 items-center gap-2.5 rounded-[9px] px-3 text-[13px] transition-colors hover:bg-superficie/60",
+              central.sem_conexao ? "font-semibold text-alarme" : "text-grafite hover:text-tinta",
+            )}
+          >
+            <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", central.sem_conexao ? "bg-alarme" : "bg-verde")} />
+            <span className="min-w-0 flex-1 truncate">
+              {central.sem_conexao ? "Central: sem conexão" : `Central: conectado como ${central.usuario?.nome ?? "gestor"}`}
+            </span>
+          </Link>
+        )}
+      </div>
 
       {/* Sem min-h-0: numa janela baixa o menu rola inteiro, em vez de o rodapé passar por cima de quem entrou. */}
       <nav aria-label="Menu" className="mt-3 flex flex-1 flex-col">
@@ -151,4 +168,25 @@ export function Sidebar() {
       )}
     </aside>
   );
+}
+
+/** Estado da central para o menu: lê na hora de entrar e a cada 30 s (só o banco local; a Ponte é quem busca na rede).
+ * O painel pela web não tem a central (spec 026). */
+function useCentral(usuarioId: number | null): CentralEstado | null {
+  const [central, setCentral] = useState<CentralEstado | null>(null);
+  useEffect(() => {
+    if (usuarioId === null || PAINEL_NA_WEB) return;
+    let vivo = true;
+    const ler = () =>
+      bridge.central_estado().then((resposta) => {
+        if (vivo) setCentral(resposta.ok ? resposta.dados : null);
+      });
+    void ler();
+    const vigia = window.setInterval(() => void ler(), CENTRAL_MS);
+    return () => {
+      vivo = false;
+      window.clearInterval(vigia);
+    };
+  }, [usuarioId]);
+  return usuarioId === null ? null : central;
 }

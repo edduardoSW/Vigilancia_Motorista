@@ -9,28 +9,22 @@ import { Glyph } from "@/components/ui/glyph";
 import { Kbd } from "@/components/ui/kbd";
 import { useEscapeAndFocus, usePresence } from "@/components/ui/use-presence";
 import { nomeDoVeiculo as nomeNaFrota } from "@/components/vehicles/vehicle-labels";
-import { dados, dia, hora, motoristaDe, nomeDoVeiculo } from "@/content";
+import { dia, hora, nomeDoVeiculo } from "@/content";
 import { buscarNoGuia } from "@/content/guide";
 import { bridge, type Motorista, type Veiculo } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
+import { useViagens } from "@/lib/viagens";
 
 /** O botão "Buscar" do menu abre a busca rápida com este evento. */
 export const EVENTO_BUSCA = "rotaguard:busca";
 
 // Busca rápida (Ctrl+K, contrato do painel): ir para uma tela, achar viagem, motorista, veículo ou capítulo do guia.
 // ↑/↓ escolhe, Enter abre, Esc fecha. Motorista e veículo abrem na janela no centro da tela deles (?abrir=).
-const VIAGENS: ItemBusca[] = dados.viagens.map((viagem) => ({
-  id: `viagem-${viagem.id}`,
-  grupo: "Viagens",
-  titulo: nomeDoVeiculo(viagem.tipo, viagem.veiculo),
-  detalhe: `${viagem.linha} · chegou ${dia(viagem.chegada)} às ${hora(viagem.chegada)}`,
-  palavras: `viagem ${motoristaDe(viagem.motorista)?.nome ?? ""}`,
-  href: `/viagens/${viagem.id}/`,
-}));
-
+// Viagens só as lidas de verdade (spec 030).
 export function CommandPalette() {
   const router = useRouter();
   const { pode } = useSession();
+  const viagens = useViagens();
   const [aberta, setAberta] = useState(false);
   const [aberturaVista, setAberturaVista] = useState(false);
   const [consulta, setConsulta] = useState("");
@@ -100,6 +94,14 @@ export function CommandPalette() {
       palavras: `veiculo ${veiculo.modelo ?? ""}`,
       href: `/veiculos/?abrir=${veiculo.id}`,
     }));
+    const deViagens = viagens.map((viagem) => ({
+      id: `viagem-${viagem.id}`,
+      grupo: "Viagens",
+      titulo: nomeDoVeiculo(viagem.tipo, viagem.veiculo),
+      detalhe: `${viagem.linha} · chegou ${dia(viagem.chegada)} às ${hora(viagem.chegada)}`,
+      palavras: `viagem ${cadastros.motoristas.find((motorista) => motorista.ref === viagem.motorista)?.nome ?? ""}`,
+      href: `/viagens/relatorio/?id=${encodeURIComponent(viagem.id)}`,
+    }));
     const guia = buscarNoGuia(consulta)
       .slice(0, 5)
       .map((achado) => ({
@@ -110,8 +112,8 @@ export function CommandPalette() {
         palavras: consulta,
         href: `/guia/?capitulo=${achado.capituloId}${achado.topicoId ? `&passo=${achado.topicoId}` : ""}`,
       }));
-    return buscarNaPaleta(consulta, [...telas, ...VIAGENS, ...motoristas, ...veiculos, ...guia]);
-  }, [consulta, telas, cadastros]);
+    return buscarNaPaleta(consulta, [...telas, ...deViagens, ...motoristas, ...veiculos, ...guia]);
+  }, [consulta, telas, cadastros, viagens]);
 
   const selecionado = resultados.length ? Math.min(indice, resultados.length - 1) : -1;
 

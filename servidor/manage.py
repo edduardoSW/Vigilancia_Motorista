@@ -12,6 +12,11 @@ Primeiros passos:
 Para testar o app com dados de exemplo:
   python manage.py demo --com-alertas
 
+Central (spec 026): empresa e gestor que entram no painel executável (--empresa aceita o id ou o nome):
+  DRIVESAFE_SENHA_INICIAL='senha-forte-aqui' python manage.py criar-usuario --papel gestor --nome "Fulana" \
+      --email fulana@exemplo.com --empresa "Transportadora Exemplo"
+  python manage.py apagar-trechos-antigos --dias 30      # prazo de guarda dos trechos (cron diário na VPS)
+
 Senhas: sem DRIVESAFE_SENHA_INICIAL, o comando gera uma senha temporária, mostra uma única vez e pede a troca no
 primeiro acesso.
 """
@@ -19,17 +24,21 @@ import argparse
 import os
 import random
 import secrets
+import time
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
+from backend import config
 from backend.alert_types import needs_review
+from backend.central import clip_file, clips_root, long_path
 from backend.identifiers import email_problem, format_phone, normalize_email, normalize_phone
 from backend.database import (
-    ACTIVATION_POLICIES, ROLES, Alert, Company, Consent, CONSENT_TERM_VERSION, Device, Driver, SessionLocal, User,
-    UserSession, Vehicle, format_local, init_db, utcnow,
+    ACTIVATION_POLICIES, ROLES, Alert, Clip, Company, Consent, CONSENT_TERM_VERSION, Device, Driver, PairingCode,
+    SessionLocal, User, UserSession, Vehicle, format_local, init_db, utcnow,
 )
 from backend.security import generate_device_token, hash_password, password_problem
 
@@ -41,9 +50,18 @@ def _get_or_exit(db, model, object_id, label):
     return obj
 
 
-def _company(db, company_id):
-    if company_id is not None:
-        return _get_or_exit(db, Company, company_id, "Empresa")
+def _company(db, company):
+    """--empresa: id (ex.: 3) ou nome exato, sem diferença de maiúsculas (ex.: "Transportadora Exemplo")."""
+    if company is not None:
+        text = str(company).strip()
+        if text.isdigit():
+            return _get_or_exit(db, Company, int(text), "Empresa")
+        matches = db.query(Company).filter(func.lower(Company.name) == text.lower()).order_by(Company.id).limit(2).all()
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            raise SystemExit(f'Há mais de uma empresa chamada "{text}": informe o ID (veja com: python manage.py empresas).')
+        raise SystemExit(f'Empresa "{text}" não existe (veja com: python manage.py empresas).')
     companies = db.query(Company).order_by(Company.id).limit(2).all()
     if len(companies) == 1:
         return companies[0]
@@ -101,7 +119,8 @@ def criar_empresa(db, args):
                       contact_phone=_phone_or_exit(args.celular), activation_policy=args.politica)
     db.add(company)
     db.commit()
-    print(f'Empresa #{company.id} "{company.name}" criada (sinais de ativação: {company.activation_policy}).')
+    print(f'Empresa #{company.id} "{company.name}" criada (sinais de ativação: {company.activation_policy}; '
+          f'uid {company.uid}).')
 
 
 def listar_empresas(db, _args):
@@ -109,7 +128,7 @@ def listar_empresas(db, _args):
         status = "ativa" if company.active else "INATIVA"
         contact = " ".join(filter(None, (company.contact_name, format_phone(company.contact_phone)))) or "-"
         print(f"#{company.id:<3} {company.name:<36} {company.document or '-':<18} contato {contact:<36} "
-              f"ativação {company.activation_policy:<9} {status}")
+              f"ativação {company.activation_policy:<9} {status}  uid {company.uid}")
 
 
 def criar_usuario(db, args):
@@ -233,6 +252,41 @@ def listar_dispositivos(db, _args):
         company = device.company.name if device.company else "-"
         print(f"#{device.id:<3} {device.name:<28} {company:<24} token {device.token_prefix}...  veículo {vehicle:<9} "
               f"motorista {driver:<18} {status}")
+
+
+# ---------- central: prazo de guarda dos trechos ----------
+
+def apagar_trechos_antigos(db, args):
+    """Trecho tem rosto (dado pessoal) e malha (biométrico): sai da central no prazo. O registro fica, com apagado_em,
+    para o painel saber que o vídeo não está mais lá."""
+    if args.dias < 1:
+        raise SystemExit("--dias precisa ser 1 ou mais.")
+    now = utcnow()
+    clips = (db.query(Clip).filter(Clip.deleted_at.is_(None), Clip.received_at < now - timedelta(days=args.dias))
+             .order_by(Clip.id).all())
+    missing = 0
+    for clip in clips:
+        try:
+            clip_file(clip.path).unlink()
+        except FileNotFoundError:
+            missing += 1
+        clip.deleted_at = now
+    db.commit()
+
+    leftovers = 0
+    for folder, _, names in os.walk(long_path(clips_root())):
+        for name in names:  # envio interrompido há mais de um dia
+            part = Path(folder) / name
+            if name.startswith(".") and name.endswith(".part") and part.stat().st_mtime < time.time() - 86400:
+                part.unlink(missing_ok=True)
+                leftovers += 1
+    codes = (db.query(PairingCode).filter(PairingCode.expires_at < now - timedelta(days=1))
+             .delete(synchronize_session=False))
+    db.commit()
+    print(f"{len(clips)} trecho(s) com mais de {args.dias} dias apagado(s)"
+          + (f" ({missing} já sem arquivo)" if missing else "") + ".")
+    if leftovers or codes:
+        print(f"Limpeza: {leftovers} envio(s) interrompido(s), {codes} código(s) de pareamento vencido(s).")
 
 
 # ---------- motoristas e veículos ----------
@@ -369,7 +423,7 @@ def build_parser():
     p.add_argument("--nome", required=True)
     p.add_argument("--email", help="login por e-mail")
     p.add_argument("--celular", help="login por celular, com DDD (pode usar junto com --email)")
-    p.add_argument("--empresa", type=int, help="ID da empresa (gestor e motorista)")
+    p.add_argument("--empresa", help="ID ou nome da empresa (gestor e motorista)")
     p.add_argument("--motorista", type=int, help="ID do motorista (papel motorista)")
     p.set_defaults(func=criar_usuario)
 
@@ -382,7 +436,7 @@ def build_parser():
 
     p = sub.add_parser("criar-dispositivo", help="cadastra um dispositivo e mostra o token dele")
     p.add_argument("--nome", required=True)
-    p.add_argument("--empresa", type=int, help="ID da empresa (obrigatório se houver mais de uma)")
+    p.add_argument("--empresa", help="ID ou nome da empresa (obrigatório se houver mais de uma)")
     p.add_argument("--veiculo", type=int, help="ID do veículo")
     p.add_argument("--motorista", type=int, help="ID do motorista")
     p.set_defaults(func=criar_dispositivo)
@@ -411,7 +465,7 @@ def build_parser():
     p.add_argument("--placa", required=True)
     p.add_argument("--modelo", required=True)
     p.add_argument("--tipo", required=True)
-    p.add_argument("--empresa", type=int)
+    p.add_argument("--empresa", help="ID ou nome da empresa")
     p.set_defaults(func=criar_veiculo)
 
     p = sub.add_parser("motoristas", help="lista os motoristas")
@@ -421,8 +475,13 @@ def build_parser():
     p.add_argument("--nome", required=True)
     p.add_argument("--cnh", required=True)
     p.add_argument("--telefone")
-    p.add_argument("--empresa", type=int)
+    p.add_argument("--empresa", help="ID ou nome da empresa")
     p.set_defaults(func=criar_motorista)
+
+    p = sub.add_parser("apagar-trechos-antigos", help="apaga da central os trechos de vídeo mais velhos que o prazo")
+    p.add_argument("--dias", type=int, default=config.CLIP_RETENTION_DAYS,
+                   help=f"prazo de guarda em dias (padrão {config.CLIP_RETENTION_DAYS})")
+    p.set_defaults(func=apagar_trechos_antigos)
 
     p = sub.add_parser("demo", help="cria empresa, motoristas, veículos, usuários e dispositivos de demonstração")
     p.add_argument("--com-alertas", action="store_true", help="também cria alertas de exemplo dos últimos 7 dias")

@@ -21,6 +21,8 @@ import copia  # noqa: E402
 from dados import ErroPainel, iso_utc  # noqa: E402
 from ponte import Ponte  # noqa: E402
 
+import demonstracao_antiga  # noqa: E402
+
 checks = 0
 CUSTO_TESTE = (2**4, 8, 1)
 T0 = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc).timestamp()
@@ -30,6 +32,7 @@ SENHA_SUP = "frase comprida de teste dois"
 SENHA_CON = "frase comprida de teste tres"
 SENHA_COPIA = "frase da copia de teste"
 ADMIN = {"nome": "Marina Lopes", "usuario": "marina.lopes", "senha": SENHA_ADM}
+EMPRESA = "Transportes Lima"  # spec 030: ativar sem arquivo cria a empresa com o nome digitado
 
 
 def ok(message):
@@ -93,9 +96,11 @@ def entrar_como(ponte, usuario, senha):
 
 
 def pronta(tmp, relogio, destinos=None):
-    """Demonstração ativada, com supervisor e consulta criados; volta com a administradora na sessão."""
+    """Painel ativado sem arquivo, com os cadastros fictícios do fixture (só nos testes, spec 030), supervisor e
+    consulta criados; volta com a administradora na sessão."""
     ponte = nova_ponte(tmp, relogio, destinos)
-    dados(ponte.ativar_demonstracao(ADMIN), "ativar demonstração")
+    dados(ponte.ativar_local(EMPRESA, ADMIN), "ativar sem arquivo")
+    demonstracao_antiga.carregar_na_ponte(ponte)
     for nome, usuario, funcao, senha in (("Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP),
                                          ("Ana Souza", "ana.souza", "consulta", SENHA_CON)):
         entrar_como(ponte, "marina.lopes", SENHA_ADM)
@@ -135,7 +140,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     for secao, valores, esperadas in (
             ("regras", {"direcao_continua_min": 300}, [("regras.direcao_continua_min", "5 h 30 → 5 h")]),
             ("empresa", {"nome": "Viação Teste", "cnpj": "11222333000181", "telefone": "(11) 3333-4444"},
-             [("empresa.nome", "Viação Demonstração → Viação Teste"), ("empresa.cnpj", "(vazio) → 11.222.333/0001-81"),
+             [("empresa.nome", f"{EMPRESA} → Viação Teste"), ("empresa.cnpj", "(vazio) → 11.222.333/0001-81"),
               ("empresa.telefone", "(vazio) → (11) 3333-4444")]),
             ("guarda", {"videos_dias": 15}, [("guarda.videos_dias", "30 → 15")]),
             ("acesso", {"bloqueio_min": 10}, [("acesso.bloqueio_min", "15 → 10")]),
@@ -259,7 +264,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     assert sorted(p.name for p in Path(tmp).iterdir() if p.is_file()) == [caminho.name], "BKP-01 um arquivo só, sem .tmp"
     bruto = caminho.read_bytes()
     assert len(bruto) == feita["bytes"] and bruto.startswith(copia.MAGICO), "BKP-01 tamanho e assinatura do formato"
-    for texto in ("Carlos Menezes", "Viação Demonstração", "marina.lopes", "CREATE TABLE", SENHA_COPIA):
+    for texto in ("Carlos Menezes", EMPRESA, "marina.lopes", "CREATE TABLE", SENHA_COPIA):
         assert texto.encode("utf-8") not in bruto, f"BKP-01 texto aberto dentro da cópia: {texto}"
     linha = linhas(ponte, "fez cópia de segurança")[-1]
     assert (linha["alvo"], linha["detalhe"], linha["em"]) == (caminho.name, f"{feita['bytes']} bytes", iso_utc(t[0]))
@@ -273,7 +278,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     assert inspect.signature(copia.fazer_copia).parameters["custo"].default == contas.CUSTO_PRODUCAO == (2**17, 8, 1), \
         "BKP-01 fora dos testes a chave usa o scrypt de produção"
     pacote = copia.conteudo_da_copia(cabecalho, conteudo)
-    assert pacote["arquivos"] == {}, f"BKP-01 demonstração sem termo importado não leva arquivo: {list(pacote['arquivos'])}"
+    assert pacote["arquivos"] == {}, f"BKP-01 sem termo importado não leva arquivo: {list(pacote['arquivos'])}"
     restaurado = sqlite3.connect(":memory:")
     restaurado.deserialize(pacote["banco"])
     assert restaurado.execute("SELECT COUNT(*) FROM motoristas").fetchone()[0] == 5, "BKP-01 a cópia devolve o banco"

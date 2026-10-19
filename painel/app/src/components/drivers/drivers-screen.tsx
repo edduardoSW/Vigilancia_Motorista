@@ -10,12 +10,14 @@ import { useSession, useVisao } from "@/components/session-provider";
 import { CardGrid, CardInfo, CardTitulo } from "@/components/ui/card-grid";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Kbd } from "@/components/ui/kbd";
 import { PageHeader } from "@/components/ui/page-header";
 import { SaveButton } from "@/components/ui/save-button";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { ViewToggle } from "@/components/ui/view-toggle";
+import { VAZIO } from "@/content/estados-vazios";
 import { bridge, type Motorista } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 import { diasAte, hojeIso, mesAno, situacaoCnh } from "@/lib/validators";
@@ -30,8 +32,8 @@ type Janela = { modo: "novo" } | { modo: "ver"; id: number; recemCadastrado: boo
 
 const ABAS: Aba[] = ["ativo", "afastado", "desligado"];
 const NOME_ABA: Record<Aba, string> = { ativo: "Ativos", afastado: "Afastados", desligado: "Desligados" };
-const VAZIO: Record<Aba, string> = {
-  ativo: "Nenhum motorista ativo ainda.",
+const NADA_NA_ABA: Record<Aba, string> = {
+  ativo: "Nenhum motorista ativo.",
   afastado: "Nenhum motorista afastado.",
   desligado: "Nenhum motorista desligado.",
 };
@@ -112,7 +114,17 @@ export function DriversScreen() {
     .filter((item) => item.situacao === aba)
     .filter((item) => !termo || semAcento(`${item.nome} ${item.nome_curto} ${item.matricula}`).includes(termo))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-  const vazio = lista === null ? "Carregando…" : busca.trim() ? `Nenhum motorista encontrado para "${busca.trim()}".` : VAZIO[aba];
+  // Spec 030 (SDF-04): sem nenhum motorista, o estado vazio diz o próximo passo; com motoristas, só a aba está vazia.
+  const vazio =
+    lista === null ? (
+      "Carregando…"
+    ) : busca.trim() ? (
+      `Nenhum motorista encontrado para "${busca.trim()}".`
+    ) : todos.length === 0 ? (
+      <EmptyState estado={VAZIO.motoristas} onAcao={podeEditar ? abrirNovo : undefined} />
+    ) : (
+      NADA_NA_ABA[aba]
+    );
 
   function abrirNovo() {
     setSalvando("idle");

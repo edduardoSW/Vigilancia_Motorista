@@ -7,23 +7,18 @@ import { Wordmark } from "@/components/icons";
 import { useSession } from "@/components/session-provider";
 import { Sidebar } from "@/components/sidebar";
 import { Field } from "@/components/ui/field";
-import { bridge, type NovoAdministrador, SENHA_MINIMA } from "@/lib/bridge";
+import { bridge, type NovoAdministrador, PAINEL_NA_WEB, SENHA_MINIMA } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 
 // Portão do painel (spec 014): ativar → criar administrador → guardar o código → entrar → trocar senha se pedido.
 // Depois de entrar, o menu e o conteúdo; a tela de bloqueio fica por cima sem perder a página aberta.
-// A faixa de prévia aparece em todas as telas (o --verificar do app procura "dados fictícios").
-export const AVISO_PREVIA = "Prévia com dados fictícios. Ler a caixa de verdade (registro e vídeos) ainda está em desenvolvimento.";
+// Spec 030: sem faixa de prévia e sem dado de exemplo; o --verificar do app recusa a faixa se ela voltar.
 
 /** Pede para parar vídeos e fechar janelas de vídeo quando a tela bloqueia. */
 export const EVENTO_BLOQUEIO = "rotaguard:bloqueio";
 
 const TOQUE_MS = 30_000;
 const nunca = new Promise<never>(() => {});
-
-function Faixa({ className }: { className?: string }) {
-  return <p className={cn("no-print border-b border-fio px-10 py-2.5 text-[12px] text-grafite", className)}>{AVISO_PREVIA}</p>;
-}
 
 // No build o conteúdo sai no HTML (escondido); na janela ele só monta depois de alguém entrar.
 function Conteudo({ liberado, children }: { liberado: boolean; children: React.ReactNode }) {
@@ -121,7 +116,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         <div hidden={fase !== "app"} inert={bloqueado} className="app-shell grid h-[var(--altura-janela)] grid-cols-[288px_minmax(0,1fr)] overflow-hidden">
           <Sidebar />
           <main id="conteudo" className="overflow-y-auto">
-            <Faixa />
             <Suspense key={fase === "app" ? "app" : "espera"} fallback={null}>
               <Conteudo liberado={fase === "app"}>
                 <div key={rota} className="anim-enter">
@@ -173,7 +167,6 @@ function useVigiaDeUso(ativo: boolean, atualizar: () => Promise<void>) {
 function TelaDeFora({ children, versao }: { children: React.ReactNode; versao: string | null }) {
   return (
     <div className="flex min-h-[var(--altura-janela)] flex-col">
-      <Faixa />
       <div className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="anim-enter w-full max-w-[400px]">{children}</div>
       </div>
@@ -376,10 +369,12 @@ function Recuperar({ onVoltar }: { onVoltar: () => void }) {
 }
 
 function Ativar({ onAtivado }: { onAtivado: (codigo: string) => void }) {
-  const [etapa, setEtapa] = useState<"escolher" | "admin">("escolher");
   const [arquivo, setArquivo] = useState<{ nome: string; conteudo: string } | null>(null);
   const [erroArquivo, setErroArquivo] = useState<string | null>(null);
+  const [empresa, setEmpresa] = useState("");
   const [admin, setAdmin] = useState<NovoAdministrador>({ nome: "", usuario: "", senha: "" });
+  // Painel pela web (spec 024): quem abrisse primeiro viraria administrador; ativar pede o código da RotaGuard.
+  const [codigoAtivacao, setCodigoAtivacao] = useState("");
   const [erro, setErro] = useState<{ campo?: string; texto: string } | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -393,81 +388,90 @@ function Ativar({ onAtivado }: { onAtivado: (codigo: string) => void }) {
     }
     setErroArquivo(null);
     setArquivo({ nome: escolhido.name, conteudo: await escolhido.text() });
-    setEtapa("admin");
   }
 
+  // Spec 030 (SDF-06): sem o arquivo, a empresa nasce com o nome digitado e nenhum registro; com ele, nome e caixas
+  // vêm do arquivo. Nos dois casos, quem preenche vira o administrador.
   async function criar(event: React.FormEvent) {
     event.preventDefault();
     setEnviando(true);
     setErro(null);
-    const resposta = arquivo ? await bridge.ativar_com_arquivo(arquivo.conteudo, admin) : await bridge.ativar_demonstracao(admin);
+    const opcoes = PAINEL_NA_WEB ? { codigo_ativacao: codigoAtivacao } : undefined;
+    const resposta = arquivo ? await bridge.ativar_com_arquivo(arquivo.conteudo, admin, opcoes) : await bridge.ativar_local(empresa, admin, opcoes);
     setEnviando(false);
     if (resposta.ok) {
       setAdmin({ nome: "", usuario: "", senha: "" });
+      setCodigoAtivacao("");
       onAtivado(resposta.dados.codigo_recuperacao);
       return;
     }
     if (resposta.campo === "arquivo") {
       setArquivo(null);
-      setEtapa("escolher");
       setErroArquivo(resposta.erro);
       return;
     }
     setErro({ campo: resposta.campo, texto: resposta.erro });
   }
 
-  if (etapa === "escolher") {
-    return (
-      <div>
-        <Wordmark />
-        <h1 className="mt-10 font-titulo text-[34px] font-semibold leading-tight tracking-[-0.01em]">Ativar o painel</h1>
-        <p className="mt-2 text-[15px] leading-relaxed text-grafite">
-          Abra o arquivo da empresa que a RotaGuard entregou. Sem ele, dá para ver uma demonstração com dados fictícios.
-        </p>
-        <label className="btn btn-primary mt-7 h-[46px] w-full cursor-pointer justify-center">
-          Abrir arquivo da empresa
-          <input type="file" accept=".json,application/json" onChange={lerArquivo} className="sr-only" />
-        </label>
-        <button
-          type="button"
-          onClick={() => {
-            setArquivo(null);
-            setErroArquivo(null);
-            setEtapa("admin");
-          }}
-          className="btn mt-2.5 h-[46px] w-full justify-center"
-        >
-          Ver demonstração
-        </button>
-        {erroArquivo && (
-          <p role="alert" className="anim-enter mt-4 text-[14px] text-alarme">
-            {erroArquivo}
-          </p>
-        )}
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={criar} noValidate>
       <Wordmark />
-      <h1 className="mt-10 font-titulo text-[30px] font-semibold leading-tight tracking-[-0.01em]">Criar o administrador</h1>
-      <p className="mt-1.5 text-[15px] text-grafite">
-        {arquivo ? `Arquivo ${arquivo.nome}.` : "Demonstração com dados fictícios."} Quem administra cria depois as contas da equipe.
+      <h1 className="mt-10 font-titulo text-[34px] font-semibold leading-tight tracking-[-0.01em]">Ativar o painel</h1>
+      <p className="mt-2 text-[15px] leading-relaxed text-grafite">
+        {arquivo ? "O nome da empresa e as caixas vêm do arquivo." : "Escreva o nome da empresa."} Depois, crie o acesso de quem vai administrar: é essa
+        pessoa que cria as contas da equipe.
       </p>
       <div className="mt-6">
-        <Field label="Nome" htmlFor="adm-nome" error={erro?.campo === "nome" ? erro.texto : null}>
+        {PAINEL_NA_WEB && (
+          <Field
+            label="Código de ativação"
+            htmlFor="adm-codigo-ativacao"
+            hint="Entregue pela RotaGuard. Sem ele, o painel não é ativado pela internet."
+            error={erro?.campo === "codigo_ativacao" ? erro.texto : null}
+          >
+            <SenhaInput
+              id="adm-codigo-ativacao"
+              value={codigoAtivacao}
+              onChange={setCodigoAtivacao}
+              autoComplete="off"
+              invalid={erro?.campo === "codigo_ativacao"}
+              autoFocus
+            />
+          </Field>
+        )}
+        {arquivo ? (
+          <Field label="Arquivo da empresa" htmlFor="adm-arquivo">
+            <div id="adm-arquivo" className="flex min-h-[42px] items-center justify-between gap-3 rounded-[9px] border border-fio bg-superficie px-3 text-[14px]">
+              <span className="min-w-0 truncate font-semibold">{arquivo.nome}</span>
+              <button type="button" onClick={() => setArquivo(null)} className="shrink-0 text-[13px] font-semibold text-grafite hover:text-tinta">
+                Tirar o arquivo
+              </button>
+            </div>
+          </Field>
+        ) : (
+          <Field label="Nome da empresa" htmlFor="adm-empresa" error={erro?.campo === "empresa" ? erro.texto : null}>
+            <input
+              id="adm-empresa"
+              value={empresa}
+              onChange={(event) => setEmpresa(event.target.value)}
+              autoComplete="organization"
+              autoFocus={!PAINEL_NA_WEB}
+              aria-invalid={erro?.campo === "empresa" || undefined}
+              className="input"
+            />
+          </Field>
+        )}
+        <Field label="Seu nome" htmlFor="adm-nome" error={erro?.campo === "nome" ? erro.texto : null}>
           <input
             id="adm-nome"
             value={admin.nome}
             onChange={(event) => setAdmin({ ...admin, nome: event.target.value })}
             autoComplete="name"
-            autoFocus
             aria-invalid={erro?.campo === "nome" || undefined}
             className="input"
           />
         </Field>
-        <Field label="Usuário" htmlFor="adm-usuario" hint="Nome curto para entrar, por exemplo marina.lopes." error={erro?.campo === "usuario" ? erro.texto : null}>
+        <Field label="Usuário" htmlFor="adm-usuario" hint="Nome curto para entrar, por exemplo maria.santos." error={erro?.campo === "usuario" ? erro.texto : null}>
           <input
             id="adm-usuario"
             value={admin.usuario}
@@ -480,28 +484,31 @@ function Ativar({ onAtivado }: { onAtivado: (codigo: string) => void }) {
           />
         </Field>
         <Field label="Senha" htmlFor="adm-senha" hint={<RegraDaSenha senha={admin.senha} />} error={erro?.campo === "senha" ? erro.texto : null}>
-          <SenhaInput
-            id="adm-senha"
-            value={admin.senha}
-            onChange={(senha) => setAdmin({ ...admin, senha })}
-            autoComplete="new-password"
-            invalid={erro?.campo === "senha"}
-          />
+          <SenhaInput id="adm-senha" value={admin.senha} onChange={(senha) => setAdmin({ ...admin, senha })} autoComplete="new-password" invalid={erro?.campo === "senha"} />
         </Field>
       </div>
-      {erro && !["nome", "usuario", "senha"].includes(erro.campo ?? "") && (
+      {erro && !["codigo_ativacao", "empresa", "nome", "usuario", "senha"].includes(erro.campo ?? "") && (
         <p role="alert" className="mb-3 text-[14px] text-alarme">
           {erro.texto}
         </p>
       )}
-      <div className="flex gap-2">
-        <button type="submit" disabled={enviando} className="btn btn-primary">
-          {enviando ? "Criando…" : "Criar e continuar"}
-        </button>
-        <button type="button" onClick={() => setEtapa("escolher")} className="btn">
-          Voltar
-        </button>
-      </div>
+      <button type="submit" disabled={enviando} className="btn btn-primary h-[46px] w-full justify-center">
+        {enviando ? "Criando…" : "Criar e continuar"}
+      </button>
+      {!arquivo && (
+        <p className="mt-6 border-t border-fio pt-4 text-[14px] leading-relaxed text-grafite">
+          Recebeu o arquivo da empresa da RotaGuard? Abra o arquivo antes de criar: é ele que traz as caixas.{" "}
+          <label className="cursor-pointer font-semibold text-tinta hover:underline">
+            Abrir arquivo da empresa
+            <input type="file" accept=".json,application/json" onChange={lerArquivo} className="sr-only" />
+          </label>
+        </p>
+      )}
+      {erroArquivo && (
+        <p role="alert" className="anim-enter mt-3 text-[14px] text-alarme">
+          {erroArquivo}
+        </p>
+      )}
     </form>
   );
 }
@@ -634,7 +641,6 @@ function TelaBloqueada({
 
   return (
     <div className="veu-forte anim-fade fixed inset-0 z-[70] flex flex-col">
-      <p className="no-print border-b border-sobre-video/10 px-10 py-2.5 text-[12px] text-sobre-video/70">{AVISO_PREVIA}</p>
       <div className="grid flex-1 place-items-center p-6">
         <form onSubmit={enviar} noValidate className="anim-dialog w-full max-w-[380px] rounded-[14px] border border-fio bg-elevada p-6">
           <h2 className="font-titulo text-[24px] font-semibold">Tela bloqueada</h2>

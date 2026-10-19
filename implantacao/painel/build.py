@@ -49,7 +49,7 @@ def _carregar_build_app_teste():
     return modulo
 
 
-# Reaproveita do RotaGuard Teste (spec 010): propriedades do .exe, alvo, Inno Setup e SHA-256.
+# Reaproveita do RotaGuard Script (spec 010): propriedades do .exe, alvo, Inno Setup e SHA-256.
 APP_TESTE = _carregar_build_app_teste()
 
 

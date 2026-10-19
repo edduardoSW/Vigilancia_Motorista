@@ -19,6 +19,8 @@ import cadastros  # noqa: E402
 from dados import ErroPainel, iso_utc  # noqa: E402
 from ponte import Ponte  # noqa: E402
 
+import demonstracao_antiga as antiga  # noqa: E402
+
 checks = 0
 CUSTO_TESTE = (2**4, 8, 1)
 T0 = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc).timestamp()
@@ -27,6 +29,7 @@ SENHA_ADM = "frase comprida de teste um"
 SENHA_SUP = "frase comprida de teste dois"
 SENHA_CON = "frase comprida de teste tres"
 ADMIN = {"nome": "Marina Lopes", "usuario": "marina.lopes", "senha": SENHA_ADM}
+EMPRESA = "Transportes Lima"  # spec 030: ativar sem arquivo cria a empresa com o nome digitado
 B64 = base64.b64encode(bytes(range(32))).decode()
 CHAVES_MOTORISTA = {"id", "ref", "nome", "nome_curto", "matricula", "cpf", "telefone", "cnh_numero", "cnh_categoria",
                     "cnh_validade", "situacao", "termo", "observacoes", "viagens_30d", "confirmados_30d"}
@@ -106,10 +109,12 @@ def criar_pessoa(ponte, nome, usuario, funcao, senha):
 
 
 def pronta(tmp, relogio, destinos=None, arquivo=None):
-    """Painel ativado (demonstração ou arquivo da empresa) com o supervisor Paulo Reis na sessão."""
+    """Painel ativado (sem arquivo, com os cadastros fictícios do fixture, ou com o arquivo da empresa) e o supervisor
+    Paulo Reis na sessão. Os cadastros fictícios só existem nos testes (spec 030)."""
     ponte = nova_ponte(tmp, relogio, destinos)
     if arquivo is None:
-        dados(ponte.ativar_demonstracao(ADMIN), "ativar demonstração")
+        dados(ponte.ativar_local(EMPRESA, ADMIN), "ativar sem arquivo")
+        antiga.carregar_na_ponte(ponte)
     else:
         dados(ponte.ativar_com_arquivo(json.dumps(arquivo), ADMIN), "ativar com arquivo")
     criar_pessoa(ponte, "Paulo Reis", "paulo.reis", "supervisor", SENHA_SUP)
@@ -136,7 +141,7 @@ def chaveiro():
 
 
 def cnh_nova(indice):
-    return cadastros.cnh_demo(100 + indice)
+    return antiga.cnh(100 + indice)
 
 
 # MOT-01 · campos obrigatórios da decisão 1; matrícula e CNH únicas; erro com o nome da propriedade
@@ -166,7 +171,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     assert duplicada["campo"] == "matricula" and duplicada["erro"] == "Já existe um motorista com esta matrícula.", \
         f"MOT-01 {duplicada}"
     assert erro(ponte.motorista_salvar({**BASE, "matricula": "0412", "cnh_numero": cnh_nova(2)}), "conflito",
-                "MOT-01 matrícula da demonstração")["campo"] == "matricula"
+                "MOT-01 matrícula já cadastrada")["campo"] == "matricula"
     repetida = erro(ponte.motorista_salvar({**BASE, "matricula": "1000"}), "conflito", "MOT-01 CNH repetida")
     assert repetida["campo"] == "cnh_numero" and repetida["erro"] == "Já existe um motorista com esta CNH.", repetida
     assert contar(ponte, "motoristas") == antes + 1, "MOT-01 repetido não grava"
@@ -182,8 +187,8 @@ for numero in CNH_OK + [" 123.456.789-00 "]:
     assert cadastros.cnh_valida(numero), f"MOT-02 CNH válida recusada: {numero}"
 for numero in CNH_RUINS + ["1234567890", "123456789001", "", None]:
     assert not cadastros.cnh_valida(numero), f"MOT-02 CNH inválida aceita: {numero}"
-assert all(cadastros.cnh_valida(cadastros.cnh_demo(i)) for i in range(1, 6)), "MOT-02 CNHs de demonstração válidas"
-assert len({cadastros.cnh_demo(i) for i in range(1, 6)}) == 5, "MOT-02 CNHs de demonstração diferentes"
+assert all(cadastros.cnh_valida(antiga.cnh(i)) for i in range(1, 6)), "MOT-02 CNHs do fixture válidas"
+assert len({antiga.cnh(i) for i in range(1, 6)}) == 5, "MOT-02 CNHs do fixture diferentes"
 for cpf in ("529.982.247-25", "52998224725"):
     assert cadastros.cpf_valido(cpf), f"MOT-02 CPF válido recusado: {cpf}"
 for cpf in ("52998224724", "111.111.111-11", "5299822472", "", None):
@@ -416,7 +421,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                     "modelo": "Sprinter", "ano": 2027, "situacao": "em_uso", "caixa_id": None}, f"VEI-01 {novo}"
     repetido = erro(ponte.veiculo_salvar({**VEICULO, "placa": "XYZ9A99"}), "conflito", "VEI-01 número repetido")
     assert repetido["campo"] == "numero" and repetido["erro"] == "Já existe um veículo com este número.", repetido
-    erro(ponte.veiculo_salvar({**VEICULO, "numero": "2240"}), "conflito", "VEI-01 número da demonstração")
+    erro(ponte.veiculo_salvar({**VEICULO, "numero": "2240"}), "conflito", "VEI-01 número já cadastrado")
     editado = dados(ponte.veiculo_salvar({**novo, "situacao": "oficina", "ano": ""}), "VEI-01 editar o mesmo")
     assert editado["situacao"] == "oficina" and editado["ano"] is None, f"VEI-01 {editado}"
     erro(ponte.veiculo_salvar({**VEICULO, "id": 9999}), "nao_encontrado", "VEI-01 editar o que não existe")
@@ -468,11 +473,11 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     fechar(ponte)
     demo = pronta(Path(tmp) / "demo", t)
     codigos = {c["codigo"]: c for c in dados(demo.caixas_listar())}
-    assert len(codigos) == 8 and codigos["RG-0155"]["veiculo_id"] is None, "CXA-01 caixas da demonstração"
-    assert (codigos["RG-0129"]["situacao"], codigos["RG-0129"]["detalhe"]) == ("atencao", cadastros.DEMO_DETALHE_RG_0129)
+    assert len(codigos) == 8 and codigos["RG-0155"]["veiculo_id"] is None, "CXA-01 caixas do fixture"
+    assert (codigos["RG-0129"]["situacao"], codigos["RG-0129"]["detalhe"]) == ("atencao", antiga.DETALHE_RG_0129)
     fechar(demo)
 ok("CXA-01 ativar com arquivo traz só as caixas dele (código, geração, revogação); ponte sem criar caixa; caixa "
-   "inexistente não grava veículo; demonstração com 8 caixas e RG-0155 livre")
+   "inexistente não grava veículo; fixture com 8 caixas e RG-0155 livre")
 
 # CXA-02 · uma caixa em um veículo por vez; trocar guarda o histórico e não muda viagens antigas
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
@@ -543,7 +548,8 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]
     ponte = pronta(tmp, t)
     apagar = [nome for nome in dir(ponte) if any(p in nome for p in ("apagar", "excluir", "remover", "deletar"))]
-    assert apagar == [], f"CAD-01 a ponte não tem como apagar cadastro: {apagar}"
+    # Spec 030: a única remoção é interna (não chega ao JavaScript) e só tira a demonstração antiga, ao abrir.
+    assert apagar == ["_remover_demonstracao"], f"CAD-01 a ponte não tem como apagar cadastro: {apagar}"
     dados(ponte.motorista_salvar({**por_ref(ponte, "m-01"), "situacao": "desligado"}))
     carlos = por_ref(ponte, "m-01")
     assert carlos["situacao"] == "desligado" and carlos["termo"]["assinado"] is True, f"CAD-01 {carlos}"
@@ -596,26 +602,5 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     fechar(ponte)
 ok("CAD-02 cadastrou e editou motorista e veículo (com os campos), instalou, retirou e trocou caixa e exportou, "
    "com quem, quando e em quê; salvar sem mudança não registra")
-
-# EQP-04 (demonstração) · decisões de demonstração iguais às da tela, sem linha no registro
-with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-    t = [T0]
-    ponte = nova_ponte(tmp, t)
-    dados(ponte.ativar_demonstracao(ADMIN))
-    decisoes = dados(ponte.decisoes_listar())
-    assert decisoes == [
-        {"momento_id": "v-1187-e-202", "resultado": "alarme_falso", "orientado": False, "por": "Marina (gestora)",
-         "funcao": "administrador", "em": "2026-09-14T06:58"},
-        {"momento_id": "v-1187-e-203", "resultado": "confirmado", "orientado": True, "por": "Marina (gestora)",
-         "funcao": "administrador", "em": "2026-09-14T06:58"}], f"EQP-04 decisões de demonstração: {decisoes}"
-    guardadas = ponte._n().banco.todos("SELECT uid, criado_em, alterado_em, ativa FROM decisoes ORDER BY id")
-    assert all(len(l["uid"]) == 32 and l["criado_em"] and l["alterado_em"] and l["ativa"] == 1 for l in guardadas)
-    acoes = [l["acao"] for l in ponte._n().banco.todos("SELECT acao FROM atividades ORDER BY id")]
-    assert acoes == ["ativou o painel", "entrou"], f"EQP-04 demonstração sem linha de decisão no registro: {acoes}"
-    dados(ponte.decisao_desfazer("v-1187-e-202"))
-    assert [d["momento_id"] for d in dados(ponte.decisoes_listar())] == ["v-1187-e-203"], "EQP-04 desfazer vale"
-    fechar(ponte)
-ok("EQP-04 (demonstração) v-1187-e-202 alarme falso e v-1187-e-203 confirmado e orientado, por Marina (gestora) às "
-   "06:58, com uid, sem linha no registro")
 
 print(f"\n{checks} verificações OK")

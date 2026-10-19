@@ -1,0 +1,6 @@
+# Só para os testes (tests/test_painel_web.py): o TestClient do Starlette 1.9 usa o httpx2 (o httpx antigo está obsoleto
+# para ele). Fora da imagem de produção. Versões conferidas com `pip index versions` em 19/10/2026.
+-r requirements.txt
+httpx2==2.14.0
+httpcore2==2.14.0
+truststore==0.10.5

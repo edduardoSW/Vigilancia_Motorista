@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { bridge, type Configuracoes } from "@/lib/bridge";
 import { useSession } from "@/components/session-provider";
@@ -8,6 +9,7 @@ import { AboutSection } from "./about-section";
 import { AccessSection } from "./access-section";
 import { AppearanceSection } from "./appearance-section";
 import { BackupSection } from "./backup-section";
+import { CentralSection } from "./central-section";
 import { CompanySection } from "./company-section";
 import { RetentionSection } from "./retention-section";
 import { RulesSection } from "./rules-section";
@@ -18,6 +20,7 @@ const SECOES = [
   { id: "regras", label: "Regras da viagem" },
   { id: "guarda", label: "Vídeos e guarda dos dados" },
   { id: "copia", label: "Cópia de segurança" },
+  { id: "central", label: "Central" },
   { id: "acesso", label: "Acesso" },
   { id: "aparencia", label: "Aparência" },
   { id: "sobre", label: "Sobre o RotaGuard" },
@@ -30,6 +33,14 @@ export function SettingsScreen() {
   const { pode } = useSession();
   const permitido = pode("configuracoes");
   const [secao, setSecao] = useState<SecaoId>("empresa");
+  // O Início leva direto a uma seção com ?secao= (spec 030: nome da empresa, central, cópia). Ajuste na renderização.
+  const pedida = useSearchParams().get("secao");
+  const [pedidaVista, setPedidaVista] = useState<string | null>(null);
+  if (pedida && pedida !== pedidaVista) {
+    setPedidaVista(pedida);
+    const achada = SECOES.find((item) => item.id === pedida);
+    if (achada) setSecao(achada.id);
+  }
   const [config, setConfig] = useState<Configuracoes | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -47,7 +58,7 @@ export function SettingsScreen() {
   }, [permitido]);
 
   const resumo = config
-    ? `${config.empresa.nome} · direção contínua até ${Math.floor(config.regras.direcao_continua_min / 60)} h ${String(config.regras.direcao_continua_min % 60).padStart(2, "0")} · vídeos por ${config.guarda.videos_dias} dias`
+    ? `${config.empresa.nome || "Empresa sem nome"} · direção contínua até ${Math.floor(config.regras.direcao_continua_min / 60)} h ${String(config.regras.direcao_continua_min % 60).padStart(2, "0")} · vídeos por ${config.guarda.videos_dias} dias`
     : "Toda mudança vai para o registro de atividades, com o seu nome.";
 
   return (
@@ -72,6 +83,7 @@ export function SettingsScreen() {
                 {secao === "regras" && <RulesSection config={config} onSaved={setConfig} />}
                 {secao === "guarda" && <RetentionSection config={config} onSaved={setConfig} />}
                 {secao === "copia" && <BackupSection />}
+                {secao === "central" && <CentralSection />}
                 {secao === "acesso" && <AccessSection config={config} onSaved={setConfig} />}
                 {secao === "aparencia" && <AppearanceSection config={config} onSaved={setConfig} />}
                 {secao === "sobre" && <AboutSection />}

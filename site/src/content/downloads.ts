@@ -23,8 +23,8 @@ const base = (process.env.NEXT_PUBLIC_ROTAGUARD_DOWNLOADS_BASE || BASE_PADRAO).r
 // Painel primeiro (spec 020) e só Windows: o Linux do painel está fora do escopo da spec 013.
 const arquivos: [App, Plataforma, string][] = [
   ["painel", "windows", "RotaGuard-Painel-windows-x64.zip"],
-  ["teste", "windows", "RotaGuard-Teste-windows-x64.zip"],
-  ["teste", "linux", "RotaGuard-Teste-linux-x86_64.tar.gz"],
+  ["teste", "windows", "RotaGuard-Script-windows-x64.zip"],
+  ["teste", "linux", "RotaGuard-Script-linux-x86_64.tar.gz"],
 ];
 
 export const downloads: Download[] = arquivos.map(([app, plataforma, arquivo]) => ({

@@ -10,6 +10,12 @@ Gatilhos iniciais (a ajustar com vídeos reais da frota):
 - Bocejo é sinal complementar, nunca gatilho crítico (FG 2018, Universidade de Cambridge).
 - Cabeceio: queda rápida da cabeça seguida de volta. Sistemas publicados usam de 15° a 20° de inclinação;
   os limiares abaixo são iniciais e não foram validados com a câmera do veículo.
+- Rosto perdido logo depois de o olho fechar (spec 027, ALM-01/ALM-02): a cabeça que cai no sono leva o rosto para
+  fora da imagem antes de 1 s, e o rastreador zerava. Se o olho estava fechado havia pelo menos 0,5 s (fechamento
+  longo de Mulhall et al., 2020), ou 0,4 s com a cabeça descendo, o fechamento continua contando com o rosto fora e
+  vira "possível sono" (sono_rosto_perdido) no mesmo 1 s do microssono. O Euro NCAP 2026 (§1.3.5) trata quem não
+  reage como "sem resposta". Olho aberto antes de o rosto sumir (pegar algo no chão) nunca entra aqui. Limiares de
+  0,4 s e 5° são hipótese: confirmar com vídeo real de cabeceio.
 """
 from __future__ import annotations
 
@@ -42,6 +48,10 @@ ATTENTION_PERCLOS_FACTOR = 1.5
 ATTENTION_YAWNS_10MIN = 2
 ATTENTION_NODS_10MIN = 2
 ATTENTION_AVR_RATIO = 1.30
+# DMS-06: reabertura mediana 30% mais lenta que a da calibração (Schleicher et al., 2008; Johns: a AVR da
+# reabertura também sobe). Sinal leve e fraco: sozinho não vira nível 2 nem por persistência. Limiar: hipótese.
+ATTENTION_REOPENING_RATIO = 1.30
+WEAK_MILD_SIGNS = frozenset({"reabertura_lenta"})
 
 MIN_FPS_FOR_DURATION = 24.0
 MIN_BLINKS_FOR_DURATION = 15
@@ -62,6 +72,11 @@ NOD_MAX_DOWN_S = 3.0
 NOD_REFERENCE_S = 10.0
 NOD_REFERENCE_STEP_S = 0.2
 NOD_RECENT_S = 1.5
+
+# Rosto perdido com o olho fechado (ALM-01): fechamento mínimo antes de perder a medida.
+LOST_CLOSURE_MIN_S = 0.4
+LOST_CLOSURE_HEAD_DROP_DEG = 5.0
+LOST_CLOSURE_EVENT = "sono_rosto_perdido"
 
 # Euro NCAP: avisar em até 10 s que o sistema não consegue monitorar.
 FACE_MISSING_EVENT_S = 10.0
@@ -230,6 +245,9 @@ class DrowsinessMonitor:
         self._last_t = None
         self._critical_stage = 0
         self._closure_pitch = None
+        # Último quadro medido com o olho fechado: (t, fechado desde, pitch no fechamento, pitch agora). ALM-01.
+        self._closure_seen = None
+        self._lost_closure = None  # episódio de "possível sono" com o rosto fora
         self._yawn_start = None
         self._yawn_counted = False
         self._face_missing_since = None
@@ -302,6 +320,7 @@ class DrowsinessMonitor:
         if self._nod_tracker.update(t, metrics.pitch if metrics.face_found else None):
             self._nods.append(t)
         self._check_critical(t, closed_for, metrics, assessment)
+        self._check_lost_closure(t, metrics, openness, source, assessment)
 
         if t >= self._next_evaluation:
             self._next_evaluation = t + EVALUATE_EVERY_S
@@ -368,6 +387,52 @@ class DrowsinessMonitor:
             assessment.alarm = True
             assessment.reasons = [CRITICAL_STAGES[self._critical_stage - 1][1]]
 
+    def _check_lost_closure(self, t, metrics, openness, source, assessment) -> None:
+        """ALM-01: o olho fechou, a cabeça desceu e a medida do olho sumiu (rosto fora da imagem ou cabeça baixa
+        demais para o EAR). O fechamento segue contando até o rosto voltar com o olho aberto."""
+        lost = (not metrics.face_found and not self.face_hidden_by_hand) or source == "cabeca_baixa"
+        if openness is not None:
+            if self._lost_closure is not None and openness > P80_OPENNESS:
+                self._lost_closure = None  # voltou com o olho aberto: acordado
+            since = self._tracker.closed_since
+            self._closure_seen = None if since is None else (t, since, self._closure_pitch, metrics.pitch)
+        elif not lost:
+            # Olhos tapados pela mão, óculos escuros ou rosto virado de lado: não é a cabeça caindo.
+            self._lost_closure = None
+            self._closure_seen = None
+        elif self._lost_closure is None and self._closure_seen is not None:
+            seen_t, since, pitch_start, pitch_last = self._closure_seen
+            closed = seen_t - since
+            drop = pitch_last - pitch_start if pitch_start is not None and pitch_last is not None else 0.0
+            if t - seen_t <= MAX_FRAME_GAP_S and (
+                    closed >= LONG_CLOSURE_S or (closed >= LOST_CLOSURE_MIN_S and drop >= LOST_CLOSURE_HEAD_DROP_DEG)):
+                self._lost_closure = {"since": since, "lost_at": t, "closed_before": closed, "drop": drop,
+                                      "emitted": False}
+            self._closure_seen = None
+
+        episode = self._lost_closure
+        if episode is None:
+            return
+        closed_equivalent = t - episode["since"]
+        if closed_equivalent < MICROSLEEP_S:
+            return
+        assessment.level = 3
+        assessment.alarm = True
+        assessment.reasons = [LOST_CLOSURE_EVENT]
+        assessment.closed_for = max(assessment.closed_for, closed_equivalent)
+        if not episode["emitted"]:
+            episode["emitted"] = True
+            details = {
+                "fechado_s": round(closed_equivalent, 2),
+                "fechado_antes_de_perder_s": round(episode["closed_before"], 2),
+                "cabeca_desceu_graus": round(episode["drop"], 1),
+                "rosto_fora_s": round(t - episode["lost_at"], 2),
+                "medida": source or "sem_rosto",
+                "calibrando": assessment.calibrating,
+            }
+            details.update(self._window_details(t))
+            assessment.events.append(DetectedEvent(LOST_CLOSURE_EVENT, 3, round(closed_equivalent, 2), details))
+
     def _on_blink(self, t, blink) -> None:
         for listener in self.blink_listeners:
             listener(t, blink)
@@ -431,20 +496,38 @@ class DrowsinessMonitor:
                 details["amplitude_mediana"] = round(statistics.median(amplitudes), 3)
         if fps is not None and fps >= MIN_FPS_FOR_VELOCITY:
             for key, values in (("avr_fechamento_ms", [b.closing_avr for b in recent]),
-                                ("avr_abertura_ms", [b.opening_avr for b in recent])):
+                                ("avr_abertura_ms", [b.opening_avr for b in recent]),
+                                ("fechamento_mediano_ms", [b.closing_s for b in recent]),  # DMS-06
+                                ("reabertura_mediana_ms", [b.reopening_s for b in recent])):
                 values = [v for v in values if v is not None]
                 if len(values) >= MIN_BLINKS_FOR_DURATION:
                     details[key] = round(statistics.median(values) * 1000, 1)
+            closing_avr = [b.closing_avr for b in recent if b.closing_avr is not None]
+            if len(closing_avr) >= MIN_BLINKS_FOR_DURATION:
+                # Optalert põe o desvio do AVR do fechamento logo depois da média (patente US7791491): só registro.
+                mean = math.fsum(closing_avr) / len(closing_avr)
+                spread = math.sqrt(math.fsum((v - mean) ** 2 for v in closing_avr) / len(closing_avr))
+                details["avr_fechamento_desvio_ms"] = round(spread * 1000, 1)
         perclos_3min = self._perclos.value(t, 180.0)
         details["perclos_3min"] = round(perclos_3min, 3) if perclos_3min is not None else None
         perclos_60s = self._perclos.value(t, 60.0)
         details["perclos_60s"] = round(perclos_60s, 3) if perclos_60s is not None else None
         if self.profile is not None:
-            if self.profile.blink_duration_median_s:
-                details["duracao_base_ms"] = round(self.profile.blink_duration_median_s * 1000)
-            if self.profile.blink_closing_avr_median_s:
-                details["avr_fechamento_base_ms"] = round(self.profile.blink_closing_avr_median_s * 1000, 1)
-            details["perclos_base"] = round(self.profile.perclos_baseline, 3)
+            profile = self.profile
+            if profile.blink_duration_median_s:
+                details["duracao_base_ms"] = round(profile.blink_duration_median_s * 1000)
+            if profile.blink_closing_avr_median_s:
+                details["avr_fechamento_base_ms"] = round(profile.blink_closing_avr_median_s * 1000, 1)
+            if profile.blink_reopening_median_s and "reabertura_mediana_ms" in details:
+                details["reabertura_base_ms"] = round(profile.blink_reopening_median_s * 1000, 1)
+            details["perclos_base"] = round(profile.perclos_baseline, 3)
+            # DMS-06, só registro (literatura mista para a frequência; p90 da própria pessoa).
+            if profile.blink_rate_per_min and details["piscadas_por_min"] is not None:
+                details["razao_frequencia_piscadas"] = round(details["piscadas_por_min"] / profile.blink_rate_per_min, 2)
+            if (profile.blink_duration_p90_s and fps is not None and fps >= MIN_FPS_FOR_DURATION
+                    and len(recent) >= MIN_BLINKS_FOR_DURATION):
+                above = sum(1 for b in recent if b.duration > profile.blink_duration_p90_s)
+                details["fracao_acima_p90"] = round(above / len(recent), 3)
         return details
 
     def _evaluate(self, t):
@@ -470,6 +553,14 @@ class DrowsinessMonitor:
             details["razao_avr_fechamento"] = round(ratio, 2)
             if ratio >= ATTENTION_AVR_RATIO:
                 mild.append("palpebra_mais_lenta")
+
+        base_reopening = details.get("reabertura_base_ms")
+        reopening = details.get("reabertura_mediana_ms")
+        if base_reopening and reopening:
+            ratio = reopening / base_reopening
+            details["razao_reabertura"] = round(ratio, 2)
+            if ratio >= ATTENTION_REOPENING_RATIO:
+                mild.append("reabertura_lenta")
 
         perclos_3min = details.get("perclos_3min")
         if perclos_3min is not None:
@@ -501,7 +592,7 @@ class DrowsinessMonitor:
 
         if strong:
             return 2, strong, details
-        if mild and t - self._attention_since >= ATTENTION_PERSIST_S:
+        if any(sign not in WEAK_MILD_SIGNS for sign in mild) and t - self._attention_since >= ATTENTION_PERSIST_S:
             return 2, mild + ["atencao_persistente"], details
         if mild:
             return 1, mild, details
@@ -518,7 +609,9 @@ class DrowsinessMonitor:
                            "o perfil anterior" if self.previous_profile else "a referência adaptativa")
             return
 
-        details = {"perfil": profile.summary(), "usando_perfil_anterior": False}
+        details = {"perfil": profile.summary(), "usando_perfil_anterior": False,
+                   "qualidade_calibracao": profile.calibration_quality,  # CAL-01
+                   "motivos_suspeita": list(profile.suspect_reasons)}  # CAL-02
         if profile.looked_alert or self.previous_profile is None:
             self._activate(profile)
             if profile.looked_alert and self.profile_path is not None:
@@ -533,7 +626,8 @@ class DrowsinessMonitor:
                         round(profile.blink_duration_median_s * 1000) if profile.blink_duration_median_s else "?")
         else:
             assessment.events.append(DetectedEvent("calibracao_suspeita", 2, round(profile.valid_seconds, 1), details))
-            logger.warning("Calibração suspeita: o motorista pode já estar sonolento (PERCLOS %.1f%%, maior fechamento %.2f s).",
+            logger.warning("Calibração suspeita: o motorista pode já estar sonolento (%s; PERCLOS %.1f%%, maior "
+                           "fechamento %.2f s).", ", ".join(profile.suspect_reasons) or "?",
                            profile.perclos_baseline * 100, profile.longest_closure_s)
 
     def _activate(self, profile: DriverProfile) -> None:

@@ -1,0 +1,54 @@
+# RotaGuard na VPS (specs 021 e 026): site + central de dados, atrás do Caddy de borda da VPS (/root/edge, rede `edge`).
+#
+# Fica em /root/rotaguard. Segredos e nomes da VPS no .env ao lado (chmod 600, fora do git); modelo em env.exemplo.
+#
+# Nomes únicos na VPS (projeto, serviços, volume): dois composes com serviço `app` já fizeram o proxy resolver o
+# container errado. Os nomes dos containers vêm de CONTAINER_PREFIXO, definido só no .env da VPS.
+#
+#   docker compose up -d                     # sobe os dois
+#   ./atualizar.sh site <tag>                # troca a imagem de um, com volta automática
+name: rotaguard
+
+services:
+  rotaguard_site:
+    image: rotaguard-site:${SITE_TAG:-pendente}
+    container_name: ${CONTAINER_PREFIXO:-rotaguard}-site
+    restart: unless-stopped
+    networks:
+      - edge
+    mem_limit: 384m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # Central de dados (spec 026): o RotaGuard Script de outros computadores envia eventos, sessões e trechos; o painel
+  # executável busca. Só /api/* é publicado pelo Caddy.
+  rotaguard_central:
+    image: rotaguard-central:${CENTRAL_TAG:-pendente}
+    container_name: ${CONTAINER_PREFIXO:-rotaguard}-central
+    restart: unless-stopped
+    environment:
+      DRIVESAFE_TIMEZONE: America/Sao_Paulo
+      # Trecho de até 25 MB (spec 026); análises de vídeo do modo teste antigo não são usadas aqui.
+      DRIVESAFE_MAX_UPLOAD_MB: '25'
+    volumes:
+      # Banco da central e pasta de trechos. Apagar o volume apaga as empresas, aparelhos e gravações.
+      - rotaguard_central_dados:/app/data
+    networks:
+      - edge
+    mem_limit: 384m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  rotaguard_central_dados:
+
+networks:
+  edge:
+    name: edge
+    external: true

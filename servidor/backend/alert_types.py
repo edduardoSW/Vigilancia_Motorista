@@ -11,7 +11,7 @@ ALERT_TYPE_LABELS = {
     "sonolencia": "Sonolência",
     "microssono": "Microssono (olhos fechados 1 s)",
     "sono": "Sono (olhos fechados 3 s)",
-    "nao_responsivo": "Sem resposta (olhos fechados 6 s)",
+    "nao_responsivo": "Sem resposta (olhos fechados 6 s ou olhar fora da estrada depois do aviso)",
     "rosto_nao_detectado": "Câmera sem visão do rosto",
     "calibracao_concluida": "Calibração concluída",
     "calibracao_suspeita": "Calibração suspeita (motorista já cansado?)",
@@ -24,16 +24,26 @@ ALERT_TYPE_LABELS = {
     "olhando_celular": "Olhando o celular (mais de 2 s)",
     "olhos_esfregados": "Olhos esfregados ou coçados (sinal leve de sono)",
     "mao_no_rosto": "Mão no rosto por mais de 1 s (sinal leve de sono)",
+    # Spec 027 (19/10/2026)
+    "sono_rosto_perdido": "Possível sono: olhos fecharam e o rosto saiu da imagem",
+    "distracao_longa": "Olhar fora da estrada por mais de 3 s",
+    "distracao_repetida": "Muitas olhadas fora da estrada em pouco tempo",
+    "fora_da_posicao": "Motorista fora da posição de dirigir",
+    "pausa_sugerida": "Pausa sugerida ao motorista",
+    "pausa_detectada": "Pausa feita pelo motorista",
+    "descanso_previsto_em_atraso": "Descanso previsto em atraso",
+    "avisos_de_distracao_suavizados": "Avisos de distração deixados mais baixos",
+    "estado_aparelho": "Aviso da caixa sobre o próprio funcionamento",
 }
 
 CATEGORIES = {
     "sonolencia": {"atencao", "sonolencia", "microssono", "sono", "nao_responsivo", "sonolencia_abrupta",
-                   "possivel_sonolencia", "eyes_closed", "olhos_esfregados", "mao_no_rosto"},
+                   "possivel_sonolencia", "eyes_closed", "olhos_esfregados", "mao_no_rosto", "sono_rosto_perdido"},
     "celular": {"celular_na_mao", "celular_no_ouvido", "olhando_celular", "phone_usage"},
     "ativacao": {"ativacao_atipica"},
-    "jornada": {"direcao_continua"},
-    "distracao": {"looking_down", "inattention", "distracted"},
-    "sistema": {"rosto_nao_detectado", "olhos_nao_visiveis", "calibracao_concluida", "calibracao_suspeita"},
+    "jornada": {"direcao_continua", "pausa_sugerida", "pausa_detectada", "descanso_previsto_em_atraso"},
+    "distracao": {"looking_down", "inattention", "distracted", "distracao_longa", "distracao_repetida", "fora_da_posicao"},
+    "sistema": {"rosto_nao_detectado", "olhos_nao_visiveis", "calibracao_concluida", "calibracao_suspeita", "avisos_de_distracao_suavizados", "estado_aparelho"},
 }
 _CATEGORY_BY_TYPE = {alert_type: category for category, types in CATEGORIES.items() for alert_type in types}
 

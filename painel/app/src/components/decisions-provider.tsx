@@ -3,12 +3,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
 import { useToast } from "@/components/ui/toast";
-import { dados } from "@/content";
-import { momentosDaViagem, type ResultadoMomento } from "@/content/moments";
+import type { ResultadoMomento } from "@/content/moments";
 import { bridge, type Decisao } from "@/lib/bridge";
 
 // Decisões sobre os momentos, pela ponte (spec 014, EQP-04): quem entrou decide e o Python grava nome e função.
-// Antes de alguém entrar (e no HTML exportado) valem as decisões de demonstração, iguais às que o Python cria.
+// Antes de alguém entrar (e no HTML exportado) não há decisão nenhuma (spec 030: nada de exemplo).
 type Decisions = Record<string, Decisao>;
 
 interface DecisionsContextValue {
@@ -21,11 +20,6 @@ interface DecisionsContextValue {
 }
 
 const INITIAL: Decisions = {};
-for (const trip of dados.viagens) {
-  for (const moment of momentosDaViagem(trip)) {
-    if (moment.decisaoInicial) INITIAL[moment.id] = { momento_id: moment.id, ...moment.decisaoInicial, funcao: "administrador" };
-  }
-}
 
 const DecisionsContext = createContext<DecisionsContextValue | null>(null);
 

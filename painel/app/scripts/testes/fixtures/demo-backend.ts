@@ -1,14 +1,17 @@
-// Demonstração em memória do contrato da ponte (painel parte 2): mesmos nomes, respostas e permissões do Python, com os
-// dados fictícios. Nada vai para disco nem para o navegador; recarregar a janela começa do zero (ENT-07).
+// FIXTURE DE TESTE (spec 030): a demonstração em memória que até 19/10/2026 ia no app. Não entra no pacote: só os testes
+// da tela (scripts/testes/*.test.mjs) importam, com os ganchos que resolvem o "@/" do Next e os .json.
+// Mesmos nomes, respostas e permissões do Python, com os dados fictícios de demo.json (que também mora aqui).
 // A assinatura do arquivo da empresa só é conferida no Python; aqui ele é aceito se tiver o formato certo.
-// Captura de tela sem janela: `?sessao=administrador|supervisor|consulta` abre já ativado e com alguém dentro.
-import { dados } from "@/content";
+import type { Viagem } from "@/content";
 import { momentosDaViagem } from "@/content/moments";
+import bruto from "./demo.json";
 import type {
   Acao,
   Api,
+  AparelhoRemoto,
   Atividade,
   Caixa,
+  CentralEstado,
   Configuracoes,
   Decisao,
   Estado,
@@ -18,12 +21,36 @@ import type {
   Preferencias,
   PreferenciasEntrada,
   Resposta,
+  SessaoRemota,
+  SessaoRemotaDetalhe,
   Tema,
   TermoRegistro,
+  TrechoParaTocar,
+  TrechoRemoto,
   Usuario,
   Veiculo,
-} from "./bridge";
-import { PREFERENCIAS_PADRAO, podeFazer, SENHA_MINIMA, TELAS_COM_VISAO } from "./bridge";
+} from "@/lib/bridge";
+import { PREFERENCIAS_PADRAO, podeFazer, SENHA_MINIMA, TELAS_COM_VISAO } from "@/lib/bridge";
+
+// Forma do demo.json (antes em src/content/index.ts; as viagens usam o tipo de verdade).
+interface DemoVeiculo {
+  prefixo: string;
+  tipo: "onibus" | "caminhao";
+  descricao: string;
+  caixa: string;
+  situacao: "coletada" | "importando" | "revisada" | "em_viagem" | "pronta" | "atencao";
+  detalhe: string;
+  viagem: string | null;
+}
+interface Demo {
+  aviso: string;
+  empresa: { nome: string; garagem: string };
+  motoristas: { id: string; nome: string }[];
+  veiculos: DemoVeiculo[];
+  coletas: { caixa: string; veiculo: string; conectadaEm: string }[];
+  viagens: Viagem[];
+}
+export const dados = bruto as unknown as Demo;
 
 const VERSAO = "0.1.0";
 const FUNCOES: Funcao[] = ["administrador", "supervisor", "consulta"];
@@ -234,7 +261,7 @@ const configPadrao = (nome: string): Configuracoes => ({
   aparencia: { texto_maior: false },
 });
 
-export function criarDemonstracao(): Api {
+export function criarDemonstracao({ comDados = true }: { comDados?: boolean } = {}): Api {
   let ativado = false;
   let modo: Estado["modo"] = null;
   let contas: Conta[] = [];
@@ -309,7 +336,7 @@ export function criarDemonstracao(): Api {
     return conta;
   }
 
-  function ativar(modoNovo: "demonstracao" | "empresa", nomeEmpresa: string, admin: NovoAdministrador, comDados: boolean) {
+  function ativar(modoNovo: "local" | "empresa", nomeEmpresa: string, admin: NovoAdministrador, comDados: boolean) {
     ativado = true;
     modo = modoNovo;
     config = configPadrao(nomeEmpresa);
@@ -334,21 +361,40 @@ export function criarDemonstracao(): Api {
     bloqueado = false;
     ultimoUso = Date.now();
     codigoRecuperacao = [sortear(4), sortear(4), sortear(4), sortear(4)].join("-");
-    registrar(conta.nome, "ativou o painel", nomeEmpresa, modoNovo === "demonstracao" ? "demonstração" : "arquivo da empresa");
+    registrar(conta.nome, "ativou o painel", nomeEmpresa, modoNovo === "local" ? "sem o arquivo da empresa" : "arquivo da empresa");
     registrar(conta.nome, "entrou");
     return codigoRecuperacao;
   }
 
-  // Captura de tela sem janela: começa ativado e com a função pedida dentro.
-  if (typeof window !== "undefined") {
-    const pedida = new URLSearchParams(window.location.search).get("sessao") as Funcao | null;
-    if (pedida && FUNCOES.includes(pedida)) {
-      ativar("demonstracao", "Viação Demonstração", { nome: "Marina Lopes", usuario: "marina.lopes", senha: sortear(16) }, true);
-      codigoRecuperacao = null;
-      novaConta("Paulo Reis", "paulo.reis", "supervisor", sortear(16), false).ultimo_acesso = agora();
-      novaConta("Ana Souza", "ana.souza", "consulta", sortear(16), false);
-      sessaoId = contas.find((conta) => conta.funcao === pedida)!.id;
-    }
+  // Spec 026 · central na demonstração: dois computadores fictícios, um testando agora, sessões e trechos de exemplo.
+  // Nada vai para a rede. O trecho .rgclip é sintético (quadros desenhados aqui); o MP4 fica "indisponível".
+  const centralDemo = {
+    conectado: true,
+    endereco: ENDERECO_CENTRAL,
+    usuario: { nome: "Marina Lopes", funcao: "gestor" } as { nome: string; funcao: string | null } | null,
+    empresa: "Viação Demonstração",
+    inicio: Date.now(),
+  };
+  const remotosDemo = criarRemotosDemo(centralDemo.inicio);
+
+  function estadoCentral(): CentralEstado {
+    const agoraMs = Date.now();
+    return {
+      conectado: centralDemo.conectado,
+      endereco: centralDemo.endereco,
+      endereco_padrao: ENDERECO_CENTRAL,
+      host: hostDe(centralDemo.endereco),
+      usuario: centralDemo.conectado ? centralDemo.usuario : null,
+      empresa: { nome: centralDemo.empresa },
+      ultima_busca: new Date(agoraMs - (centralDemo.conectado ? 12_000 : 600_000)).toISOString(),
+      ultima_tentativa: new Date(agoraMs - 12_000).toISOString(),
+      sem_conexao: false,
+      ultimo_erro: null,
+      buscando: false,
+      token_protegido: centralDemo.conectado ? true : null,
+      intervalo_s: 30,
+      trechos_pendentes: 0,
+    };
   }
 
   const api: Api = {
@@ -369,12 +415,15 @@ export function criarDemonstracao(): Api {
       });
     },
 
-    async ativar_demonstracao(admin) {
+    // Como o Python (ativar_local), mas a fixture carrega os dados fictícios quando foi criada com `comDados`.
+    async ativar_local(empresa, admin) {
       await pausa(150);
       if (ativado) return falha("O painel já está ativado.", { codigo: "conflito" });
+      const nome = typeof empresa === "string" ? empresa.split(/\s+/).filter(Boolean).join(" ") : "";
+      if (nome.length < 2 || nome.length > 120) return falha("Escreva o nome da empresa, com 2 a 120 letras.", { codigo: "invalido", campo: "empresa" });
       const problema = problemaDoAdmin(admin);
       if (problema) return problema;
-      return ok({ codigo_recuperacao: ativar("demonstracao", "Viação Demonstração", admin, true) });
+      return ok({ codigo_recuperacao: ativar("local", nome, admin, comDados) });
     },
 
     async ativar_com_arquivo(conteudo, admin) {
@@ -837,7 +886,31 @@ export function criarDemonstracao(): Api {
       const conta = exigir("ver_viagens");
       if (ehErro(conta)) return conta;
       const dias = ultimaCopiaEm ? Math.max(0, Math.floor((Date.now() - Date.parse(ultimaCopiaEm)) / 86_400_000)) : null;
-      return ok({ ultima_copia_em: ultimaCopiaEm, dias_desde_copia: dias, primeiros_passos_escondidos: passosEscondidos });
+      // Números de hoje como o Python (spec 030): sessões da central de mentira começadas hoje e quem testa agora.
+      const meiaNoite = new Date();
+      meiaNoite.setHours(0, 0, 0, 0);
+      const { aparelhos, sessoes } = remotosDemo.listar(centralDemo.conectado);
+      const deHoje = sessoes.filter((sessao) => Date.parse(sessao.iniciada_em ?? "") >= meiaNoite.getTime());
+      const porTipo: Record<string, number> = {};
+      for (const sessao of deHoje) for (const [tipo, n] of Object.entries(sessao.resumo.eventos_por_tipo ?? {})) porTipo[tipo] = (porTipo[tipo] ?? 0) + n;
+      const eventos = Object.values(porTipo).reduce((soma, n) => soma + n, 0);
+      return ok({
+        ultima_copia_em: ultimaCopiaEm,
+        dias_desde_copia: dias,
+        primeiros_passos_escondidos: passosEscondidos,
+        hoje: {
+          testes: deHoje.length,
+          testes_central: deHoje.length,
+          testes_locais: 0,
+          eventos,
+          alertas: eventos,
+          alertas_por_tipo: porTipo,
+          testando_agora: aparelhos.filter((item) => item.testando_agora).length,
+          computadores: aparelhos.length,
+          script_aberto: false,
+          central_conectada: centralDemo.conectado,
+        },
+      });
     },
 
     async primeiros_passos_esconder(esconder) {
@@ -960,9 +1033,228 @@ export function criarDemonstracao(): Api {
       if (ehErro(conta)) return conta;
       return ok([]);
     },
+
+    async central_estado() {
+      const conta = exigir("ver_viagens");
+      if (ehErro(conta)) return conta;
+      return ok(estadoCentral());
+    },
+
+    async central_conectar(endereco, usuario, senha) {
+      const conta = exigir("configuracoes");
+      if (ehErro(conta)) return conta;
+      const limpo = typeof endereco === "string" ? endereco.trim().replace(/\/+$/, "") : "";
+      if (!/^https:\/\/[^\s/?#@]+(\/[^\s?#]*)?$/.test(limpo)) {
+        return falha("Use o endereço completo da central, começando com https://.", { codigo: "invalido", campo: "endereco" });
+      }
+      if (typeof usuario !== "string" || usuario.trim().length < 3) {
+        return falha("Informe o e-mail ou o telefone do usuário da central.", { codigo: "invalido", campo: "usuario" });
+      }
+      if (typeof senha !== "string" || senha.length < 6) return falha("E-mail, telefone ou senha incorretos na central.", { codigo: "invalido", campo: "senha" });
+      Object.assign(centralDemo, { conectado: true, endereco: limpo, usuario: { nome: usuario.includes("@") ? usuario.split("@")[0] : usuario.trim(), funcao: "gestor" } });
+      registrar(conta.nome, "conectou à central", hostDe(limpo), `como ${centralDemo.usuario?.nome} · ${centralDemo.empresa}`);
+      return ok(estadoCentral());
+    },
+
+    async central_desconectar() {
+      const conta = exigir("configuracoes");
+      if (ehErro(conta)) return conta;
+      centralDemo.conectado = false;
+      registrar(conta.nome, "desconectou da central", hostDe(centralDemo.endereco), "o que já foi baixado continua no painel");
+      return ok(estadoCentral());
+    },
+
+    async central_gerar_codigo(nome) {
+      const conta = exigir("configuracoes");
+      if (ehErro(conta)) return conta;
+      if (nome !== null && nome !== undefined && (typeof nome !== "string" || nome.trim().length > 80)) {
+        return falha("O nome do computador pode ter até 80 letras.", { codigo: "invalido", campo: "nome" });
+      }
+      if (!centralDemo.conectado) return falha("O painel não está conectado à central. Conecte em Configurações › Central.", { codigo: "conflito" });
+      const letras = sortear(8);
+      const limpo = typeof nome === "string" && nome.trim() ? nome.trim().split(/\s+/).join(" ") : null;
+      registrar(conta.nome, "gerou código para outro computador", limpo ?? "sem nome", "vale 30 min");
+      return ok({ codigo: `${letras.slice(0, 4)}-${letras.slice(4)}`, expira_em: new Date(Date.now() + 30 * 60_000).toISOString(), validade_min: 30, nome: limpo, aparelho_uid: null });
+    },
+
+    async remotos_listar() {
+      const conta = exigir("ver_viagens");
+      if (ehErro(conta)) return conta;
+      return ok({ central: estadoCentral(), ...remotosDemo.listar(centralDemo.conectado) });
+    },
+
+    async remotos_sessao(sessao_uid) {
+      const conta = exigir("ver_viagens");
+      if (ehErro(conta)) return conta;
+      const detalhe = remotosDemo.sessao(sessao_uid, podeFazer(conta.funcao, "ver_video"), centralDemo.conectado);
+      return detalhe ? ok(detalhe) : falha("Não encontrado.", { codigo: "nao_encontrado" });
+    },
+
+    async remotos_trecho(trecho_uid) {
+      const conta = exigir("ver_video");
+      if (ehErro(conta)) return conta;
+      const trecho = remotosDemo.trecho(trecho_uid);
+      if (!trecho) return falha("Não encontrado.", { codigo: "nao_encontrado" });
+      if (trecho.disponivel) registrar(conta.nome, "abriu trecho", `${trecho.tipo} · ${trecho.aparelho_nome}`, trecho.uid);
+      return ok(trecho);
+    },
   };
 
   return api;
+}
+
+// Testes à distância na demonstração (spec 026) ------------------------------------------------------------------------
+const ENDERECO_CENTRAL = "https://rotaguard.acexpartners.com.br";
+const hostDe = (endereco: string) => endereco.replace(/^https?:\/\//, "").split("/")[0];
+const uidDemo = (n: number) => n.toString(16).padStart(32, "0");
+
+/** Um quadro sintético do trecho: rosto em traço, olhos que fecham e a marca d'água com hora e tipo (como no vídeo real). */
+function quadroDemo(indice: number, total: number, hora: string, tipo: string): string {
+  const fase = indice / (total - 1);
+  const abertura = fase < 0.35 ? 7 : fase < 0.75 ? 0.8 : 7 * Math.min(1, (fase - 0.75) * 4);
+  const cabeca = fase > 0.4 && fase < 0.75 ? 10 : 0;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+<rect width="640" height="360" fill="rgb(29,36,32)"/>
+<g transform="translate(320 ${170 + cabeca})" fill="none" stroke="rgb(159,232,112)" stroke-width="2" stroke-opacity="0.85">
+<ellipse rx="92" ry="118"/><ellipse cx="-36" cy="-22" rx="20" ry="${abertura}"/><ellipse cx="36" cy="-22" rx="20" ry="${abertura}"/>
+<path d="M-14 22 Q0 30 14 22"/><path d="M-30 58 Q0 70 30 58"/></g>
+<g fill="rgb(159,232,112)" fill-opacity="0.9">${Array.from({ length: 28 }, (_, i) => `<circle cx="${320 + Math.cos(i / 4.46) * 88}" cy="${170 + cabeca + Math.sin(i / 4.46) * 112}" r="2"/>`).join("")}</g>
+<text x="16" y="340" fill="rgb(255,255,255)" fill-opacity="0.8" font-family="sans-serif" font-size="15">${hora} · ${tipo} · demonstração</text>
+</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function criarRemotosDemo(inicio: number) {
+  const em = (minutosAtras: number) => new Date(inicio - minutosAtras * 60_000).toISOString();
+  const resumo = (duracao: number, eventos: Record<string, number>, perclos: number, piscadas: number, trechos: number) => ({
+    duracao_s: duracao,
+    eventos_por_tipo: eventos,
+    perclos_medio: perclos,
+    piscadas_por_minuto: piscadas,
+    trechos,
+    fps_medio: 24.6,
+  });
+  const aparelhos = [
+    { uid: uidDemo(1), nome: "Notebook da Ana", computador: "ANA-NOTE", programa: "RotaGuard Teste 0.4", pareado_em: em(60 * 26) },
+    { uid: uidDemo(2), nome: "Desktop da garagem", computador: "GARAGEM-01", programa: "RotaGuard Teste 0.4", pareado_em: em(60 * 50) },
+  ];
+  const sessoes = [
+    { uid: uidDemo(11), aparelho_uid: uidDemo(1), iniciada_em: em(18), encerrada_em: null as string | null, camera: "Webcam HD integrada",
+      resumo: resumo(18 * 60, { atencao: 1, microssono: 1, celular_na_mao: 1 }, 0.07, 15.2, 2) },
+    { uid: uidDemo(12), aparelho_uid: uidDemo(2), iniciada_em: em(140), encerrada_em: em(115), camera: "Câmera USB",
+      resumo: resumo(25 * 60, { olhos_esfregados: 2 }, 0.04, 17.8, 0) },
+    { uid: uidDemo(13), aparelho_uid: uidDemo(1), iniciada_em: em(60 * 22), encerrada_em: em(60 * 22 - 42), camera: "Webcam HD integrada",
+      resumo: resumo(42 * 60, { sono: 1, olhando_celular: 2 }, 0.11, 12.4, 1) },
+  ];
+  const eventos = [
+    { uid: "demo-ev-1", sessao_uid: uidDemo(11), tipo: "atencao", nivel_risco: 1, duracao_s: null, ocorrido_em: em(14.8), trecho_uid: null },
+    { uid: "demo-ev-2", sessao_uid: uidDemo(11), tipo: "microssono", nivel_risco: 3, duracao_s: 1.4, ocorrido_em: em(8.3), trecho_uid: uidDemo(21) },
+    { uid: "demo-ev-3", sessao_uid: uidDemo(11), tipo: "celular_na_mao", nivel_risco: 2, duracao_s: 4.2, ocorrido_em: em(3.1), trecho_uid: uidDemo(22) },
+    { uid: "demo-ev-4", sessao_uid: uidDemo(12), tipo: "olhos_esfregados", nivel_risco: 1, duracao_s: 2.1, ocorrido_em: em(131), trecho_uid: null },
+    { uid: "demo-ev-5", sessao_uid: uidDemo(12), tipo: "olhos_esfregados", nivel_risco: 1, duracao_s: 1.8, ocorrido_em: em(122), trecho_uid: null },
+    { uid: "demo-ev-6", sessao_uid: uidDemo(13), tipo: "olhando_celular", nivel_risco: 2, duracao_s: 3.0, ocorrido_em: em(60 * 22 - 9), trecho_uid: null },
+    { uid: "demo-ev-7", sessao_uid: uidDemo(13), tipo: "sono", nivel_risco: 3, duracao_s: 3.6, ocorrido_em: em(60 * 22 - 27), trecho_uid: uidDemo(23) },
+    { uid: "demo-ev-8", sessao_uid: uidDemo(13), tipo: "olhando_celular", nivel_risco: 2, duracao_s: 2.6, ocorrido_em: em(60 * 22 - 33), trecho_uid: null },
+  ];
+  const trechos = [
+    { uid: uidDemo(21), sessao_uid: uidDemo(11), evento_uid: "demo-ev-2", tipo: "microssono", formato: "rgclip", inicio: em(8.3 + 8 / 60), sintetico: true },
+    { uid: uidDemo(22), sessao_uid: uidDemo(11), evento_uid: "demo-ev-3", tipo: "celular_na_mao", formato: "mp4", inicio: em(3.1 + 8 / 60), sintetico: false },
+    { uid: uidDemo(23), sessao_uid: uidDemo(13), evento_uid: "demo-ev-7", tipo: "sono", formato: "mp4", inicio: em(60 * 22 - 27 + 8 / 60), sintetico: false },
+  ].map((item) => ({ ...item, fim: new Date(Date.parse(item.inicio) + 16_000).toISOString(), duracao_s: 16, tamanho: item.sintetico ? 412_000 : 2_480_000, baixado: true, erro: null }));
+
+  const nomeDo = (uid: string | null) => aparelhos.find((item) => item.uid === uid)?.nome ?? "Computador";
+  // Ana testa enquanto a demonstração estiver "conectada"; desconectada, o painel só mostra o que já tinha.
+  const aparelhoPublico = (item: (typeof aparelhos)[number], conectado: boolean): AparelhoRemoto => {
+    const testando = conectado && item.uid === uidDemo(1);
+    return {
+      ...item,
+      ultimo_sinal: testando ? new Date(Date.now() - 4_000).toISOString() : em(item.uid === uidDemo(1) ? 16 : 115),
+      testando_agora: testando,
+      risco_atual: testando ? 2 : null,
+      sessao_atual_uid: testando ? uidDemo(11) : null,
+      revogado_em: null,
+      sessoes: sessoes.filter((sessao) => sessao.aparelho_uid === item.uid).length,
+    };
+  };
+  const sessaoPublica = (item: (typeof sessoes)[number], conectado: boolean): SessaoRemota => {
+    const andamento = item.encerrada_em === null && conectado;
+    return {
+      uid: item.uid,
+      aparelho_uid: item.aparelho_uid,
+      aparelho_nome: nomeDo(item.aparelho_uid),
+      iniciada_em: item.iniciada_em,
+      encerrada_em: item.encerrada_em,
+      em_andamento: andamento,
+      sem_fim: item.encerrada_em === null && !andamento,
+      programa: "RotaGuard Teste 0.4",
+      camera: item.camera,
+      resumo: structuredClone(item.resumo),
+      eventos: eventos.filter((evento) => evento.sessao_uid === item.uid).length,
+      trechos: trechos.filter((trecho) => trecho.sessao_uid === item.uid).length,
+      trechos_baixados: trechos.filter((trecho) => trecho.sessao_uid === item.uid).length,
+    };
+  };
+  const trechoPublico = (item: (typeof trechos)[number]): TrechoRemoto => ({
+    uid: item.uid,
+    sessao_uid: item.sessao_uid,
+    evento_uid: item.evento_uid,
+    tipo: item.tipo,
+    inicio: item.inicio,
+    fim: item.fim,
+    duracao_s: item.duracao_s,
+    formato: item.formato,
+    tamanho: item.tamanho,
+    baixado: item.baixado,
+    erro: item.erro,
+  });
+
+  return {
+    listar(conectado: boolean) {
+      return {
+        aparelhos: aparelhos.map((item) => aparelhoPublico(item, conectado)).sort((a, b) => Number(b.testando_agora) - Number(a.testando_agora)),
+        sessoes: sessoes.map((item) => sessaoPublica(item, conectado)).sort((a, b) => (b.iniciada_em ?? "").localeCompare(a.iniciada_em ?? "")),
+      };
+    },
+    sessao(uid: string, podeVer: boolean, conectado: boolean): SessaoRemotaDetalhe | null {
+      const item = sessoes.find((sessao) => sessao.uid === uid);
+      if (!item) return null;
+      const aparelho = aparelhos.find((candidato) => candidato.uid === item.aparelho_uid);
+      return {
+        sessao: sessaoPublica(item, conectado),
+        aparelho: aparelho ? aparelhoPublico(aparelho, conectado) : null,
+        eventos: eventos
+          .filter((evento) => evento.sessao_uid === uid)
+          .map((evento) => ({
+            uid: evento.uid,
+            tipo: evento.tipo,
+            nivel_risco: evento.nivel_risco,
+            duracao_s: evento.duracao_s,
+            ocorrido_em: evento.ocorrido_em,
+            detalhes: {},
+            trecho_uid: podeVer ? evento.trecho_uid : null,
+          }))
+          .sort((a, b) => a.ocorrido_em.localeCompare(b.ocorrido_em)),
+        trechos: podeVer ? trechos.filter((trecho) => trecho.sessao_uid === uid).map(trechoPublico) : [],
+        pode_ver_trechos: podeVer,
+      };
+    },
+    trecho(uid: string): TrechoParaTocar | null {
+      const item = trechos.find((trecho) => trecho.uid === uid);
+      if (!item) return null;
+      const base = { ...trechoPublico(item), aparelho_nome: nomeDo(sessoes.find((sessao) => sessao.uid === item.sessao_uid)?.aparelho_uid ?? null) };
+      if (!item.sintetico) return { ...base, disponivel: false, motivo: "Trecho de demonstração indisponível: na demonstração não há vídeo de verdade." };
+      const hora = new Date(Date.parse(item.inicio)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const total = 48;
+      return {
+        ...base,
+        disponivel: true,
+        fps: 3,
+        largura: 640,
+        altura: 360,
+        quadros: Array.from({ length: total }, (_, indice) => ({ t: indice / 3, url: quadroDemo(indice, total, hora, "microssono") })),
+      };
+    },
+  };
 }
 
 export const demoBackend: Api = criarDemonstracao();

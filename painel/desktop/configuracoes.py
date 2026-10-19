@@ -53,6 +53,14 @@ def _texto(valor, limite: int, campo: str, mensagem: str, obrigatorio: bool = Fa
     return valor.strip()
 
 
+def validar_nome_empresa(nome, campo: str = "empresa") -> str:
+    """Nome digitado na ativação sem o arquivo da empresa (spec 030, decisão 4): de 2 a 120 letras, sem espaço sobrando."""
+    texto = " ".join(nome.split()) if isinstance(nome, str) else ""
+    if not 2 <= len(texto) <= 120:
+        raise ErroPainel("Escreva o nome da empresa, com 2 a 120 letras.", "invalido", campo)
+    return texto
+
+
 def validar(secao: str, valores: dict) -> dict:
     if secao == "empresa":
         cnpj = _texto(valores["cnpj"], 20, "cnpj", "CNPJ inválido. Confira os números.")

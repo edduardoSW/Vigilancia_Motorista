@@ -6,6 +6,15 @@ Base:
 - Início e fim da piscada a meia amplitude: Ingre et al., 2006.
 - Razão amplitude/velocidade (AVR) do fechamento e da reabertura: Johns et al., 2003 e 2005. Tem dimensão de
   tempo, então vale mesmo sem calibrar a escala da medida; cresce quando a pálpebra fica lenta com o sono.
+- Tempo de fechamento e de reabertura da pálpebra (Schleicher et al., 2008, 129 pessoas: o atraso da reabertura
+  está entre os melhores indicadores de sono). Medidos entre 10% e 90% da amplitude da piscada e divididos por 0,8
+  (estimativa do movimento inteiro), o que não depende da fase em que o quadro pegou o fundo da piscada.
+- Olhar para baixo não é olho fechado (spec 027, DMS-03): olhando o colo a pálpebra desce e o EAR cai sem o olho
+  fechar (patente RE39539). Com eyeLookDown do MediaPipe 0,35 acima do normal da pessoa e o classificador (OCEC) ou
+  a íris dizendo "aberto", o quadro fica sem abertura (fonte olhar_para_baixo) e vai para a zona "colo" do módulo de
+  distração. Limiares da pesquisa; hipótese a confirmar com vídeo real.
+- Reflexo nos óculos (DMS-07): pixels saturados na região do olho tiram o EAR daquele quadro. O Euro NCAP 2026
+  (§1.1.1) exige funcionar com óculos claros; o limiar de 2% é hipótese.
 """
 from __future__ import annotations
 
@@ -13,7 +22,7 @@ import json
 import logging
 import statistics
 from collections import deque
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 logger = logging.getLogger("drivesafe.eyes")
@@ -35,6 +44,17 @@ PRE_BLINK_WINDOW_S = 0.5
 MAX_TRACE_SAMPLES = 600
 # O fechamento da pálpebra dura ~100 ms: abaixo de ~28 fps sobram 2 quadros e o pico de velocidade some.
 MIN_FPS_FOR_VELOCITY = 28.0
+# Tempos da pálpebra entre 10% e 90% da amplitude (DMS-06); a reabertura espera até 1 s depois do fim da piscada.
+EYELID_LOW_FRACTION = 0.10
+EYELID_HIGH_FRACTION = 0.90
+REOPENING_WAIT_S = 1.0
+# DMS-03: eyeLookDown acima do normal da pessoa e olho dado como aberto pelo classificador ou pela íris.
+LOOK_DOWN_ABOVE_BASELINE = 0.35
+LOOK_DOWN_DEFAULT_BASELINE = 0.10
+LOOK_DOWN_MIN_OPEN_PROB = 0.6
+LOOK_DOWN_MIN_IRIS_FRACTION = 0.4
+# DMS-07: fração de pixels saturados na região do olho acima da qual o EAR do quadro é descartado.
+GLARE_MAX_FRACTION = 0.02
 
 
 @dataclass
@@ -56,6 +76,9 @@ class Sample:
     pupil_ratio: float | None = None
     eye_luminance: float | None = None
     ambient_lux: float | None = None
+    eye_look_down: float | None = None  # blendshape eyeLookDown (vision/face.py), DMS-03
+    iris_visible_fraction: float | None = None  # fenda do olho ÷ diâmetro da íris, DMS-03
+    glare_fraction: float | None = None  # reflexo nos óculos, DMS-07
 
     @classmethod
     def from_metrics(cls, metrics) -> Sample:
@@ -88,6 +111,15 @@ class DriverProfile:
     looked_alert: bool = True
     ear_closed_estimated: bool = False
     created_at: str = ""
+    # Spec 027. Todos com padrão: perfil salvo antes destes campos continua abrindo (DMS-02c).
+    blink_closing_median_s: float | None = None  # DMS-06
+    blink_reopening_median_s: float | None = None  # DMS-06
+    look_down_baseline: float | None = None  # mediana do eyeLookDown na calibração, DMS-03
+    gaze_center_yaw: float | None = None  # "frente" inicial do olhar (cabeça + olho), DMS-02
+    gaze_center_pitch: float | None = None
+    gaze_zones: dict | None = None  # calibração guiada: {zona: [Δyaw, Δpitch]}, DMS-02
+    calibration_quality: str | None = None  # boa, taxa_de_quadros_baixa, poucas_piscadas (CAL-01)
+    suspect_reasons: list = field(default_factory=list)  # por que a calibração ficou suspeita (CAL-02)
 
     def save(self, path: Path) -> None:
         path = Path(path)
@@ -141,6 +173,26 @@ class OpennessModel:
         # Sem perfil ainda: referência adaptativa dos últimos ~20 s (a 30 fps).
         self._recent_ear = deque(maxlen=600)
         self._recent_score = deque(maxlen=600)
+        self._recent_look_down = deque(maxlen=600)
+
+    def looking_down(self, sample) -> bool:
+        """DMS-03: olhar para baixo com o olho aberto (eyeLookDown alto e OCEC ou íris dizendo aberto)."""
+        look_down = getattr(sample, "eye_look_down", None)
+        if look_down is None:
+            return False
+        profile = self.profile
+        if profile is not None and profile.look_down_baseline is not None:
+            baseline = profile.look_down_baseline
+        else:
+            self._recent_look_down.append(look_down)
+            baseline = (statistics.median(self._recent_look_down) if len(self._recent_look_down) >= 30
+                        else LOOK_DOWN_DEFAULT_BASELINE)
+        if look_down < baseline + LOOK_DOWN_ABOVE_BASELINE:
+            return False
+        open_prob = getattr(sample, "eye_open_prob", None)
+        iris = getattr(sample, "iris_visible_fraction", None)
+        return ((open_prob is not None and open_prob >= LOOK_DOWN_MIN_OPEN_PROB)
+                or (iris is not None and iris >= LOOK_DOWN_MIN_IRIS_FRACTION))
 
     def openness(self, sample) -> tuple[float | None, str]:
         """Retorna (abertura, sinais usados). Abertura None = quadro sem medida confiável."""
@@ -153,8 +205,12 @@ class OpennessModel:
         yaw_deviation = _deviation(sample.yaw, profile.yaw_baseline if profile else None)
         if yaw_deviation is not None and yaw_deviation > MAX_YAW_DEVIATION_DEG:
             return None, "rosto_virado"
+        if self.looking_down(sample):
+            return None, "olhar_para_baixo"
         pitch_deviation = _deviation(sample.pitch, profile.pitch_baseline if profile else None)
-        ear_usable = sample.ear is not None and (pitch_deviation is None or pitch_deviation <= MAX_PITCH_DEVIATION_DEG)
+        glare = getattr(sample, "glare_fraction", None)
+        ear_usable = (sample.ear is not None and (pitch_deviation is None or pitch_deviation <= MAX_PITCH_DEVIATION_DEG)
+                      and (glare is None or glare <= GLARE_MAX_FRACTION))
 
         refs = self._references(sample)
         signals = []
@@ -172,6 +228,11 @@ class OpennessModel:
             signals.append((sample.eye_open_prob if value is None else value, "classificador"))
 
         if not signals:
+            # Cabeça muito baixa tira o EAR e não sobra outro sinal: o rosto está caindo para fora da medida
+            # (vision/drowsiness.py trata como rosto perdido se o olho já estava fechado; ALM-01).
+            if (sample.ear is not None and pitch_deviation is not None and pitch_deviation > MAX_PITCH_DEVIATION_DEG
+                    and sample.pitch > profile.pitch_baseline):  # pitch positivo = cabeça baixa (vision/face.py)
+                return None, "cabeca_baixa"
             return None, "sem_referencia"
         values = [value for value, _ in signals]
         if len(values) == 1:
@@ -218,6 +279,10 @@ class Blink:
     amplitude: float | None = None  # abertura antes da piscada menos a menor abertura
     closing_velocity: float | None = None  # pico de velocidade fechando, em abertura por segundo
     opening_velocity: float | None = None  # pico de velocidade reabrindo
+    # DMS-06 (Schleicher et al., 2008): tempo de 90% a 10% fechando e de 10% a 90% reabrindo, ÷ 0,8. A reabertura
+    # é preenchida até 1 s depois do fim da piscada (o olho passa de 60% antes de chegar a 90%).
+    closing_s: float | None = None
+    reopening_s: float | None = None
 
     @property
     def closing_avr(self) -> float | None:
@@ -239,6 +304,36 @@ def _crossing(t0: float | None, o0: float | None, t1: float, o1: float, level: f
         return t1
     fraction = min(max((o0 - level) / (o0 - o1), 0.0), 1.0)
     return t0 + fraction * (t1 - t0)
+
+
+def _eyelid_levels(trace, pre_level: float | None):
+    """(índice do fundo, nível de 10%, nível de 90%) da piscada, ou None sem traço ou amplitude."""
+    if not trace or len(trace) < 3 or pre_level is None:
+        return None
+    lowest = min(range(len(trace)), key=lambda i: trace[i][1])
+    amplitude = pre_level - trace[lowest][1]
+    if amplitude <= 0:
+        return None
+    floor = trace[lowest][1]
+    return (lowest, floor + EYELID_LOW_FRACTION * amplitude, floor + EYELID_HIGH_FRACTION * amplitude)
+
+
+def _closing_time(trace, levels) -> float | None:
+    """Tempo de 90% a 10% da amplitude descendo, ÷ 0,8 (estimativa do fechamento inteiro)."""
+    if levels is None:
+        return None
+    lowest, low, high = levels
+    t_low = t_high = None
+    for i in range(lowest, 0, -1):
+        (t0, o0), (t1, o1) = trace[i - 1], trace[i]
+        if t_low is None and o0 >= low > o1:
+            t_low = _crossing(t0, o0, t1, o1, low)
+        if t_low is not None and o0 >= high > o1:
+            t_high = _crossing(t0, o0, t1, o1, high)
+            break
+    if t_low is None or t_high is None:
+        return None
+    return max(0.0, t_low - t_high) / (EYELID_HIGH_FRACTION - EYELID_LOW_FRACTION)
 
 
 def _eyelid_speeds(trace, pre_level: float | None):
@@ -274,6 +369,7 @@ class EyeStateTracker:
         self._history = deque()  # (t, abertura) do último meio segundo fora de piscada
         self._trace = None
         self._pre_level = None
+        self._reopening = None  # piscada terminada esperando o olho chegar a 90% (DMS-06)
 
     @property
     def in_blink(self) -> bool:
@@ -285,6 +381,11 @@ class EyeStateTracker:
         if self._closed_start is None or self._last_t is None:
             return 0.0
         return max(0.0, self._last_t - self._closed_start)
+
+    @property
+    def closed_since(self) -> float | None:
+        """Instante (interpolado) em que o olho passou de 80% fechado, ou None se não está fechado agora."""
+        return self._closed_start
 
     def update(self, t: float, openness: float | None) -> Blink | None:
         if openness is None:
@@ -298,7 +399,10 @@ class EyeStateTracker:
             prev_t = prev_o = None
 
         finished = None
+        if self._reopening is not None:
+            self._track_reopening(prev_t, prev_o, t, openness)
         if self._blink_start is None and openness < BLINK_START_OPENNESS:
+            self._reopening = None  # outra piscada antes de reabrir a 90%: sem medida
             self._blink_start = _crossing(prev_t, prev_o, t, openness, BLINK_START_OPENNESS)
             self._min_o = openness
             opened = [o for _, o in self._history if o >= BLINK_END_OPENNESS]
@@ -320,6 +424,7 @@ class EyeStateTracker:
             if openness > BLINK_END_OPENNESS:
                 end = _crossing(prev_t, prev_o, t, openness, BLINK_END_OPENNESS)
                 amplitude, closing, opening = _eyelid_speeds(self._trace, self._pre_level)
+                levels = _eyelid_levels(self._trace, self._pre_level)
                 finished = Blink(
                     start=self._blink_start,
                     end=end,
@@ -329,7 +434,9 @@ class EyeStateTracker:
                     amplitude=amplitude,
                     closing_velocity=closing,
                     opening_velocity=opening,
+                    closing_s=_closing_time(self._trace, levels),
                 )
+                self._start_reopening(finished, levels, t)
                 self._blink_start = None
                 self._closed_total = 0.0
                 self._min_o = 1.0
@@ -344,3 +451,33 @@ class EyeStateTracker:
 
         self._last_t, self._last_o = t, openness
         return finished
+
+    def _start_reopening(self, blink: Blink, levels, t: float) -> None:
+        """Procura no traço a subida por 10% e deixa a de 90% para os próximos quadros."""
+        self._reopening = None
+        if levels is None or self._trace is None:
+            return
+        lowest, low, high = levels
+        state = {"blink": blink, "low": low, "high": high, "t_low": None, "deadline": t + REOPENING_WAIT_S}
+        trace = self._trace
+        for i in range(lowest + 1, len(trace)):
+            (t0, o0), (t1, o1) = trace[i - 1], trace[i]
+            if state["t_low"] is None and o0 < low <= o1:
+                state["t_low"] = _crossing(t0, o0, t1, o1, low)
+            if state["t_low"] is not None and o0 < high <= o1:
+                blink.reopening_s = (_crossing(t0, o0, t1, o1, high) - state["t_low"]) / (
+                    EYELID_HIGH_FRACTION - EYELID_LOW_FRACTION)
+                return
+        self._reopening = state
+
+    def _track_reopening(self, prev_t, prev_o, t: float, openness: float) -> None:
+        state = self._reopening
+        if t > state["deadline"] or prev_t is None:
+            self._reopening = None
+            return
+        if state["t_low"] is None and openness >= state["low"]:
+            state["t_low"] = _crossing(prev_t, prev_o, t, openness, state["low"])
+        if state["t_low"] is not None and openness >= state["high"]:
+            state["blink"].reopening_s = max(0.0, _crossing(prev_t, prev_o, t, openness, state["high"]) - state["t_low"]) / (
+                EYELID_HIGH_FRACTION - EYELID_LOW_FRACTION)
+            self._reopening = None

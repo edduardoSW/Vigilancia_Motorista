@@ -14,8 +14,9 @@ export function AboutSection() {
         <p className="text-[15px]">{estado?.versao ?? "—"}</p>
       </Row>
       <Row label="Empresa">
-        <p className="text-[15px]">{estado?.empresa?.nome ?? "—"}</p>
-        {estado?.modo === "demonstracao" && <p className="text-[13.5px] text-grafite">Demonstração, com dados fictícios</p>}
+        <p className="text-[15px]">{estado?.empresa?.nome || "Sem nome. Escreva o nome em Empresa."}</p>
+        {estado?.modo === "local" && <p className="text-[13.5px] text-grafite">Ativado sem o arquivo da empresa: as caixas chegam com o arquivo.</p>}
+        {estado?.modo === "empresa" && <p className="text-[13.5px] text-grafite">Ativado com o arquivo da empresa entregue pela RotaGuard.</p>}
       </Row>
       <Row label="Onde ficam os dados" description="Nada vai para a internet nesta versão.">
         <p className="text-[15px]">Os dados ficam guardados neste computador</p>

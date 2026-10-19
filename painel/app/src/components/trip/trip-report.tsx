@@ -1,26 +1,17 @@
-import type { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { MomentList } from "@/components/moment-list";
 import { PrintButton } from "@/components/print-button";
 import { TripBar } from "@/components/trip-bar";
 import { TripPeople } from "@/components/trip/trip-people";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Glyph } from "@/components/ui/glyph";
-import { dados, dia, duracao, hora, minutosEntre, nomeDoVeiculo, resumoDaViagem, rotuloDe, segundos, viagemDe } from "@/content";
+import { dia, duracao, hora, minutosEntre, nomeDoVeiculo, resumoDaViagem, rotuloDe, segundos, type Viagem } from "@/content";
+import { VAZIO } from "@/content/estados-vazios";
 import { contarPorTipo, momentosDaViagem, naMadrugada } from "@/content/moments";
-
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return dados.viagens.map((trip) => ({ id: trip.id }));
-}
-
-type Props = { params: Promise<{ id: string }> };
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const trip = viagemDe((await params).id);
-  return { title: trip ? `${nomeDoVeiculo(trip.tipo, trip.veiculo)} · RotaGuard` : "RotaGuard" };
-}
+import { useViagens, viagemPorId } from "@/lib/viagens";
 
 const NUMBERS = ["nenhum", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez"];
 const inWords = (value: number) => NUMBERS[value] ?? String(value);
@@ -29,11 +20,30 @@ function joinList(parts: string[]) {
   return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} e ${parts.at(-1)}` : (parts[0] ?? "");
 }
 
-// Viagem como página de relatório (prévia 2): resumo em frases, barra da viagem e momentos para verificar.
-export default async function TripPage({ params }: Props) {
-  const trip = viagemDe((await params).id);
-  if (!trip) notFound();
+const Voltar = () => (
+  <Link href="/viagens/" className="no-print text-[13px] font-semibold text-grafite transition-colors hover:text-tinta">
+    Voltar para Viagens
+  </Link>
+);
 
+// Relatório da viagem (prévia 2; spec 030): abre por /viagens/relatorio/?id=, com a viagem lida da caixa. Sem a viagem
+// neste computador (a leitura da caixa ainda não existe, spec 004), o estado vazio leva de volta para Viagens.
+export function TripReport() {
+  const params = useSearchParams();
+  const viagem = viagemPorId(useViagens(), params.get("id"));
+  if (!viagem) {
+    return (
+      <section className="max-w-[900px] px-14 pb-16 pt-[34px]">
+        <Voltar />
+        <EmptyState estado={VAZIO.relatorio} className="mt-4 rounded-[12px] border border-fio bg-superficie px-5 py-6" />
+      </section>
+    );
+  }
+  return <Relatorio trip={viagem} />;
+}
+
+// Viagem como página de relatório (prévia 2): resumo em frases, barra da viagem e momentos para verificar.
+function Relatorio({ trip }: { trip: Viagem }) {
   const summary = resumoDaViagem(trip);
   const moments = momentosDaViagem(trip);
   const byType = contarPorTipo(moments);
@@ -50,17 +60,11 @@ export default async function TripPage({ params }: Props) {
     ].filter(Boolean),
   );
   const nightText =
-    atNight === 0
-      ? ""
-      : atNight === moments.length
-        ? moments.length === 1 ? ", na madrugada" : ", todos na madrugada"
-        : `, ${inWords(atNight)} ${atNight === 1 ? "deles" : "deles"} na madrugada`;
+    atNight === 0 ? "" : atNight === moments.length ? (moments.length === 1 ? ", na madrugada" : ", todos na madrugada") : `, ${inWords(atNight)} deles na madrugada`;
 
   return (
     <section className="max-w-[900px] px-14 pb-16 pt-[34px]">
-      <Link href="/viagens/" className="no-print text-[13px] font-semibold text-grafite transition-colors hover:text-tinta">
-        Voltar para Viagens
-      </Link>
+      <Voltar />
       <div className="mt-2 flex items-start justify-between gap-6">
         <div>
           <h1 className="font-titulo text-[34px] font-semibold leading-[1.1] tracking-[-0.01em]">{nomeDoVeiculo(trip.tipo, trip.veiculo)}</h1>
@@ -80,7 +84,7 @@ export default async function TripPage({ params }: Props) {
         </div>
       </div>
 
-      <TripPeople viagemId={trip.id} />
+      <TripPeople viagem={trip} />
 
       <h2 className="mb-2.5 mt-[30px] font-titulo text-[20px] font-semibold">Resumo</h2>
       <p className="max-w-[760px] text-[17px] leading-[1.65]">
@@ -111,7 +115,7 @@ export default async function TripPage({ params }: Props) {
 
       <TripBar trip={trip} moments={moments} />
 
-      <MomentList viagemId={trip.id} />
+      <MomentList viagem={trip} />
       <p className="mt-4 text-[12.5px] text-grafite">
         Os alertas ajudam a sua avaliação e não são diagnóstico. Depois de confirmar, dá para registrar se o motorista foi
         orientado.

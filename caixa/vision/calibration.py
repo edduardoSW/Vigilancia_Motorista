@@ -5,6 +5,17 @@ Base:
 - Aprendizado de até 10 min no início da viagem (Euro NCAP 2026, Driver Engagement).
 - Calibração feita com o motorista já sonolento vira referência errada: por isso a checagem absoluta
   de PERCLOS e de fechamento longo no fim (Mulhall et al., 2020; Cori et al., 2023; Lin et al., 2012).
+
+Spec 027 (pesquisa docs/pesquisa/2026-10-19-alarme-calibracao-e-registro.md, §2.3):
+- CAL-01: a referência de olho fechado era a mediana do menor EAR de cada piscada. A 10 fps a piscada de ~100 ms
+  tem 1 ou 2 quadros e o "menor EAR" raramente pega o fundo (+57% de erro no experimento exp_calib.py). Agora é um
+  percentil dos mínimos que cai com a taxa de quadros (P50 a 30 fps, igual ao de antes; ~P17 a 10 fps): a fração de
+  piscadas cujo quadro pega o fundo cai na mesma proporção. Abaixo de 20 fps a referência fica marcada como estimada
+  e a qualidade da calibração não é "boa". Hipótese: confirmar com vídeo real gravado a 10 e a 30 fps.
+- CAL-02: calibração com sono moderado passava como alerta (exp_calib2.py). Agora fica suspeita com fechamento de
+  0,5 s ou mais (microssono comportamental de Mulhall et al., 2020) ou com a piscada mediana 1,5 desvio acima da
+  linha de base acumulada da pessoa (≥ 3 viagens; Ingre et al., 2006: a duração sobe com o sono). Suspeita não
+  salva o perfil se houver um salvo e não entra na acumulada (vision/drowsiness.py e vision/engine.py).
 """
 from __future__ import annotations
 
@@ -23,6 +34,7 @@ from vision.eyes import (
     OpennessModel,
     Sample,
 )
+from vision.gaze import MIN_IRIS_PX, combined_gaze
 
 logger = logging.getLogger("drivesafe.calibration")
 
@@ -33,9 +45,16 @@ MAX_BLINK_S = 1.0
 # Piscada "completa": fechou pelo menos 60% da amplitude da pessoa.
 COMPLETE_BLINK_OPENNESS = 0.40
 MIN_BLINKS_FOR_CLOSED_REFERENCE = 10
-# Calibração com PERCLOS acima de ~10% ou fechamento de 1 s não representa o motorista alerta.
+# Calibração com PERCLOS acima de ~10% ou um fechamento de 0,5 s (Mulhall et al., 2020) não representa o
+# motorista alerta (CAL-02; antes o corte era 1 s).
 ALERT_MAX_PERCLOS = 0.10
-ALERT_MAX_CLOSURE_S = 1.0
+ALERT_MAX_CLOSURE_S = 0.5
+# CAL-02: piscada mediana acima da linha de base acumulada (z) aponta a calibração.
+SUSPECT_DURATION_Z = 1.5
+# CAL-01: percentil dos menores EAR das piscadas = 0,5 × fps / 30, entre 0,15 e 0,5.
+CLOSED_REFERENCE_FPS = 30.0
+MIN_CLOSED_PERCENTILE = 0.15
+MIN_FPS_FOR_GOOD_CALIBRATION = 20.0
 
 
 @dataclass
@@ -55,6 +74,21 @@ def _median(values):
     return statistics.median(values) if values else None
 
 
+def _percentile(values, fraction: float) -> float:
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * fraction
+    low = int(position)
+    high = min(low + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
+
+
+def closed_reference_percentile(fps: float | None) -> float:
+    """CAL-01: com menos quadros por piscada, menos piscadas têm um quadro no fundo; o percentil cai junto."""
+    if not fps:
+        return 0.5
+    return max(MIN_CLOSED_PERCENTILE, min(0.5, 0.5 * fps / CLOSED_REFERENCE_FPS))
+
+
 class Calibrator:
     def __init__(self, min_seconds: float = 300.0, max_seconds: float = 600.0, target_blinks: int = 100):
         self.min_seconds = min_seconds
@@ -62,6 +96,9 @@ class Calibrator:
         self.target_blinks = target_blinks
         self.samples: list[Sample] = []
         self.result: DriverProfile | None = None  # perfil construído ao terminar (preenchido pelo monitor)
+        # CAL-02: (média, desvio) da piscada mediana em ms na linha de base acumulada, posto pelo vision/engine.py
+        # quando há ≥ 3 viagens. None = sem comparação.
+        self.duration_reference: tuple | None = None
         self.valid_seconds = 0.0
         self.live_blinks = 0
         self._last_t = None
@@ -105,13 +142,17 @@ class Calibrator:
             ear_open=ear_open, ear_closed=0.3 * ear_open,
             pitch_baseline=pitch_baseline, yaw_baseline=yaw_baseline,
         )
+        span = self.samples[-1].timestamp - self.samples[0].timestamp
+        fps = (len(self.samples) - 1) / span if span > 0 else None
 
         # 2) Referências de fechado a partir das piscadas medidas só pela geometria do olho (EAR),
         #    o sinal mais estável; pontuação e classificador são lidos no fundo dessas piscadas.
         observations, _, _, _ = self._replay(provisional, ear_only=True)
         complete = [o for o in observations if o.complete and o.min_ear is not None]
         enough = len(complete) >= MIN_BLINKS_FOR_CLOSED_REFERENCE
-        ear_closed = min(statistics.median(o.min_ear for o in complete), 0.6 * ear_open) if enough else 0.3 * ear_open
+        ear_closed = (min(_percentile([o.min_ear for o in complete], closed_reference_percentile(fps)), 0.6 * ear_open)
+                      if enough else 0.3 * ear_open)
+        slow_camera = fps is not None and fps < MIN_FPS_FOR_GOOD_CALIBRATION
 
         score_open = _median(s.blink_score for s in valid)
         score_closed = None
@@ -139,7 +180,9 @@ class Calibrator:
             jaw_open_baseline=_median(s.jaw_open for s in valid),
             pitch_baseline=pitch_baseline,
             yaw_baseline=yaw_baseline,
-            ear_closed_estimated=not enough,
+            ear_closed_estimated=not enough or slow_camera,
+            look_down_baseline=_median(getattr(s, "eye_look_down", None) for s in valid),
+            calibration_quality="poucas_piscadas" if not enough else ("taxa_de_quadros_baixa" if slow_camera else "boa"),
         )
 
         # 3) Estatísticas finais medidas com o perfil completo e todos os sinais.
@@ -156,18 +199,55 @@ class Calibrator:
         profile.longest_closure_s = longest
         profile.blinks = len(durations)
         profile.valid_seconds = valid_time
-        span = self.samples[-1].timestamp - self.samples[0].timestamp
-        profile.fps = (len(self.samples) - 1) / span if span > 0 else None
+        profile.fps = fps
         if profile.fps is not None and profile.fps >= MIN_FPS_FOR_VELOCITY:
-            closing = [blink.closing_avr for blink in complete if blink.closing_avr is not None]
-            opening = [blink.opening_avr for blink in complete if blink.opening_avr is not None]
-            if len(closing) >= MIN_BLINKS_FOR_CLOSED_REFERENCE:
-                profile.blink_closing_avr_median_s = statistics.median(closing)
-            if len(opening) >= MIN_BLINKS_FOR_CLOSED_REFERENCE:
-                profile.blink_opening_avr_median_s = statistics.median(opening)
-        profile.looked_alert = perclos <= ALERT_MAX_PERCLOS and longest < ALERT_MAX_CLOSURE_S
+            for attribute, values in (
+                    ("blink_closing_avr_median_s", [blink.closing_avr for blink in complete]),
+                    ("blink_opening_avr_median_s", [blink.opening_avr for blink in complete]),
+                    ("blink_closing_median_s", [blink.closing_s for blink in complete]),
+                    ("blink_reopening_median_s", [blink.reopening_s for blink in complete])):
+                values = [value for value in values if value is not None]
+                if len(values) >= MIN_BLINKS_FOR_CLOSED_REFERENCE:
+                    setattr(profile, attribute, statistics.median(values))
+        profile.gaze_center_yaw, profile.gaze_center_pitch = self._gaze_center(valid, profile)
+        profile.suspect_reasons = self._suspect_reasons(profile, perclos, longest)
+        profile.looked_alert = not profile.suspect_reasons
         profile.created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         return profile
+
+    def _suspect_reasons(self, profile: DriverProfile, perclos: float, longest: float) -> list:
+        """CAL-02: por que esta calibração não representa o motorista alerta (lista vazia = alerta)."""
+        reasons = []
+        if perclos > ALERT_MAX_PERCLOS:
+            reasons.append("perclos_alto")
+        if longest >= ALERT_MAX_CLOSURE_S:
+            reasons.append("fechamento_longo")
+        if self.duration_reference is not None and profile.blink_duration_median_s:
+            mean_ms, std_ms = self.duration_reference
+            if std_ms and (profile.blink_duration_median_s * 1000.0 - mean_ms) / std_ms >= SUSPECT_DURATION_Z:
+                reasons.append("piscadas_mais_longas_que_o_habitual")
+        return reasons
+
+    @staticmethod
+    def _gaze_center(valid, profile: DriverProfile):
+        """DMS-02: valor inicial da "frente" = mediana do olhar (cabeça + olho) com o olho aberto. A moda do
+        vision/gaze.py assume depois."""
+        model = OpennessModel(profile)
+        yaws, pitches = [], []
+        for sample in valid[::3]:  # 10 Hz basta para a mediana
+            if None in (sample.yaw, sample.pitch, sample.gaze_x, sample.gaze_y):
+                continue
+            if sample.iris_diameter_px is not None and sample.iris_diameter_px < MIN_IRIS_PX:
+                continue
+            openness, _ = model.openness(sample)
+            if openness is None or openness < 0.6:
+                continue
+            yaw, pitch = combined_gaze(sample.yaw, sample.pitch, sample.gaze_x, sample.gaze_y)
+            yaws.append(yaw)
+            pitches.append(pitch)
+        if len(yaws) < 30:
+            return None, None
+        return round(statistics.median(yaws), 2), round(statistics.median(pitches), 2)
 
     def _replay(self, profile: DriverProfile, ear_only: bool = False):
         """Reprocessa os quadros guardados. Retorna (observações de piscada, perclos, maior fechamento, tempo válido)."""

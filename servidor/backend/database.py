@@ -1,9 +1,14 @@
 """Banco do servidor central: empresas, usuários, motoristas, veículos, dispositivos, alertas e consentimentos.
 
 Tudo em UTC. SQLite em modo WAL por padrão, ou Postgres via DATABASE_URL.
+
+Central (spec 026): sessões de teste, trechos de vídeo e códigos de pareamento. Aparelhos, sessões, eventos e trechos
+ganham `sync_seq`, um número global que cresce a cada criação ou alteração (atribuído no `before_flush`, valha o
+caminho que for: API, manage.py ou modo teste). O painel pede "o que mudou depois do número N".
 """
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 
 import pytz
@@ -29,6 +34,11 @@ CONSENT_TERM_VERSION = "2026-09"
 
 def utcnow():
     return datetime.now(timezone.utc)
+
+
+def new_uid() -> str:
+    """Id público (uuid4 em hexadecimal, 32 caracteres). O id inteiro do banco não sai na API da central."""
+    return uuid.uuid4().hex
 
 
 def as_utc(value):
@@ -72,6 +82,8 @@ class Company(Base):
     __tablename__ = "companies"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Id público: nome da pasta dos trechos e o que o aparelho recebe no pareamento.
+    uid = Column(String(32), unique=True, index=True, default=new_uid)
     name = Column(String(120), nullable=False)
     document = Column(String(20))
     # Responsável na transportadora. O contato com o cliente é pelo celular (só dígitos, com código do país).
@@ -155,6 +167,16 @@ class Device(Base):
     status_at = Column(DateTime(timezone=True))
     fps = Column(Float)
     latency_p95_ms = Column(Float)
+    # Central (spec 026): computador pareado por código, sessão em andamento e "testando agora".
+    uid = Column(String(32), unique=True, index=True, default=new_uid)
+    paired_at = Column(DateTime(timezone=True))
+    computer_name = Column(String(100))
+    program_name = Column(String(80))
+    current_session_uid = Column(String(32))
+    # Guardado para o painel receber pelo cursor também a passagem para "não está mais testando".
+    testing_now = Column(Boolean, default=False)
+    sync_seq = Column(Integer, index=True)
+    changed_at = Column(DateTime(timezone=True))
 
     company = relationship("Company", back_populates="devices")
     vehicle = relationship("Vehicle", back_populates="devices")
@@ -185,6 +207,11 @@ class Alert(Base):
     reviewed_by_user_id = Column(Integer, ForeignKey("users.id"))
     reviewed_at = Column(DateTime(timezone=True))
     review_note = Column(Text)
+    # Central (spec 026): sessão de teste e trecho de vídeo ligados ao evento (vêm nos details do script).
+    session_uid = Column(String(32), index=True)
+    clip_uid = Column(String(32))
+    sync_seq = Column(Integer, index=True)
+    changed_at = Column(DateTime(timezone=True))
 
     company = relationship("Company")
     driver = relationship("Driver", back_populates="alerts")
@@ -227,6 +254,8 @@ class UserSession(Base):
     last_seen_at = Column(DateTime(timezone=True))
     ip = Column(String(45))
     user_agent = Column(String(255))
+    # None = app web (cookie); "painel" = painel executável (token no cabeçalho, vale 30 dias desde o último uso).
+    client = Column(String(12))
 
     user = relationship("User")
 
@@ -265,6 +294,127 @@ class AuditLog(Base):
     ip = Column(String(45))
 
 
+# ---------- central (spec 026) ----------
+
+class RemoteTestSession(Base):
+    """Sessão do RotaGuard Script num computador pareado: início, fim e resumo (sem nenhum dado de cardio)."""
+
+    __tablename__ = "test_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    uid = Column(String(32), unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    device_id = Column(Integer, ForeignKey("devices.id"), index=True, nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    ended_at = Column(DateTime(timezone=True))
+    program = Column(String(80))
+    camera = Column(String(120))
+    summary = Column(Text)  # JSON
+    received_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    sync_seq = Column(Integer, index=True)
+    changed_at = Column(DateTime(timezone=True))
+
+    device = relationship("Device")
+
+
+class Clip(Base):
+    """Trecho de vídeo de um momento relevante (spec 002 aplicada ao teste). O arquivo fica em config.CLIPS_DIR."""
+
+    __tablename__ = "clips"
+
+    id = Column(Integer, primary_key=True, index=True)
+    uid = Column(String(32), unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    device_id = Column(Integer, ForeignKey("devices.id"), index=True, nullable=False)
+    session_uid = Column(String(32), index=True)
+    event_uid = Column(String(36), index=True)
+    alert_type = Column(String(50))
+    started_at = Column(DateTime(timezone=True))
+    ended_at = Column(DateTime(timezone=True))
+    duration_s = Column(Float)
+    format = Column(String(8), nullable=False)  # mp4, webm ou rgclip
+    size = Column(Integer, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    # Caminho relativo a config.CLIPS_DIR, gerado pela central (nunca vem do aparelho).
+    path = Column(String(255), nullable=False)
+    received_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    # Arquivo apagado pelo prazo de guarda; o registro fica para o painel saber.
+    deleted_at = Column(DateTime(timezone=True))
+    sync_seq = Column(Integer, index=True)
+    changed_at = Column(DateTime(timezone=True))
+
+    device = relationship("Device")
+    company = relationship("Company")
+
+
+class PairingCode(Base):
+    """Código curto para parear um computador. Guardado só como HMAC; uso único; vale 30 minutos."""
+
+    __tablename__ = "pairing_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code_hash = Column(String(64), unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"))
+    # O aparelho só é criado na troca, com este uid (devolvido já na geração do código).
+    device_uid = Column(String(32), unique=True, nullable=False)
+    device_name = Column(String(100))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True))
+    cancelled_at = Column(DateTime(timezone=True))
+
+    company = relationship("Company")
+
+
+class SyncState(Base):
+    """Uma linha só: o último número de sincronização entregue."""
+
+    __tablename__ = "sync_state"
+
+    id = Column(Integer, primary_key=True)
+    last_seq = Column(Integer, nullable=False, default=0)
+
+
+SYNCED_MODELS = (Device, Alert, RemoteTestSession, Clip)
+SYNCED_TABLES = tuple(model.__tablename__ for model in SYNCED_MODELS)
+
+
+def _ensure_sync_state(conn) -> None:
+    if conn.execute(text("SELECT 1 FROM sync_state WHERE id = 1")).first() is not None:
+        return
+    columns_by_table = {table: {column["name"] for column in inspect(conn).get_columns(table)} for table in SYNCED_TABLES}
+    highest = 0
+    for table, columns in columns_by_table.items():
+        if "sync_seq" in columns:
+            highest = max(highest, conn.execute(text(f"SELECT MAX(sync_seq) FROM {table}")).scalar() or 0)
+    conn.execute(text("INSERT INTO sync_state (id, last_seq) VALUES (1, :seq)"), {"seq": highest})
+
+
+def allocate_seqs(conn, count: int) -> range:
+    """Reserva `count` números seguidos. A linha do contador fica travada até o commit: a ordem dos números é a ordem
+    em que as gravações ficam visíveis, e o painel não perde nada que chegou "atrasado"."""
+    result = conn.execute(text("UPDATE sync_state SET last_seq = last_seq + :n WHERE id = 1"), {"n": count})
+    if result.rowcount == 0:
+        _ensure_sync_state(conn)
+        conn.execute(text("UPDATE sync_state SET last_seq = last_seq + :n WHERE id = 1"), {"n": count})
+    last = conn.execute(text("SELECT last_seq FROM sync_state WHERE id = 1")).scalar_one()
+    return range(last - count + 1, last + 1)
+
+
+@event.listens_for(SessionLocal, "before_flush")
+def _stamp_sync_seq(session, _flush_context, _instances):
+    changed = [obj for obj in session.new if isinstance(obj, SYNCED_MODELS)]
+    changed += [obj for obj in session.dirty
+                if isinstance(obj, SYNCED_MODELS) and session.is_modified(obj, include_collections=False)]
+    if not changed:
+        return
+    now = utcnow()
+    for obj, seq in zip(changed, allocate_seqs(session.connection(), len(changed))):
+        obj.sync_seq = seq
+        obj.changed_at = now
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -283,15 +433,24 @@ def init_db():
 
 # Colunas que bancos de versões anteriores não têm. ALTER TABLE só adiciona; nada é apagado.
 _ADDED_COLUMNS = {
-    "companies": ("contact_name", "contact_phone"),
+    "companies": ("contact_name", "contact_phone", "uid"),
     "users": ("phone",),
     "drivers": ("company_id",),
     "vehicles": ("company_id",),
-    "devices": ("company_id", "live_status", "risk_level", "status_at", "fps", "latency_p95_ms"),
+    "devices": ("company_id", "live_status", "risk_level", "status_at", "fps", "latency_p95_ms",
+                "uid", "paired_at", "computer_name", "program_name", "current_session_uid", "testing_now",
+                "sync_seq", "changed_at"),
     "alerts": ("device_id", "event_uid", "details", "received_at", "company_id", "review_status",
-               "reviewed_by_user_id", "reviewed_at", "review_note"),
+               "reviewed_by_user_id", "reviewed_at", "review_note", "session_uid", "clip_uid", "sync_seq",
+               "changed_at"),
+    "user_sessions": ("client",),
 }
 _INDEXES = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_companies_uid ON companies (uid)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_devices_uid ON devices (uid)",
+    "CREATE INDEX IF NOT EXISTS ix_devices_sync_seq ON devices (sync_seq)",
+    "CREATE INDEX IF NOT EXISTS ix_alerts_sync_seq ON alerts (sync_seq)",
+    "CREATE INDEX IF NOT EXISTS ix_alerts_session_uid ON alerts (session_uid)",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_alerts_event_uid ON alerts (event_uid)",
     "CREATE INDEX IF NOT EXISTS ix_alerts_device_id ON alerts (device_id)",
     "CREATE INDEX IF NOT EXISTS ix_alerts_timestamp ON alerts (timestamp)",
@@ -342,11 +501,33 @@ def _upgrade_schema():
         if "review_status" in alert_columns:
             # Alertas anteriores à revisão não entram na fila do gestor.
             conn.execute(text("UPDATE alerts SET review_status = 'arquivado' WHERE review_status IS NULL"))
+        filled = _backfill_central(conn)
 
     for table_name, columns in added.items():
         logger.info("Banco atualizado: %s ganhou %s.", table_name, ", ".join(columns))
     if converted:
         logger.info("%d alerta(s) antigo(s) convertido(s) para UTC.", converted)
+    if filled:
+        logger.info("Central: %d registro(s) antigo(s) ganharam uid ou número de sincronização.", filled)
+
+
+def _backfill_central(conn) -> int:
+    """Registros de versões anteriores ganham uid público e número de sincronização (uma vez; nada é apagado)."""
+    filled = 0
+    for table in ("companies", "devices"):
+        ids = [row[0] for row in conn.execute(text(f"SELECT id FROM {table} WHERE uid IS NULL ORDER BY id"))]
+        if ids:
+            conn.execute(text(f"UPDATE {table} SET uid = :uid WHERE id = :id"),
+                         [{"uid": new_uid(), "id": row_id} for row_id in ids])
+            filled += len(ids)
+    _ensure_sync_state(conn)
+    for table in SYNCED_TABLES:
+        ids = [row[0] for row in conn.execute(text(f"SELECT id FROM {table} WHERE sync_seq IS NULL ORDER BY id"))]
+        if ids:
+            conn.execute(text(f"UPDATE {table} SET sync_seq = :seq WHERE id = :id"),
+                         [{"seq": seq, "id": row_id} for seq, row_id in zip(allocate_seqs(conn, len(ids)), ids)])
+            filled += len(ids)
+    return filled
 
 
 def _assign_default_company():

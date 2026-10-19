@@ -1,17 +1,45 @@
 // Spec 012 · painel da empresa (prévia 2 aprovada em 14/09/2026): dados coerentes com o servidor, momentos agrupados,
 // sem localização, sem diagnóstico, sem os vícios visuais rejeitados e com as telas exportadas.
+// Spec 030: a viagem de exemplo da prévia mora só nos testes (fixtures/demo.json); as regras continuam conferidas nela.
 // Rodar depois de `npm run build` para as verificações que leem a pasta out/.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { registerHooks } from "node:module";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const raiz = path.join(import.meta.dirname, "..", "..");
+const src = path.join(raiz, "src");
 const repositorio = path.join(raiz, "..", "..");
-const demo = JSON.parse(readFileSync(path.join(raiz, "src", "content", "demo.json"), "utf8"));
+const demo = JSON.parse(readFileSync(path.join(raiz, "scripts", "testes", "fixtures", "demo.json"), "utf8"));
 const saida = path.join(raiz, "out");
 
-function arquivosFonte(pasta = path.join(raiz, "src")) {
+// Os momentos (src/content/moments.ts) importam "@/..." do Next: ganchos do Node resolvem o alias e os .json.
+registerHooks({
+  resolve(especificador, contexto, proximo) {
+    const alvo = especificador.startsWith("@/") ? pathToFileURL(path.join(src, especificador.slice(2))).href : especificador;
+    try {
+      return proximo(alvo, contexto);
+    } catch (erro) {
+      for (const fim of [".ts", "/index.ts"]) {
+        try {
+          return proximo(alvo + fim, contexto);
+        } catch {
+          /* tenta o próximo */
+        }
+      }
+      throw erro;
+    }
+  },
+  load(url, contexto, proximo) {
+    if (url.endsWith(".json")) return { format: "module", source: `export default ${readFileSync(fileURLToPath(url), "utf8")};`, shortCircuit: true };
+    return proximo(url, contexto);
+  },
+});
+const { momentosDaViagem } = await import("../../src/content/moments.ts");
+
+function arquivosFonte(pasta = src) {
   return readdirSync(pasta).flatMap((nome) => {
     const caminho = path.join(pasta, nome);
     if (statSync(caminho).isDirectory()) return arquivosFonte(caminho);
@@ -58,12 +86,12 @@ test("PRV-07 dados: revisão só para eventos que o servidor manda revisar (cate
   const revisados = demo.viagens.flatMap((viagem) => viagem.eventos.filter((evento) => evento.revisao));
   for (const evento of revisados) assert.ok(precisaRevisao(evento), `${evento.id} revisado sem precisar de revisão`);
   const pendentes = demo.viagens.flatMap((v) => v.eventos.filter((e) => precisaRevisao(e) && !e.revisao));
-  assert.ok(pendentes.length >= 3, "a prévia precisa de momentos para verificar");
+  assert.ok(pendentes.length >= 3, "o exemplo precisa de momentos para verificar");
   assert.ok(demo.viagens.flatMap((v) => v.eventos).some((e) => !precisaRevisao(e)), "precisa de evento que não entra na verificação");
 });
 
 test("PRV-08 tipos de evento do painel com o mesmo nome e categoria do servidor", () => {
-  const tipos = JSON.parse(readFileSync(path.join(raiz, "src", "content", "tipos-de-evento.json"), "utf8"));
+  const tipos = JSON.parse(readFileSync(path.join(src, "content", "tipos-de-evento.json"), "utf8"));
   for (const [tipo, { rotulo, categoria }] of Object.entries(tipos)) {
     const noServidor = tiposPy.match(new RegExp(`^\\s+"${tipo}": "([^"]+)"`, "m"));
     assert.ok(noServidor, `${tipo} não existe no servidor`);
@@ -71,6 +99,26 @@ test("PRV-08 tipos de evento do painel com o mesmo nome e categoria do servidor"
     assert.equal(categoria, categoriaDe[tipo], `${tipo}: categoria diferente do servidor`);
   }
   for (const viagem of demo.viagens) for (const evento of viagem.eventos) assert.ok(tipos[evento.tipo], `${evento.tipo} sem nome no painel`);
+});
+
+test("PRV-09 momentos agrupados: episódio repetido vira um momento só; decisões que vieram com a viagem", () => {
+  const momentos = Object.fromEntries(demo.viagens.map((viagem) => [viagem.id, momentosDaViagem(viagem)]));
+  assert.equal(momentos["v-2240"].length, 4, "4 momentos para verificar");
+  assert.ok(momentos["v-2240"].some((momento) => momento.titulo === "Sono repetido: olhos fechados 2 vezes"));
+  assert.equal(momentos["v-3310"].length, 2);
+  assert.deepEqual(
+    momentos["v-1187"].map((momento) => [momento.decisaoInicial?.resultado, momento.decisaoInicial?.orientado]),
+    [
+      ["alarme_falso", false],
+      ["confirmado", true],
+    ],
+    "orientado vira confirmado com orientação",
+  );
+  assert.deepEqual(
+    momentos["v-2240"].map((momento) => momento.numero),
+    [1, 2, 3, 4],
+    "numerados na ordem da viagem",
+  );
 });
 
 test("PRV-03 sem mapa, GPS nem rastreamento: o produto não registra localização", () => {
@@ -91,48 +139,25 @@ test("PRV-10 sem os vícios da prévia rejeitada: rótulo em maiúsculas, legend
   }
 });
 
-const exportado = existsSync(path.join(saida, "index.html"));
-const relatorios = demo.viagens.map((v) => `viagens/${v.id}/index.html`);
-const telas = ["viagens", "motoristas", "veiculos", "equipe", "configuracoes", "guia", "ao-vivo"].map((tela) => `${tela}/index.html`);
-const paginas = ["index.html", ...telas, ...relatorios];
-// Texto visível da página exportada, sem tags nem scripts (um aviso só em comentário do código não conta).
-const textoVisivel = (pagina) =>
-  readFileSync(path.join(saida, pagina), "utf8")
-    .replace(/<script[\s\S]*?<\/script>/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/<!-- -->/g, "")
-    .replace(/\s+/g, " ");
+test("PRV-04 relatório diz na tela que os alertas não são diagnóstico e ajudam a avaliação de quem verifica", () => {
+  const relatorio = readFileSync(path.join(src, "components", "trip", "trip-report.tsx"), "utf8");
+  assert.match(relatorio, /não (é|são) diagnóstico/i);
+  assert.match(relatorio, /sua avaliação/i);
+});
 
-test("PRV-01 exportação estática com o Início, as telas do menu, o teste local e o relatório de cada viagem", { skip: !exportado && "sem build" }, () => {
+const exportado = existsSync(path.join(saida, "index.html"));
+const telas = ["viagens", "viagens/relatorio", "motoristas", "veiculos", "remotos", "equipe", "configuracoes", "guia", "ao-vivo"].map((tela) => `${tela}/index.html`);
+const paginas = ["index.html", ...telas];
+
+test("PRV-01 exportação estática com o Início, as telas do menu, o teste local e o relatório da viagem", { skip: !exportado && "sem build" }, () => {
   for (const pagina of paginas) assert.ok(existsSync(path.join(saida, pagina)), `falta out/${pagina}`);
   assert.ok(!existsSync(path.join(saida, "revisao")) && !existsSync(path.join(saida, "frota")), "telas da prévia rejeitada ainda exportadas");
 });
 
-test("PRV-02 cada tela exportada avisa que os dados são fictícios e está em pt-BR", { skip: !exportado && "sem build" }, () => {
+test("PRV-02 e SDF-02 cada tela exportada está em pt-BR e sem aviso de dados fictícios", { skip: !exportado && "sem build" }, () => {
   for (const pagina of paginas) {
     const html = readFileSync(path.join(saida, pagina), "utf8");
-    assert.match(textoVisivel(pagina), /dados fictícios/i, pagina);
     assert.match(html, /<html[^>]*lang="pt-BR"/, pagina);
+    assert.doesNotMatch(html, /fictíci/i, pagina);
   }
-});
-
-test("PRV-04 relatório diz na tela que os alertas não são diagnóstico e ajudam a avaliação de quem verifica", { skip: !exportado && "sem build" }, () => {
-  for (const pagina of relatorios) {
-    const texto = textoVisivel(pagina);
-    assert.match(texto, /não (é|são) diagnóstico/i, pagina);
-    assert.match(texto, /sua avaliação/i, pagina);
-  }
-});
-
-test("PRV-09 momentos agrupados e contagens da tela Viagens", { skip: !exportado && "sem build" }, () => {
-  assert.match(textoVisivel("viagens/v-2240/index.html"), /4 momentos para você verificar/);
-  assert.match(textoVisivel("viagens/v-2240/index.html"), /Sono repetido: olhos fechados 2 vezes/);
-  assert.match(textoVisivel("viagens/v-3310/index.html"), /2 momentos para você verificar/);
-  assert.match(textoVisivel("index.html"), /Caixa do Ônibus 2258 conectada/);
-  const viagens = textoVisivel("viagens/index.html");
-  assert.match(viagens, /4 para ver/);
-  assert.match(viagens, /2 para ver/);
-  assert.match(viagens, /Para verificar 2/, "aba com as 2 viagens que faltam verificar");
-  assert.match(viagens, /Revisadas 1/, "a viagem v-1187 já foi verificada");
-  assert.match(viagens, /Todas 3/);
 });

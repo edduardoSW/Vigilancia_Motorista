@@ -11,7 +11,7 @@ import { situacaoDoVideo } from "@/components/trip/video-rules";
 import { CardGrid, CardInfo, CardTitulo } from "@/components/ui/card-grid";
 import { Glyph } from "@/components/ui/glyph";
 import { ViewToggle } from "@/components/ui/view-toggle";
-import { hora, segundos, viagemDe } from "@/content";
+import { hora, segundos, type Viagem } from "@/content";
 import { momentosDaViagem, type Momento } from "@/content/moments";
 import { bridge, type Motorista } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
@@ -21,8 +21,7 @@ import { hojeIso } from "@/lib/validators";
 // momento (vídeo, trechos, o que a caixa registrou e decisão). A Consulta vê sem vídeo e sem botões (spec 014, EQP-02).
 const trechos = (total: number) => (total === 1 ? "1 trecho" : `${total} trechos`);
 
-export function MomentList({ viagemId }: { viagemId: string }) {
-  const viagem = viagemDe(viagemId)!;
+export function MomentList({ viagem }: { viagem: Viagem }) {
   const moments = useMemo(() => momentosDaViagem(viagem), [viagem]);
   const { pode, usuario, estado } = useSession();
   const { decisions, pendentes, decide, undo, toggleCoached } = useDecisions();

@@ -5,7 +5,7 @@
 | Produto | RotaGuard (nome anterior: DriveSafe AI) |
 | Dono das decisões | Matheus Cortes |
 | Repositório | `edduardoSW/Vigilancia_Motorista`, branch `app-instalavel-em-andamento` |
-| Versão deste PRD | 1.0, 11/09/2026 |
+| Versão deste PRD | 1.1, 19/10/2026 |
 | Método | SDD: este PRD → specs em `docs/specs/` → TDD (regra global 2b) |
 
 > [!note] Como ler
@@ -61,7 +61,8 @@
 - **Diagnóstico** de droga, álcool ou doença. O produto aponta "sinais compatíveis com ativação atípica", nunca
   "uso de droga".
 - **Pulseira de frequência cardíaca** e **leitura de pupila no celular do motorista**: ficam "para muito depois",
-  segundo o Matheus em 11/09/2026.
+  segundo o Matheus em 11/09/2026. A frequência cardíaca **pela câmera** (rPPG) entrou em 19/10/2026 (RF-16, spec 022),
+  como informação e sem mudar o nível de risco até ser validada.
 - Localização e GPS; mapa de eventos por posição.
 - Vídeo ao vivo e gravação contínua.
 - Saída de faixa (ADAS) e colisão.
@@ -87,6 +88,8 @@
 | RF-10 | **Perfil Raspberry Pi 4 (4 GB)**: resolução, taxa de quadros e intervalos de detecção ajustados; janela de vídeo desligada; desligamento seguro; temperatura no registro | Novo | 005 |
 | RF-11 | Envio ao vivo para o servidor continua **opcional** e desligado por padrão | Existe (`caixa/vision/sync.py`) | 006 |
 | RF-12 | Sem consentimento de monitoramento registrado, a caixa não registra dado identificado do motorista, e o servidor recusa eventos | Novo: hoje o servidor não confere (`servidor/backend/routes/device_api.py`) | 006 |
+| RF-16 | **Frequência cardíaca pela face (rPPG)**: POS na testa e nas bochechas, bpm com confiança, "sinal fraco" quando não dá para medir, respiração e variabilidade experimentais; nunca diagnóstico e fora do risco até validar | Novo (19/10/2026) | 022 |
+| RF-17 | **Malha de pontos no rosto**: os 478 pontos do Face Landmarker disponíveis para todos os módulos e desenhados na tela ("bolinhas"), com olhos, boca e regiões do pulso em destaque | Novo (19/10/2026) | 022, 023, 025 |
 
 ### 6.2 App instalável
 
@@ -99,7 +102,10 @@
 | RF-24 | Modo de teste com a câmera do aparelho, com as mesmas regras de detecção da caixa | Novo | 007 |
 | RF-25 | Painel instalável no computador: app de janela própria em Python + WebView2 (pywebview, PyInstaller e instalador), escolhido pelo Matheus em 14/09/2026, para Windows e Linux; Android e PWA no iPhone depois; sem Mac; Windows no futuro pela Microsoft Store (MSIX); o `.zip` do Windows é baixado na área do PIN do site | Em construção (Windows) | 007, 013, 020 |
 | RF-26 | Logins criados só pela equipe; modo local de demonstração com PIN e dados fictícios | Existe | 007 |
-| RF-27 | **App de teste do script**: o script da caixa empacotado para Windows e Linux, baixado na área do PIN do site, que roda a detecção e o alarme com a câmera do computador, sem servidor e sem instalar Python; com seção de privacidade, LGPD e termos, sem aceite obrigatório | Novo (14/09/2026) | 010 |
+| RF-19 | **Distração pelo olhar**: zonas do olhar, balde de 2 s, distração longa de 3 s, olhares repetidos (10 s em 30 s), olhar abaixo de 30°, sem resposta 3 s depois do aviso (Euro NCAP 2026: 15 dos 25 pontos de monitoramento) | Novo (19/10/2026) | 027 |
+| RF-20 | **Avisos por urgência**: 4 sinais (informação, distração, sonolência, crítico), interrompíveis, com escalonamento, memória de sonolência, orçamento por hora para avisos não críticos e aviso de "sem visão" | Novo (19/10/2026) | 027 |
+| RF-18 | **Nova tela do RotaGuard Script** (antes RotaGuard Teste, spec 031): uma janela em HTML (pywebview), início com câmera e opções, teste com vídeo e malha, cartões de olhos, cabeça, boca, coração, celular e mãos, linha do tempo e resumo ao encerrar | Novo (19/10/2026) | 023 |
+| RF-27 | **App de teste do script** (RotaGuard Script, antes RotaGuard Teste): o script da caixa empacotado para Windows e Linux, baixado na área do PIN do site, que roda a detecção e o alarme com a câmera do computador, sem servidor e sem instalar Python; com seção de privacidade, LGPD e termos, sem aceite obrigatório | Novo (14/09/2026) | 010 |
 
 ### 6.3 Site
 
@@ -135,6 +141,21 @@ parte de coisas separadas, registro de veículos e motoristas, registros de func
 | RF-53 | Termo de ciência importado para o sistema como comprovante: PDF, PNG ou JPEG de até 10 MB, com SHA-256, guardado na pasta de dados e na cópia de segurança, nunca apagado; só administrador e supervisor importam | Em construção (15/09/2026) | 019 |
 | RF-54 | Relatório da viagem com Veículo e Motorista em destaque e, em cada momento, o campo Vídeo com Início, Fim, Duração, Câmera, Caixa, Coletado em, Fica guardado até e Situação | Em construção (15/09/2026) | 019 |
 
+### 6.5 VPS (rotaguard.acexpartners.com.br)
+
+Pedido de 19/10/2026: "quero colocar esse projeto na vps quero colocar tudo o site vai estar em um subdominio
+rotaguard.acexpartners.com.br".
+
+| ID | Requisito | Situação | Spec |
+|---|---|---|---|
+| RF-60 | Site na VPS em `https://rotaguard.acexpartners.com.br`, atrás do Caddy de borda que já atende os outros sites, com containers `morro-alto-os-rotaguard-*` só na VPS | Novo (19/10/2026) | 021 |
+| RF-61 | Painel da empresa no navegador em `/painel/`, com o mesmo código e as mesmas regras do app instalado | Implementado e **não publicado**: "mas o painel eu quero que seja executavel" (19/10/2026) | 024 |
+| RF-62 | Tela Ao vivo do painel executável com teste da câmera do próprio computador: malha, sinais de sono e frequência cardíaca, sem enviar nada | Novo (19/10/2026) | 025 |
+| RF-63 | **Central na VPS** (`/api`, o `servidor/` existente): recebe do script eventos, sessões e trechos, e entrega ao painel da mesma empresa | Novo (19/10/2026) | 026 |
+| RF-64 | **Pareamento por código**: o painel gera um código de 30 min; no RotaGuard Teste de outro computador, "Conectar à empresa" troca o código por um token de aparelho | Novo (19/10/2026) | 026 |
+| RF-65 | **Trechos de vídeo no teste**: 8 s antes + 8 s depois de microssono, celular, olhos esfregados e cabeceio, com a malha desenhada; máximo 20 por sessão; enviados à central quando conectado | Novo (19/10/2026) | 026 |
+| RF-66 | **Painel executável recebe**: conecta na central com usuário gestor, busca a cada 30 s e mostra os computadores ("testando agora"), sessões, eventos e trechos com player | Novo (19/10/2026) | 026 |
+
 ## 7. Requisitos não funcionais
 
 | ID | Requisito | Situação |
@@ -151,6 +172,10 @@ parte de coisas separadas, registro de veículos e motoristas, registros de func
 | RNF-10 | Licenças: nada AGPL no produto (o `yolov8n.pt` fica só em `ferramentas/`); MediaPipe Apache-2.0 | Existe |
 | RNF-11 | Qualidade: toda regra com teste automatizado; prova com testes, build e lint | Regra |
 | RNF-12 | Senha e sessão do painel: senha só como hash `scrypt` (N 2^17, r 8, p 1); espera crescente depois de 5 erros; sessão só na memória do app, pela ponte do pywebview e sem rota HTTP; permissão conferida no Python (spec 014) | Novo (rascunho) |
+| RNF-14 | VPS: nada dos outros sites muda; HTTPS; cookie `HttpOnly` + `Secure` + `SameSite=Strict`; CSRF por cabeçalho e `Origin`; limite de tentativas; `.env` com `chmod 600` fora do git | Novo (19/10/2026) |
+| RNF-15 | **Local primeiro**: "mesmo que a vps caia eu quero que o projeto continue caso tenha os arquivos do painel e script baixados no dispositivo para rodá-los localmente". O painel instalado e o RotaGuard Teste não dependem da VPS nem da internet (modelos e arquivos dentro do pacote, sem CDN) | Novo (19/10/2026) |
+| RNF-17 | Central: token de aparelho só envia; token de usuário só lê a própria empresa; trecho até 25 MB com SHA-256 conferido; auditoria de quem baixou; dado de cardio nunca sai do computador | Novo (19/10/2026) |
+| RNF-16 | Cardio: menos de 3 ms por quadro 640×480 (medido: 0,8 ms em média); só numpy; nenhum dado de cardio em evento, fila, central ou registro da viagem (dado de saúde, LGPD art. 11); só o resumo local do app de teste, no computador da pessoa | Existe (19/10/2026) |
 | RNF-13 | Dados do painel no computador: pasta do usuário, prazos de guarda que apagam sozinhos e registram, cópia de segurança cifrada com senha (spec 016) | Novo (rascunho) |
 
 ## 8. Restrições
@@ -283,6 +308,44 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 - "coloque o downlaod do painel no site tambem" → spec 020: o `.zip` do painel para Windows entra na área do PIN,
   acima do RotaGuard Teste (responde a pergunta 3 da spec 013).
 
+### 19/10/2026
+
+- **VPS:** "quero colocar esse projeto na vps quero colocar tudo o site vai estar em um subdominio
+  rotaguard.acexpartners.com.br" → spec 021. VPS `187.127.41.22` (a mesma dos outros sites, Caddy de borda próprio).
+  DNS: o Matheus cria o registro A `rotaguard` na Hostinger.
+- **Nome dos containers:** "na vps o nome do container docker deve estar com o nome morro alto os somente na vps";
+  escolheu "morro-alto-*" → `morro-alto-os-rotaguard-site` e `morro-alto-os-rotaguard-painel`, só pelo `.env` da VPS.
+- **Painel:** "eu quero que o site e o painel de app funcionem" → painel também no navegador (spec 024), sem deixar de
+  ser o app instalado decidido em 14/09.
+- **Cardio e malha:** "quero colocar mais coisas referentes a cardio pois tem como saber as frequencias cardiacas com as
+  faces e eu quero que na face tenha bolinhas para captação de tudo rode varios agents sobre isso pesquisando e estudando
+  para desenvolver ao maximo o script da camera" → RF-16, RF-17, specs 022 e 025.
+- **Prioridade:** "eu ainda não tem o raspiberry pi e etc então é necessario que deixe o script mais completo e bonito
+  possivel assim como o painel o site ja esta muito bom so vou contextualizar e mudar os textos depois" → spec 023
+  (tela nova do app de teste); o site só vai para a VPS, sem mudança de conteúdo.
+- **Local primeiro:** "além disso mesmo que a vps caia eu quero que o projeto continue caso tenha os arquivos do painel e
+  script baixados no dispositivo para rodalos localmente" → RNF-15.
+- **Pitch:** "quero que seja algo muito completo para eu e os integrantes da minha equipe usarem na entrega de pitch".
+- **DNS** criado pelo Matheus no mesmo dia; site no ar com HTTPS em `https://rotaguard.acexpartners.com.br`.
+- **Painel executável + central:** "mas o painel eu quero que seja executavel e tipo uma pessoa em outro computador
+  use o script e eu no meu computador consiga ver os resultados e gravação da outra pessoa que usou no computador dela"
+  → spec 026 (RF-63 a RF-66, RNF-17). O painel no navegador (spec 024), já pronto, não é publicado.
+- **Pesquisa:** "pesquise mais para ver se consegue melhorar tudo ao maximo"; "essas pesquisas devem ser de acordo com o
+  conteudo do script para deixalo mais completo ao maximo".
+- **Celular:** "a parte do celular era algo que pecava muito pois a pessoa antes estava com a mão no ouvido e o script
+  detectava como celular isso não pode acontecer" → spec 028: na orelha, celular só com prova de objeto que não é a
+  mão; na dúvida, "sem celular".
+- **Malha e tela do teste:** "esses quadrados e etc visualmente não ficou muito legal e dificulta realmente ver a face e
+  o olho da pessoa pela camera então em investigação isso pode ser ruim"; "no resumo final e naquela parte que mostra as
+  coisas no script estão muito confusas" → spec 029: nada cobre o rosto nem o olho, trechos gravados sem malha, tela e
+  resumo por pergunta em linguagem simples.
+- **Painel:** "no painel ainda tem muitos dados mockados a partir de agora remova esses dados mockados" → spec 030;
+  RF-26 deixa de ter "dados fictícios": o painel só mostra dados reais.
+- **Acessos (19/10):** login da central `teste@gmail.com` criado a pedido ("eu não quero esse gmail"); o do e-mail
+  pessoal foi desativado. Senha do usuário local `cortes` do painel redefinida a pedido (esquecida).
+- **Nome:** "troque o nome não quero que seja rotaguard test coloque rotaguard script" → spec 031: o app passa a se
+  chamar **RotaGuard Script** (executável, pacote, site, painel e central); a pasta de dados antiga é trazida sozinha.
+
 ## 12. Specs
 
 | Spec | Cobre |
@@ -307,3 +370,14 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 | `docs/specs/018-script-local-no-painel.md` | RF-50 (reconhecer o script aberto neste computador e capturar os eventos); pedido de 14/09/2026 |
 | `docs/specs/019-painel-mais-claro-lista-cards-tema-termo-videos.md` | RF-51 a RF-54 (lista e cards, janelas no centro, modo escuro, termo importado, motorista e vídeos no relatório); pedido de 15/09/2026 |
 | `docs/specs/020-download-do-painel-no-site.md` | RF-25 e RF-32 (download do painel na área do PIN do site); pedido de 16/09/2026 |
+| `docs/specs/021-vps-rotaguard.md` | RF-60, RNF-14, RNF-15 (site e painel na VPS, containers, Caddy, atualização com volta automática); 19/10/2026 |
+| `docs/specs/022-cardio-pela-face.md` | RF-16, RF-17, RNF-16 (rPPG por POS e malha de 478 pontos no Python); 19/10/2026 |
+| `docs/specs/023-nova-tela-do-app-de-teste.md` | RF-18, RF-27 (janela única em HTML, malha, cartões, linha do tempo e resumo); 19/10/2026 |
+| `docs/specs/024-painel-na-web.md` | RF-61, RNF-14, RNF-15 (ponte por HTTP, sessões, ativação com código, downloads); 19/10/2026 |
+| `docs/specs/025-camera-no-navegador.md` | RF-62 (teste com a câmera do aparelho na tela Ao vivo: malha, sono e cardio no navegador); 19/10/2026 |
+| `docs/specs/026-central-script-envia-painel-recebe.md` | RF-63 a RF-66, RNF-17 (central na VPS, pareamento por código, trechos no teste, painel executável recebe); 19/10/2026 |
+| `docs/specs/027-melhorias-do-script-pela-pesquisa.md` | RF-01 a RF-04, RF-19, RF-20 (melhorias do script tiradas de 5 pesquisas: alarme, distração, calibração, desempenho e validação); 19/10/2026 |
+| `docs/specs/028-celular-sem-confundir-mao-no-ouvido.md` | RF-02 (celular na orelha só com prova de objeto que não é a mão: cor de pele, fora do contorno da mão, confiança e maioria no tempo); 19/10/2026 |
+| `docs/specs/029-malha-discreta-e-tela-do-teste-mais-clara.md` | RF-17, RF-18, RF-65 (malha que não cobre rosto nem olho, trechos com o rosto limpo, tela e resumo organizados por pergunta); 19/10/2026 |
+| `docs/specs/030-painel-sem-dados-ficticios.md` | RF-20, RF-21, RF-26, RF-40, RF-66 (painel só com dados reais, estados vazios, migração do painel ativado em demonstração); 19/10/2026 |
+| `docs/specs/031-nome-rotaguard-script.md` | RF-18, RF-27 (o app de teste passa a se chamar RotaGuard Script; pasta de dados migrada; painel reconhece os dois nomes); 19/10/2026 |

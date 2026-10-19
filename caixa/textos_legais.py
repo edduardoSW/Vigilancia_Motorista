@@ -1,4 +1,4 @@
-"""Privacidade, LGPD e termos de uso do RotaGuard Teste (spec 010, decisão 13).
+"""Privacidade, LGPD e termos de uso do RotaGuard Teste (spec 010, decisão 13; cardio e resumos: specs 022 e 023).
 
 Ficam numa seção da tela de início, para consulta, sem aceite obrigatório para usar (pedido do Matheus em 14/09/2026).
 O texto descreve o que o app faz de verdade: se mudar o que ele grava ou envia, atualize aqui e nos testes APT-21.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-VERSAO_TEXTOS = "14/09/2026"
+VERSAO_TEXTOS = "19/10/2026"
 RESPONSAVEL = "RotaGuard"
 # Canal para dúvidas de privacidade (e-mail ou telefone). Vazio enquanto não existir: o texto diz "em preparação".
 CONTATO_PRIVACIDADE = ""
@@ -34,7 +34,15 @@ diagnóstico médico nem exame toxicológico.
 (abertura dos olhos, piscadas, boca e posição da cabeça), as mãos e a presença de celular. Com câmera infravermelha, \
 também a pupila.
 • Sinais compatíveis com ativação atípica (a partir das piscadas e do olhar), calculados só neste computador.
-• As imagens não são gravadas em arquivo nem enviadas. A janela da câmera só mostra a imagem ao vivo.
+• Frequência cardíaca estimada pela câmera, a partir de variações mínimas da cor da pele da testa e das bochechas, \
+e a respiração estimada junto. A estimativa é feita só neste computador, aparece na tela e não é gravada nem \
+enviada (a única exceção é o resumo que você decidir salvar, item 3). Não é medição médica nem diagnóstico. \
+Por ser dado de saúde, recebe o cuidado dos dados pessoais sensíveis (art. 5º, II, e art. 11). Pode ser \
+desligada nas opções do teste, em "Frequência cardíaca".
+• As imagens não são gravadas em arquivo nem enviadas, a não ser nos trechos de vídeo do item 4, quando você conecta \
+o app a uma empresa. A tela do teste só mostra a imagem ao vivo, com a malha de \
+pontos do rosto. Ela é uma página servida só para este computador (endereço 127.0.0.1, com uma chave nova a \
+cada abertura): nenhum outro aparelho da rede vê a câmera.
 • O app não faz reconhecimento facial: não identifica quem aparece, não pede nome, e-mail ou documento e não usa \
 localização.
 
@@ -44,14 +52,27 @@ Na pasta de dados do app:
 • eventos.db: eventos do teste (tipo, nível, duração e horário) e medidas em números, como piscadas por minuto, tempo \
 de olho fechado, confiança da detecção de celular e a calibração do olho feita no teste;
 • registro-teste.log: registro técnico (início e fim, pasta de dados, câmera usada, desempenho e eventos);
-• sirene.wav: o som do alarme;
+• sirene_info.wav, sirene_distracao.wav, sirene_sonolencia.wav e sirene_critico.wav: os sons do alarme, um para cada tipo de aviso;
 • em_execucao.json, só enquanto o teste está aberto: número do processo, horário de início, câmera usada e último \
-sinal, para o painel da empresa neste computador reconhecer que o teste está aberto. É apagado quando o teste termina.
+sinal, para o painel da empresa neste computador reconhecer que o teste está aberto. É apagado quando o teste termina;
+• resumos, só quando você clica em "Salvar resumo" no fim do teste: duração, eventos por tipo, PERCLOS médio, \
+piscadas por minuto e a frequência cardíaca média, mínima e máxima do teste, em JSON e CSV;
+• só com o app conectado a uma empresa (item 4): central.json (endereço da central, nome da empresa e a chave \
+deste computador), a pasta central (fila do que ainda vai ser enviado) e a pasta trechos (os trechos de vídeo).
 A calibração não é reaproveitada: cada teste calibra de novo, e nenhum perfil do rosto fica guardado.
 
 4. O que sai deste computador
-Nada. O app de teste não precisa de internet e não envia imagens, medidas, eventos ou registro para a {RESPONSAVEL} \
-nem para terceiros. A {RESPONSAVEL} não recebe nem guarda dados deste teste.
+Sem conexão com uma empresa, nada: o app de teste não precisa de internet e não envia imagens, medidas, eventos ou \
+registro para a {RESPONSAVEL} nem para terceiros.
+Se você usar "Conectar à empresa" com um código gerado no painel de uma empresa, e enquanto "Enviar para a empresa" \
+estiver ligado, vão para a central da {RESPONSAVEL}, para essa empresa ver no painel dela:
+• os eventos do teste e o resumo de cada teste (duração, eventos por tipo, PERCLOS médio e piscadas por minuto);
+• trechos de vídeo de cerca de 16 s (8 s antes e 8 s depois) dos momentos de alerta, com o rosto, a malha de pontos \
+e a hora;
+• o sinal de que o teste está aberto, com o nível de risco do momento.
+A frequência cardíaca nunca sai deste computador. Tudo é gravado aqui antes de sair: sem internet, fica na fila e vai \
+depois. Desligar o envio ou "Desconectar" para na hora; o que já foi enviado fica com a empresa, que define por \
+quanto tempo guarda (o padrão da central é 30 dias para os trechos).
 
 5. Por quanto tempo os dados ficam
 Até você apagar. Use o botão "Apagar dados deste computador", nesta seção, ou apague a pasta acima.
@@ -78,13 +99,17 @@ o app trata esses dados com o cuidado exigido para dados pessoais sensíveis (ar
 usá-los para identificar ninguém.
 
 2. Onde e por quem os dados são tratados
-Todo o tratamento acontece neste computador, sob o controle de quem usa o app. A {RESPONSAVEL} não recebe esses dados.
+Sem conexão com uma empresa, todo o tratamento acontece neste computador, sob o controle de quem usa o app, e a \
+{RESPONSAVEL} não recebe esses dados. Conectado a uma empresa com um código, a empresa passa a ser a controladora do \
+que é enviado (eventos, resumos e trechos de vídeo) e a {RESPONSAVEL} guarda esses dados por ela, na central. A \
+frequência cardíaca nunca é enviada.
 
 3. Princípios seguidos (art. 6º)
-• Finalidade: medir sinais de sono e de uso de celular durante o teste.
+• Finalidade: medir sinais de sono e de uso de celular durante o teste e, se ligada, estimar a frequência cardíaca.
 • Necessidade: só as medidas necessárias; as imagens não são gravadas.
 • Transparência: esta seção explica o que é usado e o que fica gravado.
-• Segurança e prevenção: tudo fica no computador; nada é enviado.
+• Segurança e prevenção: tudo fica no computador; só sai o que está no item 4 da Privacidade, com o app conectado a \
+uma empresa, por conexão protegida (HTTPS).
 • Livre acesso: a pasta de dados abre pelo próprio app.
 
 4. Seus direitos (art. 18)
@@ -119,6 +144,7 @@ pessoal, gratuita, não exclusiva e intransferível, que pode ser encerrada a qu
 3. Limites do teste
 • Não é dispositivo médico, exame toxicológico nem equipamento de segurança certificado.
 • Os alertas podem falhar: pode haver alerta falso ou sinal não detectado.
+• A frequência cardíaca é estimativa pela câmera, não é medida médica.
 • Não substitui descanso, pausas, atenção ao volante nem as regras de trânsito e de jornada do motorista.
 • Não use o app de teste como proteção enquanto dirige.
 
@@ -158,7 +184,10 @@ O app inclui estes componentes, cada um com a própria licença:
 YuNet: MIT.
 • OCEC, classificador de olho aberto ou fechado (Katsuya Hyodo): MIT.
 • NumPy: BSD-3-Clause. matplotlib: licença própria (estilo PSF). sounddevice: MIT. absl-py e flatbuffers: Apache 2.0.
-• Python e Tkinter: licença PSF e licença do Tcl/Tk (estilo BSD).
+• Janela da tela do teste: pywebview (BSD-3-Clause), que usa o WebView2 do Windows (componente do sistema, da \
+Microsoft), com bottle (MIT), proxy_tools (MIT), typing_extensions (PSF), pythonnet (MIT), clr_loader (MIT), \
+cffi (MIT-0) e pycparser (BSD-3-Clause).
+• Python: licença PSF.
 • Empacotado com PyInstaller (GPL 2.0 com exceção que permite distribuir programas gerados com ele).
 
 Os textos completos das licenças das bibliotecas ficam dentro da pasta do app, em _internal, nas pastas terminadas em \

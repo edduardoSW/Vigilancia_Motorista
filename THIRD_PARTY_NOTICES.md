@@ -66,7 +66,7 @@ Contém informação do banco de dados **closed-open-eyes**, de Michał Młodaws
 
 ## Bibliotecas Python
 
-Instaladas pelo `pip`, não redistribuídas neste repositório. O RotaGuard Teste (`implantacao/app-teste`) redistribui as
+Instaladas pelo `pip`, não redistribuídas neste repositório. O RotaGuard Script (`implantacao/app-teste`) redistribui as
 de uso "Dispositivo" dentro do pacote, junto com as pastas `*.dist-info` e os textos de licença de cada uma. Versões
 testadas e licença declarada no pacote:
 
@@ -87,6 +87,14 @@ testadas e licença declarada no pacote:
 | Servidor | pydantic, pydantic-core | 2.13.5, 2.46.5 | MIT |
 | Servidor | pytz | 2026.3.post1 | MIT |
 | Servidor | psycopg, psycopg-binary | 3.3.5 | LGPL-3.0-only |
+| App de teste e painel (janela) | pywebview | 6.2.1 | BSD-3-Clause |
+| App de teste e painel (janela) | bottle, proxy_tools | 0.13.4, 0.1.0 | MIT |
+| App de teste e painel (janela) | typing_extensions | 4.16.0 | PSF-2.0 |
+| App de teste e painel (Windows) | pythonnet, clr_loader | 3.1.0, 0.3.1 | MIT ([pythonnet/clr-loader](https://github.com/pythonnet/clr-loader/blob/master/LICENSE)) |
+| App de teste e painel (Windows) | cffi, pycparser | 2.1.1, 3.0 | MIT-0, BSD-3-Clause |
+| Painel (cópia de segurança) | cryptography | 50.0.1 | Apache-2.0 ou BSD-3-Clause |
+| Painel (câmera do aparelho, spec 025) | @mediapipe/tasks-vision (npm, WASM em `painel/app/public/mediapipe/`) | 1.1.1 | Apache 2.0 |
+| Painel no navegador (não publicado, spec 024) | starlette, uvicorn | 1.9.0, 0.54.0 | BSD-3-Clause |
 
 A opencv-contrib-python inclui a FFmpeg (`opencv_videoio_ffmpeg`), sob LGPL 2.1. O aviso completo está no
 `LICENSE-3RD-PARTY.txt` que acompanha o pacote.

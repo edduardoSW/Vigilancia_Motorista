@@ -33,15 +33,33 @@ def ok(message):
 
 # APT-01 · pasta de dados por sistema
 windows = app_teste.pasta_dados(sistema="win32", ambiente={"LOCALAPPDATA": r"C:\Users\ana\AppData\Local"}, home=Path("/h"))
-assert windows == Path(r"C:\Users\ana\AppData\Local") / "RotaGuard" / "Teste", windows
-assert app_teste.pasta_dados(sistema="win32", ambiente={}, home=Path("/h")) == Path("/h") / "AppData" / "Local" / "RotaGuard" / "Teste"
+assert windows == Path(r"C:\Users\ana\AppData\Local") / "RotaGuard" / "Script", windows
+assert app_teste.pasta_dados(sistema="win32", ambiente={}, home=Path("/h")) == Path("/h") / "AppData" / "Local" / "RotaGuard" / "Script"
 assert app_teste.pasta_dados(sistema="darwin", ambiente={}, home=Path("/Users/ana")) == \
-    Path("/Users/ana") / "Library" / "Application Support" / "RotaGuard" / "Teste"
+    Path("/Users/ana") / "Library" / "Application Support" / "RotaGuard" / "Script"
 assert app_teste.pasta_dados(sistema="linux", ambiente={"XDG_DATA_HOME": "/dados"}, home=Path("/home/ana")) == \
-    Path("/dados") / "rotaguard" / "teste"
+    Path("/dados") / "rotaguard" / "script"
 assert app_teste.pasta_dados(sistema="linux", ambiente={}, home=Path("/home/ana")) == \
-    Path("/home/ana") / ".local" / "share" / "rotaguard" / "teste"
-ok("APT-01 pasta de dados em Windows, macOS e Linux (com e sem XDG_DATA_HOME)")
+    Path("/home/ana") / ".local" / "share" / "rotaguard" / "script"
+assert app_teste.NOME_APP == "RotaGuard Script"
+ok("APT-01 pasta de dados em Windows, macOS e Linux (com e sem XDG_DATA_HOME), com o nome RotaGuard Script (spec 031)")
+
+# NOM-04 (spec 031) · a pasta antiga "Teste" vira "Script" uma vez; com as duas, nada é sobrescrito
+with tempfile.TemporaryDirectory() as tmp:
+    # Uma pasta por caso: o Windows não diferencia maiúsculas de minúsculas (Teste e teste seriam a mesma pasta).
+    for caso, (antiga_nome, nova_nome) in enumerate((("Teste", "Script"), ("teste", "script"))):
+        base = Path(tmp) / f"caso{caso}"
+        antiga, nova = base / antiga_nome, base / nova_nome
+        (antiga / "trechos").mkdir(parents=True)
+        (antiga / "eventos.db").write_text("dados", encoding="utf-8")
+        assert app_teste.migrar_pasta_antiga(nova) is True
+        assert not antiga.exists() and (nova / "eventos.db").read_text(encoding="utf-8") == "dados"
+        assert app_teste.migrar_pasta_antiga(nova) is False  # uma vez só
+        antiga.mkdir()
+        (antiga / "eventos.db").write_text("velho", encoding="utf-8")
+        assert app_teste.migrar_pasta_antiga(nova) is False
+        assert (nova / "eventos.db").read_text(encoding="utf-8") == "dados" and antiga.exists()
+ok("NOM-04 pasta antiga Teste movida para Script uma vez; com as duas, nada é sobrescrito")
 
 # APT-02 · linha do monitor montada a partir das opções da tela de início
 pasta = Path("/tmp/rg")
@@ -60,8 +78,8 @@ assert sem_extras[sem_extras.index("--camera-ir") + 1] == "sim"
 ok("APT-02 opções viram --sem-celular, --mute, calibração rápida, câmera e --sem-servidor")
 
 # APT-03 · processo do monitor: o próprio executável empacotado, ou python app_teste.py
-assert app_teste.comando_monitor(["--camera", "1"], congelado=True, executavel=r"C:\App\RotaGuardTeste.exe") == \
-    [r"C:\App\RotaGuardTeste.exe", "--monitor", "--camera", "1"]
+assert app_teste.comando_monitor(["--camera", "1"], congelado=True, executavel=r"C:\App\RotaGuardScript.exe") == \
+    [r"C:\App\RotaGuardScript.exe", "--monitor", "--camera", "1"]
 dev = app_teste.comando_monitor(["--camera", "1"], congelado=False, executavel="/usr/bin/python3")
 assert dev[0] == "/usr/bin/python3" and Path(dev[1]).name == "app_teste.py" and dev[2:] == ["--monitor", "--camera", "1"]
 ok("APT-03 comando do monitor empacotado e fora do pacote")
@@ -323,7 +341,8 @@ class Cv2Falso:
 
 
 cv2_original, desenho_original = driver_monitor.cv2, driver_monitor.draw_overlay
-driver_monitor.draw_overlay = lambda quadro, estado, latencia=None: quadro
+# Spec 023: a janela recebe também o modo da malha (tecla M) e as mãos.
+driver_monitor.draw_overlay = lambda quadro, estado, latencia=None, **_: quadro
 try:
     for descricao, falso, esperado in (
         ("X", Cv2Falso(lambda n: 1.0 if n <= 3 else -1.0), 4),
@@ -393,8 +412,8 @@ especificacao = importlib.util.spec_from_file_location("build_app_teste", RAIZ /
 build_app = importlib.util.module_from_spec(especificacao)
 especificacao.loader.exec_module(build_app)
 propriedades = build_app.texto_versao_windows("0.3.0")
-for esperado in ("StringStruct('CompanyName', 'RotaGuard')", "StringStruct('ProductName', 'RotaGuard Teste')",
-                 "StringStruct('OriginalFilename', 'RotaGuardTeste.exe')", "filevers=(0, 3, 0, 0)"):
+for esperado in ("StringStruct('CompanyName', 'RotaGuard')", "StringStruct('ProductName', 'RotaGuard Script')",
+                 "StringStruct('OriginalFilename', 'RotaGuardScript.exe')", "filevers=(0, 3, 0, 0)"):
     assert esperado in propriedades, esperado
 assert socket.gethostname() not in propriedades
 assert build_app.numeros_versao("1.2") == (1, 2, 0, 0) and build_app.numeros_versao("0.1.0-rc1") == (0, 1, 0, 0)
@@ -415,7 +434,7 @@ import inspect  # noqa: E402
 
 import textos_legais  # noqa: E402
 
-pasta_exemplo = Path("/dados/RotaGuard/Teste")
+pasta_exemplo = Path("/dados/RotaGuard/Script")
 secoes = textos_legais.secoes(pasta_exemplo, "AVISOS DE TERCEIROS DE EXEMPLO")
 assert [titulo for titulo, _ in secoes] == ["Privacidade", "LGPD", "Termos de uso", "Licenças"]
 tudo = "\n".join(conteudo for _, conteudo in secoes)
@@ -426,9 +445,16 @@ for esperado in ("Lei nº 13.709/2018", "art. 18", "art. 11", "não é diagnóst
     assert esperado in tudo, esperado
 assert "--sem-servidor" in app_teste.argumentos_monitor(app_teste.OpcoesTeste(), pasta_exemplo), "texto diz que nada sai"
 assert "em preparação" in textos_legais.contato("") and textos_legais.contato(" privacidade@x ") == "privacidade@x"
-assert "aceit" not in inspect.getsource(app_teste.TelaInicio._iniciar).lower(), "iniciar o teste não pode exigir aceite"
+# Spec 023: a tela Tkinter saiu; o teste começa por SessaoTeste.iniciar (servidor) e pela função iniciar do app.js.
+from tela_teste import PASTA_WEB  # noqa: E402
+from tela_teste.sessao import SessaoTeste  # noqa: E402
+
+assert "aceit" not in inspect.getsource(SessaoTeste.iniciar).lower(), "iniciar o teste não pode exigir aceite"
+script_tela = (PASTA_WEB / "app.js").read_text(encoding="utf-8")
+funcao_iniciar = script_tela[script_tela.index("function iniciar()"):script_tela.index("function marcarSegmentado")]
+assert "aceit" not in funcao_iniciar.lower() and "legal" not in funcao_iniciar.lower()
 assert "Apache" in app_teste.avisos_de_terceiros() and "MIT" in app_teste.avisos_de_terceiros()
-especificacao_pacote = (RAIZ / "implantacao" / "app-teste" / "rotaguard-teste.spec").read_text(encoding="utf-8")
+especificacao_pacote = (RAIZ / "implantacao" / "app-teste" / "rotaguard-script.spec").read_text(encoding="utf-8")
 assert "THIRD_PARTY_NOTICES.md" in especificacao_pacote
 assert "copy_metadata" in especificacao_pacote and "opencv-contrib-python" in especificacao_pacote
 assert "LGPL" in tudo and ".dist-info" in tudo
@@ -436,7 +462,7 @@ ok("APT-21 seção de privacidade, LGPD, termos e licenças coerente com o app e
 
 # APT-22 · apagar os dados do teste (eliminação, LGPD art. 18) só na pasta do app
 with tempfile.TemporaryDirectory() as tmp:
-    pasta_teste = Path(tmp) / "RotaGuard" / "Teste"
+    pasta_teste = Path(tmp) / "RotaGuard" / "Script"
     (pasta_teste / "perfis").mkdir(parents=True)
     for nome in ("eventos.db", "registro-teste.log", "sirene.wav", "perfis/teste.json"):
         (pasta_teste / nome).write_text("x", encoding="utf-8")
@@ -445,7 +471,11 @@ with tempfile.TemporaryDirectory() as tmp:
     assert app_teste.apagar_dados(pasta_teste) == 4
     assert pasta_teste.exists() and not any(pasta_teste.iterdir()) and vizinho.exists()
     assert app_teste.apagar_dados(pasta_teste) == 0
-    for errada in (Path(tmp) / "RotaGuard", Path(tmp) / "outra" / "Teste"):
+    antiga = Path(tmp) / "RotaGuard" / "Teste"  # pasta antiga, antes da migração (spec 031): também pode ser limpa
+    antiga.mkdir()
+    (antiga / "eventos.db").write_text("x", encoding="utf-8")
+    assert app_teste.apagar_dados(antiga) == 1
+    for errada in (Path(tmp) / "RotaGuard", Path(tmp) / "outra" / "Teste", Path(tmp) / "outra" / "Script"):
         try:
             app_teste.apagar_dados(errada)
         except ValueError:
