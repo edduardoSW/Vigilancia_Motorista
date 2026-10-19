@@ -479,7 +479,7 @@ def _cartao_sono(d: dict) -> dict:
 
     duracao, base_ms = olhos.get("duracao_mediana_ms"), comparacao.get("duracao_base_ms")
     o_que_e = "Quanto dura cada piscada (mediana de 5 min). Mais longa que o seu normal é sinal de sono."
-    seu_normal = f"seu normal: {base_ms} ms" if base_ms else None
+    seu_normal = f"seu normal: {_br(base_ms)} ms" if base_ms else None
     if duracao is None:
         if fps is not None and fps < 24:
             espera = (f"Não dá para medir agora: a câmera está em {_br(fps)} quadros por segundo e precisa de 24.")

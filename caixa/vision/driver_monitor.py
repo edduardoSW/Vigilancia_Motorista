@@ -125,28 +125,6 @@ def _dot_table(radius: float):
     return _DOT_TABLES[key]
 
 
-def _splat_dots(image, fixed: np.ndarray, color, alpha: float, radius: float = 1.25) -> None:
-    """Pontos redondos e antisserrilhados, todos de uma vez: uma leitura e uma escrita vetorizadas, com os pesos de
-    uma tabela por posição de subpixel (um cv2.circle por ponto custava ~1 ms nos 478 pontos)."""
-    if fixed.size == 0:
-        return
-    height, width = image.shape[:2]
-    starts, offsets_x, offsets_y, table = _dot_table(radius)
-    pixel = fixed >> SHIFT
-    step = (fixed & (ONE - 1)) * _DOT_STEPS >> SHIFT
-    xs = np.clip((pixel[:, 0] + starts[step[:, 0]])[:, None] + offsets_x, 0, width - 1)
-    ys = np.clip((pixel[:, 1] + starts[step[:, 1]])[:, None] + offsets_y, 0, height - 1)
-    weight = ((table[step[:, 1] * _DOT_STEPS + step[:, 0]] * int(round(alpha * 256))) >> 8).reshape(-1, 1)
-    if not image.flags.c_contiguous:  # recorte do quadro (o retângulo do rosto): índices 2D
-        pixels = image[ys, xs].reshape(-1, 3).astype(np.int32)
-        image[ys.ravel(), xs.ravel()] = (pixels + (((np.asarray(color, dtype=np.int32) - pixels) * weight) >> 8)).astype(np.uint8)
-        return
-    flat = image.reshape(-1, 3)
-    index = (ys * width + xs).ravel()
-    pixels = flat[index].astype(np.int32)
-    flat[index] = (pixels + (((np.asarray(color, dtype=np.int32) - pixels) * weight) >> 8)).astype(np.uint8)
-
-
 def _corner_box(image, box, scale: float, color) -> None:
     x1, y1, x2, y2 = (float(v) * scale for v in box[:4])
     arm = max(6.0, min(x2 - x1, y2 - y1) * 0.22)
@@ -177,42 +155,41 @@ def _draw_hands(image, hands, scale: float) -> None:
         cv2.addWeighted(layer, HAND_ALPHA, region, 1.0 - HAND_ALPHA, 0, dst=region)
 
 
-_KERNEL3 = np.ones((3, 3), dtype=np.uint8)
-
-
 def _eye_guard(image, eyes) -> list:
-    """Pixels de dentro de cada olho (polígono da pálpebra e mais 1 px), guardados antes de desenhar e devolvidos no
-    fim: garantia de que nada do desenho (nem mão nem celular) cobre o olho (MAL-01)."""
+    """Retângulo de cada olho (com 1 px de folga), guardado antes de desenhar e devolvido no fim: garantia de que nada
+    do desenho, nem mão nem celular, cobre o olho (MAL-01). Os colchetes e os pontos ficam fora dele por construção."""
     height, width = image.shape[:2]
     guards = []
     for eye in eyes:
-        x1, y1 = (max(0, int(np.floor(v)) - 2) for v in eye.min(axis=0))
-        x2 = min(width, int(np.ceil(eye[:, 0].max())) + 3)
-        y2 = min(height, int(np.ceil(eye[:, 1].max())) + 3)
-        if x2 <= x1 or y2 <= y1:
-            continue
-        mask = np.zeros((y2 - y1, x2 - x1), dtype=np.uint8)
-        cv2.fillPoly(mask, [_fixed(eye - np.array([x1, y1], dtype=np.float32))], 1, cv2.LINE_8, SHIFT)
-        ys, xs = np.nonzero(cv2.dilate(mask, _KERNEL3))
-        ys, xs = ys + y1, xs + x1
-        guards.append((ys, xs, image[ys, xs].copy()))
+        x1, y1 = (max(0, int(np.floor(v)) - 1) for v in eye.min(axis=0).tolist())
+        x2 = min(width, int(np.ceil(eye[:, 0].max())) + 2)
+        y2 = min(height, int(np.ceil(eye[:, 1].max())) + 2)
+        if x2 > x1 and y2 > y1:
+            guards.append((y1, y2, x1, x2, image[y1:y2, x1:x2].copy()))
     return guards
 
 
-class _Strokes:
-    """Traços de uma cor, misturados de uma vez no recorte do rosto. Linhas viram amostras com peso bilinear nos 4
-    pixels em volta (antisserrilhado); traços retos (colchetes e cantos) são pixels inteiros, nítidos. Onde dois se
-    cruzam, o pixel fica com a maior opacidade, sem escurecer o encontro. Sem máscara do tamanho do rosto: só os
-    pixels tocados são ordenados e misturados."""
+class _Overlay:
+    """Tudo o que a malha desenha num quadro, misturado de uma vez no recorte do rosto. Linhas viram amostras com peso
+    bilinear nos 4 pixels em volta (antisserrilhado); colchetes e cantos são pixels inteiros (nítidos); pontos usam a
+    tabela de subpixel. Cada pixel fica com a marca de maior opacidade (sem escurecer cruzamentos) e a cor dela: peso
+    e cor vão juntos num inteiro, e um np.maximum.at resolve tudo, sem ordenar nada."""
 
-    def __init__(self):
-        self._points: list = []
-        self._alphas: list = []
-        self._rows: list = []
-        self._columns: list = []
-        self._run_alphas: list = []
+    PALETTE = np.array([MESH_DOT, MESH_LIME], dtype=np.int32)
+    WHITE, LIME = 0, 1
 
-    def segments(self, starts: np.ndarray, ends: np.ndarray, alpha: float, step: float = 0.5) -> None:
+    def __init__(self, height: int, width: int):
+        self.height, self.width = height, width
+        self._flat: list = []
+        self._key: list = []
+
+    def _add(self, xs: np.ndarray, ys: np.ndarray, weights: np.ndarray, color: int) -> None:
+        keep = (weights >= MIN_STROKE_WEIGHT) & (xs >= 0) & (xs < self.width) & (ys >= 0) & (ys < self.height)
+        if keep.any():
+            self._flat.append(ys[keep] * self.width + xs[keep])
+            self._key.append((np.round(weights[keep] * 256).astype(np.int32) << 1) | color)
+
+    def segments(self, starts: np.ndarray, ends: np.ndarray, alpha: float, color: int, step: float = 0.5) -> None:
         """Linhas retas de starts[k] a ends[k], com uma amostra a cada `step` px."""
         if not len(starts):
             return
@@ -221,51 +198,43 @@ class _Strokes:
         which = np.repeat(np.arange(len(starts)), counts)
         first = np.repeat(np.cumsum(counts) - counts, counts)
         fraction = ((np.arange(counts.sum()) - first) / np.repeat(counts - 1, counts)).astype(np.float32)
-        self._points.append(starts[which] + delta[which] * fraction[:, None])
-        self._alphas.append((alpha, int(counts.sum())))
+        points = starts[which] + delta[which] * fraction[:, None] - 0.5  # centro do pixel em (i + 0,5, j + 0,5)
+        base = np.floor(points).astype(np.int32)
+        fx, fy = (points - base).T
+        gx, gy = 1.0 - fx, 1.0 - fy
+        bx, by = base[:, 0], base[:, 1]
+        self._add(np.concatenate([bx, bx + 1, bx, bx + 1]), np.concatenate([by, by, by + 1, by + 1]),
+                  np.concatenate([gx * gy, fx * gy, gx * fy, fx * fy]) * alpha, color)
 
-    def run(self, rows, columns, alpha: float) -> None:
+    def run(self, rows: list, columns: list, alpha: float, color: int) -> None:
         """Pixels inteiros (listas de linhas e colunas): traço reto, um pixel de largura."""
-        self._rows += rows
-        self._columns += columns
-        self._run_alphas += [alpha] * len(rows)
+        if rows:
+            self._add(np.array(columns, dtype=np.int32), np.array(rows, dtype=np.int32),
+                      np.full(len(rows), alpha, dtype=np.float32), color)
 
-    def blend(self, region, color) -> None:
-        height, width = region.shape[:2]
-        flats, weights = [], []
-        if self._points:
-            points = np.concatenate(self._points) - 0.5  # centro do pixel em (i + 0,5, j + 0,5)
-            alphas = np.repeat(np.array([a for a, _ in self._alphas], dtype=np.float32),
-                               [n for _, n in self._alphas])
-            base = np.floor(points).astype(np.int32)
-            fx, fy = (points - base).T
-            gx, gy = 1.0 - fx, 1.0 - fy
-            xs = np.concatenate([base[:, 0], base[:, 0] + 1, base[:, 0], base[:, 0] + 1])
-            ys = np.concatenate([base[:, 1], base[:, 1], base[:, 1] + 1, base[:, 1] + 1])
-            w = np.concatenate([gx * gy, fx * gy, gx * fy, fx * fy]) * np.tile(alphas, 4)
-            keep = (w >= MIN_STROKE_WEIGHT) & (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
-            flats.append(ys[keep] * width + xs[keep])
-            weights.append(w[keep])
-        if self._rows:
-            rows = np.array(self._rows, dtype=np.int32)
-            columns = np.array(self._columns, dtype=np.int32)
-            keep = (columns >= 0) & (columns < width) & (rows >= 0) & (rows < height)
-            flats.append(rows[keep] * width + columns[keep])
-            weights.append(np.array(self._run_alphas, dtype=np.float32)[keep])
-        if not flats:
+    def dots(self, fixed: np.ndarray, alpha: float, radius: float, color: int) -> None:
+        """Pontos redondos com antisserrilhado de subpixel (pesos da tabela de _dot_table)."""
+        if not fixed.size:
             return
-        flat = np.concatenate(flats)
-        weight = np.concatenate(weights)
-        if not flat.size:
+        starts, offsets_x, offsets_y, table = _dot_table(radius)
+        pixel = fixed >> SHIFT
+        step = (fixed & (ONE - 1)) * _DOT_STEPS >> SHIFT
+        xs = (pixel[:, 0] + starts[step[:, 0]])[:, None] + offsets_x
+        ys = (pixel[:, 1] + starts[step[:, 1]])[:, None] + offsets_y
+        weights = table[step[:, 1] * _DOT_STEPS + step[:, 0]] * (alpha / 256.0)
+        self._add(xs.ravel(), ys.ravel(), weights.ravel(), color)
+
+    def blend(self, region) -> None:
+        if not self._flat:
             return
-        order = np.lexsort((weight, flat))  # por pixel e, dentro dele, do peso menor para o maior
-        flat, weight = flat[order], weight[order]
-        last = np.ones(flat.size, dtype=bool)
-        last[:-1] = flat[1:] != flat[:-1]  # fica a última de cada pixel: a de maior peso
-        flat, weight = flat[last], np.round(weight[last] * 256).astype(np.int32)[:, None]
-        ys, xs = np.divmod(flat, width)
+        strongest = np.zeros(self.height * self.width, dtype=np.uint16)
+        np.maximum.at(strongest, np.concatenate(self._flat), np.concatenate(self._key).astype(np.uint16))
+        touched = np.flatnonzero(strongest)
+        key = strongest[touched].astype(np.int32)
+        ys, xs = np.divmod(touched, self.width)
         pixels = region[ys, xs].astype(np.int32)
-        region[ys, xs] = (pixels + (((np.asarray(color, dtype=np.int32) - pixels) * weight) >> 8)).astype(np.uint8)
+        weight = (key >> 1)[:, None]
+        region[ys, xs] = (pixels + (((self.PALETTE[key & 1] - pixels) * weight) >> 8)).astype(np.uint8)
 
 
 def _dash_segments(path: np.ndarray, closed: bool, dash: float, gap: float):
@@ -287,12 +256,12 @@ def _dash_segments(path: np.ndarray, closed: bool, dash: float, gap: float):
 
 
 def _eye_box(eye: np.ndarray):
-    x0, y0 = eye.min(axis=0)
-    x1, y1 = eye.max(axis=0)
-    return float(x0), float(y0), float(x1), float(y1)
+    x0, y0 = eye.min(axis=0).tolist()
+    x1, y1 = eye.max(axis=0).tolist()
+    return x0, y0, x1, y1
 
 
-def _eye_brackets(strokes: _Strokes, box, scale: float, closed: bool) -> None:
+def _eye_brackets(overlay: _Overlay, box, scale: float, closed: bool) -> None:
     """Dois colchetes finos nos cantos do olho, do lado de fora: "[" antes de um canto e "]" depois do outro.
     A altura vem da largura do olho (não pisca junto com a pálpebra); os ganchos não chegam ao olho (MAL-01)."""
     x0, y0, x1, y1 = box
@@ -314,10 +283,10 @@ def _eye_brackets(strokes: _Strokes, box, scale: float, closed: bool) -> None:
         for row in (top, bottom):
             rows += [row] * len(span)
             columns += span
-    strokes.run(rows, columns, 1.0 if closed else BRACKET_ALPHA)
+    overlay.run(rows, columns, 1.0 if closed else BRACKET_ALPHA, _Overlay.LIME)
 
 
-def _roi_corners(strokes: _Strokes, polygon: np.ndarray, scale: float, alpha: float) -> tuple:
+def _roi_corners(overlay: _Overlay, polygon: np.ndarray, scale: float, alpha: float, color: int) -> tuple:
     """Só os cantos da região do pulso, por fora da caixa dela: sem preenchimento e sem contorno inteiro (MAL-02)."""
     x0, y0 = polygon.min(axis=0).tolist()
     x1, y1 = polygon.max(axis=0).tolist()
@@ -329,7 +298,7 @@ def _roi_corners(strokes: _Strokes, polygon: np.ndarray, scale: float, alpha: fl
         cx, cy = int(round(cx)), int(round(cy))
         rows += [cy] * (arm + 1) + [cy + dy * k for k in range(1, arm + 1)]
         columns += [cx + dx * k for k in range(arm + 1)] + [cx] * arm
-    strokes.run(rows, columns, alpha)
+    overlay.run(rows, columns, alpha, color)
     return x0, y0, x1, y1
 
 
@@ -363,8 +332,8 @@ def draw_face_mesh(image, state, mode: str = "discreta", hands=(), scale: float 
     for box in getattr(phone, "boxes", None) or ():
         _corner_box(image, box, scale, MESH_PHONE)
     _draw_hands(image, hands, scale)
-    for ys, xs, saved in guards:
-        image[ys, xs] = saved
+    for y1, y2, x1, x2, saved in guards:
+        image[y1:y2, x1:x2] = saved
     return image
 
 
@@ -376,10 +345,10 @@ def _draw_eye_points(image, points: np.ndarray, scale: float) -> None:
         boxes = [(x - half_w, y - half_h, x + half_w, y + half_h) for x, y in points.tolist()]
     else:
         boxes = [_eye_box(points)]
-    lime = _Strokes()
+    overlay = _Overlay(*image.shape[:2])
     for box in boxes:
-        _eye_brackets(lime, box, scale, closed=False)
-    lime.blend(image, MESH_LIME)
+        _eye_brackets(overlay, box, scale, closed=False)
+    overlay.blend(image)
 
 
 def _draw_face(image, points: np.ndarray, eyes: list, mode: str, cardio, scale: float, eyes_closed: bool = False) -> None:
@@ -395,20 +364,20 @@ def _draw_face(image, points: np.ndarray, eyes: list, mode: str, cardio, scale: 
     region = image[y1:y2, x1:x2]
     offset = np.array([x1, y1], dtype=np.float32)
     local = points - offset
-    white, lime = _Strokes(), _Strokes()
+    overlay = _Overlay(y2 - y1, x2 - x1)
 
     # Contorno do rosto: traço curto no meio de um segmento sim e outro não.
     oval = local[list(FACE_OVAL_PATH)]
     following = np.roll(oval, -1, axis=0)
-    white.segments((oval + (following - oval) * OVAL_DASH[0])[::2], (oval + (following - oval) * OVAL_DASH[1])[::2],
-                   OVAL_ALPHA)
+    overlay.segments((oval + (following - oval) * OVAL_DASH[0])[::2], (oval + (following - oval) * OVAL_DASH[1])[::2],
+                     OVAL_ALPHA, _Overlay.WHITE)
     # Boca: só o contorno de fora, tracejado.
     dash, gap = (size * max(1.0, scale) for size in LIPS_DASH_PX)
-    white.segments(*_dash_segments(local[list(LIPS_OUTER_PATH)], True, dash, gap), LIPS_ALPHA)
+    overlay.segments(*_dash_segments(local[list(LIPS_OUTER_PATH)], True, dash, gap), LIPS_ALPHA, _Overlay.WHITE)
     # Olhos: colchetes por fora, em lima (é o que está medindo).
     eye_boxes = [_eye_box(eye - offset) for eye in eyes]
     for box in eye_boxes:
-        _eye_brackets(lime, box, scale, eyes_closed)
+        _eye_brackets(overlay, box, scale, eyes_closed)
     # Regiões do pulso: só os cantos; lima pulsando com leitura pronta, branco enquanto mede.
     roi_boxes = []
     rois = (getattr(cardio, "rois", None) or {}) if cardio is not None else {}
@@ -417,26 +386,25 @@ def _draw_face(image, points: np.ndarray, eyes: list, mode: str, cardio, scale: 
         if polygon is None or len(polygon) < 3:
             continue
         polygon = np.asarray(polygon, dtype=np.float32).reshape(-1, 2) * scale - offset
-        roi_boxes.append(_roi_corners(lime if ready else white, polygon, scale,
-                                      (0.35 + 0.35 * _pulse(cardio)) if ready else ROI_IDLE_ALPHA))
-    white.blend(region, MESH_DOT)
-    lime.blend(region, MESH_LIME)
+        roi_boxes.append(_roi_corners(overlay, polygon, scale, (0.35 + 0.35 * _pulse(cardio)) if ready else ROI_IDLE_ALPHA,
+                                      _Overlay.LIME if ready else _Overlay.WHITE))
 
     # Pontos: na discreta, só os do contorno; na completa, todos menos os do olho, os de perto dele e os de dentro das
     # regiões do pulso (que ficam limpas para a pele aparecer).
     radius = DOT_RADIUS * max(1.0, scale ** 0.5)
     if mode == "discreta":
-        _splat_dots(region, _fixed(local[list(FACE_OVAL_PATH)]), MESH_DOT, EDGE_DOT_ALPHA, radius=radius)
-        return
-    keep = np.ones(len(local), dtype=bool)
-    keep[[i for i in EYE_INDICES if i < len(local)]] = False
-    xs, ys = local[:, 0], local[:, 1]
-    reach = EYE_KEEP_OUT_PX * scale + radius
-    for bx0, by0, bx1, by1 in eye_boxes:
-        keep &= ~((xs > bx0 - reach) & (xs < bx1 + reach) & (ys > by0 - reach) & (ys < by1 + reach))
-    for bx0, by0, bx1, by1 in roi_boxes:
-        keep &= ~((xs > bx0 - radius) & (xs < bx1 + radius) & (ys > by0 - radius) & (ys < by1 + radius))
-    _splat_dots(region, _fixed(local[keep]), MESH_DOT, FULL_DOT_ALPHA, radius=radius)
+        overlay.dots(_fixed(local[list(FACE_OVAL_PATH)]), EDGE_DOT_ALPHA, radius, _Overlay.WHITE)
+    else:
+        keep = np.ones(len(local), dtype=bool)
+        keep[[i for i in EYE_INDICES if i < len(local)]] = False
+        xs, ys = local[:, 0], local[:, 1]
+        reach = EYE_KEEP_OUT_PX * scale + radius
+        for bx0, by0, bx1, by1 in eye_boxes:
+            keep &= ~((xs > bx0 - reach) & (xs < bx1 + reach) & (ys > by0 - reach) & (ys < by1 + reach))
+        for bx0, by0, bx1, by1 in roi_boxes:
+            keep &= ~((xs > bx0 - radius) & (xs < bx1 + radius) & (ys > by0 - radius) & (ys < by1 + radius))
+        overlay.dots(_fixed(local[keep]), FULL_DOT_ALPHA, radius, _Overlay.WHITE)
+    overlay.blend(region)
 
 
 def recent_hands(phone_monitor, now: float | None = None, max_age_s: float = 1.0) -> list:

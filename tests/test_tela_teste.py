@@ -562,6 +562,11 @@ ok("TEL-08 resumo conta bocejos, cabeceios e gestos da sessão inteira, não o m
 
 
 # ---------------------------------------------------------------- spec 029 · resumo em formato de relatório (TEL-21 a 23)
+TECNICOS = re.compile(r"\b(PERCLOS|EAR|KSS|AVR|RMSSD|SNR)\b")
+SITUACOES = {"Normal", "Atenção", "Alto", "Crítico", "Acima do seu normal", "Bem acima do seu normal", "Medindo",
+             "Em pausa", "Desligado", "Leitura boa", "Leitura fraca", "Sinal fraco", "Parado", "Sem rosto",
+             "Fora do comum", "Experimental", "Aprendendo", "Indisponível", "Lento"}
+
 assert dados["frase"] == "Teste de 5 s: 3 alertas de sono e 1 de celular.", dados["frase"]
 calmo = resumo_mod.ResumoSessao()
 for t in range(0, 721, 30):
@@ -602,7 +607,7 @@ ok("TEL-22 resumo com a lista de alertas (hora, duração, vídeo quando houver)
 indice_web = (PASTA_WEB / "index.html").read_text(encoding="utf-8")
 detalhes_resumo = re.search(r"<details[^>]*id=\"r-detalhes\"[^>]*>", indice_web)
 assert detalhes_resumo and " open" not in detalhes_resumo.group(0), "detalhes técnicos recolhidos por padrão"
-assert re.search(r'id="r-detalhes"[\s\S]*?<summary[^>]*>[^<]*Detalhes técnicos', indice_web)
+assert re.search(r'id="r-detalhes"[^>]*>\s*<summary[^>]*>(?:<[^>]+>)*Detalhes técnicos', indice_web)
 assert re.search(r"<details[^>]*id=\"detalhes\"[^>]*>", indice_web) and not re.search(
     r"<details[^>]*id=\"detalhes\"[^>]*\sopen", indice_web), "na tela do teste, Detalhes também começa recolhido"
 ok("TEL-23 detalhes técnicos do resumo (e da tela do teste) começam recolhidos")
@@ -708,12 +713,6 @@ ok("TEL-05 estado do cardio sem os polígonos e com bpm arredondado; rótulos de
 
 
 # ---------------------------------------------------------------- spec 029 · tela do teste por pergunta (TEL-17 a 20)
-TECNICOS = re.compile(r"\b(PERCLOS|EAR|KSS|AVR|RMSSD|SNR)\b")
-SITUACOES = {"Normal", "Atenção", "Alto", "Crítico", "Acima do seu normal", "Bem acima do seu normal", "Medindo",
-             "Em pausa", "Desligado", "Leitura boa", "Leitura fraca", "Sinal fraco", "Parado", "Sem rosto",
-             "Fora do comum", "Experimental", "Aprendendo", "Indisponível", "Lento"}
-
-
 def estado_tela(abertura=0.92, fechado=0.0, janela=None, celular="sem_celular", celular_s=0.0, rosto=True,
                 calibrando=False, nivel=0, motivos=(), risco_sono=0, risco_distracao=0, cardio=None, distracao=None,
                 fps=30.0):
@@ -876,7 +875,7 @@ ok("TEL-15 sem argumentos abre a tela nova; --monitor, --janela-opencv e os argu
 
 
 # ---------------------------------------------------------------- TEL-16 · pacote leva web/ e o build confere a tela
-especificacao = (RAIZ / "implantacao" / "app-teste" / "rotaguard-teste.spec").read_text(encoding="utf-8")
+especificacao = (RAIZ / "implantacao" / "app-teste" / "rotaguard-script.spec").read_text(encoding="utf-8")
 assert '"tela_teste" / "web"' in especificacao and '"tela_teste/web"' in especificacao
 assert "webview" in especificacao and "pywebview" in especificacao
 especificacao_build = importlib.util.spec_from_file_location("build_app_teste", RAIZ / "implantacao" / "app-teste" / "build.py")
