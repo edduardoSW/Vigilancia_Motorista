@@ -336,7 +336,7 @@ cancelado.join(5)
 assert linhas_cancelado == [] and codigos_cancelado == []
 ok("PAC-10 vigia de 60 s imprime o erro uma vez e encerra com 1; cancelado não faz nada")
 
-# PAC-11 · propriedades do .exe: RotaGuard Painel, sem o nome do computador; o RotaGuard Teste continua igual
+# PAC-11 · propriedades do .exe: RotaGuard Painel, sem o nome do computador; o RotaGuard Script continua igual
 build_painel = carregar(RAIZ / "implantacao" / "painel" / "build.py", "build_painel")
 propriedades = build_painel.propriedades_windows("0.1.0")
 for esperado in ("StringStruct('CompanyName', 'RotaGuard')", "StringStruct('ProductName', 'RotaGuard Painel')",
@@ -345,8 +345,8 @@ for esperado in ("StringStruct('CompanyName', 'RotaGuard')", "StringStruct('Prod
     assert esperado in propriedades, esperado
 assert socket.gethostname() not in propriedades
 teste = carregar(RAIZ / "implantacao" / "app-teste" / "build.py", "build_app_teste_013").texto_versao_windows("0.3.0")
-assert "StringStruct('ProductName', 'RotaGuard Teste')" in teste
-assert "StringStruct('OriginalFilename', 'RotaGuardTeste.exe')" in teste
+assert "StringStruct('ProductName', 'RotaGuard Script')" in teste
+assert "StringStruct('OriginalFilename', 'RotaGuardScript.exe')" in teste
 try:
     from PyInstaller.utils.win32 import versioninfo
 except ImportError:
@@ -356,7 +356,7 @@ else:
         arquivo_propriedades = Path(tmp) / "propriedades.txt"
         arquivo_propriedades.write_text(propriedades, encoding="utf-8")
         assert "RotaGuard Painel" in str(versioninfo.load_version_info_from_text_file(str(arquivo_propriedades)))
-ok("PAC-11 propriedades do .exe com RotaGuard Painel no formato do PyInstaller; RotaGuard Teste inalterado")
+ok("PAC-11 propriedades do .exe com RotaGuard Painel no formato do PyInstaller; RotaGuard Script inalterado")
 
 # PAC-12 · build.py, .spec e .iss
 escuta = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

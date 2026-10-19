@@ -67,8 +67,8 @@ registro para a {RESPONSAVEL} nem para terceiros.
 Se você usar "Conectar à empresa" com um código gerado no painel de uma empresa, e enquanto "Enviar para a empresa" \
 estiver ligado, vão para a central da {RESPONSAVEL}, para essa empresa ver no painel dela:
 • os eventos do teste e o resumo de cada teste (duração, eventos por tipo, PERCLOS médio e piscadas por minuto);
-• trechos de vídeo de cerca de 16 s (8 s antes e 8 s depois) dos momentos de alerta, com o rosto, a malha de pontos \
-e a hora;
+• trechos de vídeo de cerca de 16 s (8 s antes e 8 s depois) dos momentos de alerta, com o rosto como a câmera viu \
+(sem a malha de pontos) e uma faixa embaixo com a hora e o tipo do alerta;
 • o sinal de que o teste está aberto, com o nível de risco do momento.
 A frequência cardíaca nunca sai deste computador. Tudo é gravado aqui antes de sair: sem internet, fica na fila e vai \
 depois. Desligar o envio ou "Desconectar" para na hora; o que já foi enviado fica com a empresa, que define por \
