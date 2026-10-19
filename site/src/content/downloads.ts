@@ -7,6 +7,8 @@ export interface Download {
   /** Nome do arquivo gerado por implantacao/painel/build.py (spec 013) ou implantacao/app-teste/build.py (spec 010). */
   arquivo: string;
   url: string;
+  /** Windows: o .zip portátil, oferecido ao lado do instalador (e no lugar dele, se o instalador ainda não subiu). */
+  portatil?: {arquivo: string; url: string};
 }
 
 /**
@@ -19,17 +21,19 @@ export const BASE_PADRAO = "/downloads";
 const base = (process.env.NEXT_PUBLIC_ROTAGUARD_DOWNLOADS_BASE || BASE_PADRAO).replace(/\/+$/, "");
 
 // Só Windows e Linux: não haverá versão para Mac (decisão de 14/09/2026).
-// Windows: a versão portátil (.zip) sai do build em qualquer computador; o instalador .exe só com o Inno Setup.
+// Windows: o instalador (-setup.exe, Inno Setup) é o download principal, como nos apps comuns: abre o assistente, instala
+// em %LOCALAPPDATA%\Programs e cria o atalho no menu Iniciar. O .zip portátil fica ao lado, para quem não quer instalar.
 // Painel primeiro (spec 020) e só Windows: o Linux do painel está fora do escopo da spec 013.
-const arquivos: [App, Plataforma, string][] = [
-  ["painel", "windows", "RotaGuard-Painel-windows-x64.zip"],
-  ["teste", "windows", "RotaGuard-Script-windows-x64.zip"],
+const arquivos: [App, Plataforma, string, string?][] = [
+  ["painel", "windows", "RotaGuard-Painel-windows-x64-setup.exe", "RotaGuard-Painel-windows-x64.zip"],
+  ["teste", "windows", "RotaGuard-Script-windows-x64-setup.exe", "RotaGuard-Script-windows-x64.zip"],
   ["teste", "linux", "RotaGuard-Script-linux-x86_64.tar.gz"],
 ];
 
-export const downloads: Download[] = arquivos.map(([app, plataforma, arquivo]) => ({
+export const downloads: Download[] = arquivos.map(([app, plataforma, arquivo, portatil]) => ({
   app,
   plataforma,
   arquivo,
   url: `${base}/${arquivo}`,
+  ...(portatil ? {portatil: {arquivo: portatil, url: `${base}/${portatil}`}} : {}),
 }));

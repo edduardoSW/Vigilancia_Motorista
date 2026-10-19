@@ -35,6 +35,8 @@ a = Analysis(  # noqa: F821
     binaries=[],
     datas=datas,
     hiddenimports=[],
+    # Tira a marca "baixado da internet" dos DLLs antes do pythonnet carregar (sem ela, o .zip do site não abre).
+    runtime_hooks=[str(AQUI / "rthook_desbloquear.py")],
     # Bibliotecas da caixa que estão no mesmo .venv e o painel não usa.
     excludes=["numpy", "cv2", "mediapipe", "matplotlib", "pytest", "IPython"],
     noarchive=False,

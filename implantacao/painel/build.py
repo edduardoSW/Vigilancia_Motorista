@@ -136,6 +136,9 @@ def conferir_pacote() -> None:
 
 def teste_de_fumaca() -> dict:
     """PAC-14: o .exe abre a janela oculta, carrega a interface e sai com 0 e "ok": true numa linha JSON."""
+    # Como no .zip baixado do site: o Python.Runtime.dll com a marca "baixado da internet" (rthook_desbloquear.py tira).
+    marca = Path(f"{DIST / PASTA_APP / '_internal' / 'pythonnet' / 'runtime' / 'Python.Runtime.dll'}:Zone.Identifier")
+    marca.write_text("[ZoneTransfer]\nZoneId=3\n", encoding="ascii")
     inicio = time.monotonic()
     resultado = subprocess.run([str(executavel()), "--verificar"], capture_output=True, text=True, errors="replace",
                                timeout=TEMPO_FUMACA_S)
@@ -151,6 +154,8 @@ def teste_de_fumaca() -> dict:
         falhas.append('a linha JSON não tem "ok": true')
     if "Traceback" in resultado.stderr:
         falhas.append("houve Traceback")
+    if marca.exists():
+        falhas.append("o Python.Runtime.dll continuou marcado como baixado da internet")
     if falhas:
         print(resultado.stdout[-2000:], resultado.stderr[-2000:])
         raise SystemExit("Verificação do pacote falhou: " + "; ".join(falhas))

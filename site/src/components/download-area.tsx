@@ -21,7 +21,7 @@ const textos = {
 type Situacao = {disponivel: boolean|null; bytes: number|null};
 const megabytes=(bytes: number)=>`${Math.round(bytes/1_048_576)} MB`;
 // Painel da empresa (spec 020) e app de teste do script (spec 010): arquivos servidos pelo próprio site em /downloads
-// (src/content/downloads.ts). Antes de oferecer o botão, confere se o arquivo está lá; o que ainda não foi gerado aparece
+// (src/content/downloads.ts). No Windows, o botão baixa o instalador e o .zip portátil fica num link ao lado. Antes de oferecer o botão, confere se o arquivo está lá; o que ainda não foi gerado aparece
 // como "Em preparação". A situação fica guardada pelo endereço do arquivo, porque os dois apps têm Windows.
 export function DownloadArea() {
   const t=useTranslations("app");
@@ -32,14 +32,14 @@ export function DownloadArea() {
   useEffect(()=>{
     if(active!==true) return;
     const controle=new AbortController();
-    for(const d of downloads){
-      fetch(d.url,{method:"HEAD",cache:"no-store",signal:controle.signal})
+    for(const url of downloads.flatMap(d=>d.portatil?[d.url,d.portatil.url]:[d.url])){
+      fetch(url,{method:"HEAD",cache:"no-store",signal:controle.signal})
         .then(resposta=>{
           const bytes=Number(resposta.headers.get("content-length"))||null;
-          setSituacao(atual=>({...atual,[d.url]:{disponivel:resposta.ok,bytes:resposta.ok?bytes:null}}));
+          setSituacao(atual=>({...atual,[url]:{disponivel:resposta.ok,bytes:resposta.ok?bytes:null}}));
         })
         // Outro domínio sem CORS (release do GitHub, por exemplo): não dá para conferir, então o botão continua.
-        .catch(()=>{if(!controle.signal.aborted) setSituacao(atual=>({...atual,[d.url]:{disponivel:null,bytes:null}}));});
+        .catch(()=>{if(!controle.signal.aborted) setSituacao(atual=>({...atual,[url]:{disponivel:null,bytes:null}}));});
     }
     return ()=>controle.abort();
   },[active]);
@@ -49,12 +49,17 @@ export function DownloadArea() {
     {(Object.keys(textos) as App[]).map(app=><section key={app} className="download-group" aria-labelledby={`download-${app}`}>
       <h2 id={`download-${app}`}>{t(textos[app].titulo)}</h2><p className="lead">{t(textos[app].texto)}</p>
       <ul className="download-list">{downloads.filter(d=>d.app===app).map(d=>{
-        const s=situacao[d.url];
+        // Instalador ainda não subiu e o .zip sim: o .zip vira o download principal.
+        const portatilDisponivel=d.portatil&&situacao[d.portatil.url]?.disponivel!==false;
+        const principal=situacao[d.url]?.disponivel===false&&d.portatil&&portatilDisponivel?d.portatil:d;
+        const extra=principal===d&&portatilDisponivel?d.portatil:undefined;
+        const s=situacao[principal.url];
         const descricao=textos[app][d.plataforma];
-        return <li key={d.url}><div><h3>{nomes[d.plataforma]}</h3>{descricao&&<p>{t(descricao)}</p>}<small>{d.arquivo}{s?.bytes?` · ${megabytes(s.bytes)}`:""}</small></div>
+        return <li key={d.url}><div><h3>{nomes[d.plataforma]}</h3>{descricao&&<p>{t(descricao)}</p>}<small>{principal.arquivo}{s?.bytes?` · ${megabytes(s.bytes)}`:""}</small>
+          {extra&&<small className="block"><a href={extra.url} download={extra.url.startsWith("/")?extra.arquivo:undefined} className="underline" data-evento="download_app" data-app={app} data-plataforma={d.plataforma} data-tipo="portatil">{t("portatil")}</a>{situacao[extra.url]?.bytes?` · ${megabytes(situacao[extra.url]!.bytes!)}`:""}</small>}</div>
           {s?.disponivel===false
             ? <span className="action action-dark pointer-events-none opacity-40" aria-disabled="true">{t("emPreparacao")}</span>
-            : <a href={d.url} download={d.url.startsWith("/")?d.arquivo:undefined} className="action action-dark" data-evento="download_app" data-app={app} data-plataforma={d.plataforma}>{t("baixar")}<span><Arrow diagonal/></span></a>}
+            : <a href={principal.url} download={principal.url.startsWith("/")?principal.arquivo:undefined} className="action action-dark" data-evento="download_app" data-app={app} data-plataforma={d.plataforma}>{t("baixar")}<span><Arrow diagonal/></span></a>}
         </li>;
       })}</ul>
       <p className="download-note">{t(textos[app].instrucoes)}</p>

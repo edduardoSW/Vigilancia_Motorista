@@ -11,7 +11,7 @@ preferências ficam só neste computador, em `%LOCALAPPDATA%\RotaGuard\Painel` (
 
 | Sistema | Arquivo |
 |---|---|
-| Windows 10/11 64 bits | `RotaGuard-Painel-windows-x64.zip` (portátil: extraia e abra `RotaGuardPainel.exe`); instalador `RotaGuard-Painel-windows-x64-setup.exe` quando o build tiver o Inno Setup |
+| Windows 10/11 64 bits | instalador `RotaGuard-Painel-windows-x64-setup.exe` (o download principal do site; precisa do Inno Setup no build) e `RotaGuard-Painel-windows-x64.zip` (portátil: extraia e abra `RotaGuardPainel.exe`) |
 
 Os arquivos saem do build em `build/painel/pacotes/`. O `.zip` é oferecido na área do PIN do site (spec 020): depois
 de cada build, copie-o para `site/public/downloads/`. Sem versão para Linux e Mac nesta etapa.
@@ -19,6 +19,9 @@ de cada build, copie-o para `site/public/downloads/`. Sem versão para Linux e M
 É uma versão sem assinatura digital:
 
 - Extraia o `.zip` antes de abrir. O `RotaGuardPainel.exe` precisa ficar junto da pasta `_internal`.
+- O `.zip` baixado chega com a marca "baixado da internet" em todos os arquivos, e o .NET não carrega o
+  `Python.Runtime.dll` marcado ("Failed to resolve Python.Runtime.Loader.Initialize"). O `rthook_desbloquear.py` tira
+  essa marca na abertura, antes do pythonnet carregar; o teste de fumaça do `build.py` marca o DLL para conferir isso.
 - Em "O Windows protegeu o computador", clique em **Mais informações → Executar assim mesmo**.
 - O Windows 11 já traz o **WebView2 Runtime**. No Windows 10, se o app avisar que ele falta, instale o WebView2 Runtime
   (versão Evergreen) pelo site da Microsoft e abra o painel de novo.

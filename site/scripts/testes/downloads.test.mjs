@@ -18,28 +18,34 @@ const { downloads } = await import(pathToFileURL(path.join(raiz, "site", "src", 
 const doApp = (app) => downloads.filter((d) => d.app === app);
 
 const esperados = ["RotaGuard-Script-windows-x64.zip", "RotaGuard-Script-linux-x86_64.tar.gz"];
-const painelWindows = "RotaGuard-Painel-windows-x64.zip";
+const painelWindows = "RotaGuard-Painel-windows-x64-setup.exe";
+const painelPortatil = "RotaGuard-Painel-windows-x64.zip";
+const scriptWindows = "RotaGuard-Script-windows-x64-setup.exe";
 
-test("DPA-01 site oferece o .zip do painel em /downloads", () => {
+test("DPA-01 site oferece o instalador do painel em /downloads, com o .zip portátil ao lado", () => {
   const painel = doApp("painel");
   assert.deepEqual(painel.map((d) => [d.plataforma, d.arquivo, d.url]), [["windows", painelWindows, `/downloads/${painelWindows}`]]);
+  assert.deepEqual(painel[0].portatil, {arquivo: painelPortatil, url: `/downloads/${painelPortatil}`});
 });
 
 test("DPA-01 build.py do painel gera o mesmo nome", () => {
   const build = ler("implantacao", "painel", "build.py");
   assert.match(build, /^NOME = "RotaGuard-Painel"$/m);
   assert.match(build, /return f"\{NOME\}-\{alvo\(\)\}\.zip"/);
+  assert.match(build, /return f"\{NOME\}-\{alvo\(\)\}-setup\.exe"/);
+  assert.match(ler("implantacao", "painel", "rotaguard-painel.iss"), /^OutputBaseFilename=RotaGuard-Painel-windows-x64-setup$/m);
   assert.match(ler("implantacao", "app-teste", "build.py"), /return "windows-x64" if maquina in \("amd64", "x86_64"\)/);
 });
 
 test("DPA-02 painel só Windows; app de teste continua com Windows e Linux", () => {
   assert.deepEqual(doApp("painel").map((d) => d.plataforma), ["windows"]);
-  assert.deepEqual(doApp("teste").map((d) => [d.plataforma, d.arquivo]), [["windows", esperados[0]], ["linux", esperados[1]]]);
+  assert.deepEqual(doApp("teste").map((d) => [d.plataforma, d.arquivo, d.portatil?.arquivo]),
+    [["windows", scriptWindows, esperados[0]], ["linux", esperados[1], undefined]]);
 });
 
 test("DPA-03 painel antes do teste e um endereço por arquivo", () => {
   assert.deepEqual([...new Set(downloads.map((d) => d.app))], ["painel", "teste"]);
-  const urls = downloads.map((d) => d.url);
+  const urls = downloads.flatMap((d) => d.portatil ? [d.url, d.portatil.url] : [d.url]);
   assert.equal(new Set(urls).size, urls.length, "dois itens com o mesmo endereço");
   const area = ler("site", "src", "components", "download-area.tsx");
   assert.match(area, /situacao\[d\.url\]/, "a situação do arquivo precisa ser guardada pelo endereço");
@@ -49,7 +55,7 @@ test("DPA-03 painel antes do teste e um endereço por arquivo", () => {
 test("DPA-04 bloco do painel nos 5 idiomas, com o primeiro uso", () => {
   for (const locale of locales) {
     const app = mensagens(locale).app;
-    for (const chave of ["painelTitulo", "painelTexto", "painelWindows", "painelInstrucoes", "testeTitulo"]) {
+    for (const chave of ["painelTitulo", "painelTexto", "painelWindows", "painelInstrucoes", "testeTitulo", "portatil"]) {
       assert.ok(typeof app[chave] === "string" && app[chave].trim(), `${locale}: app.${chave} vazio`);
     }
     assert.match(app.painelWindows, /RotaGuardPainel\.exe/, `${locale}: Windows do painel sem o nome do .exe`);
@@ -86,7 +92,7 @@ test("APT-11 workflow publica a pasta de pacotes na release das tags teste-v*", 
 });
 
 test("APT-11 base padrão é o próprio site, com a pasta de downloads fora do git", () => {
-  assert.ok(downloads.every((d) => d.url.startsWith("/downloads/")));
+  assert.ok(downloads.every((d) => d.url.startsWith("/downloads/") && (!d.portatil || d.portatil.url.startsWith("/downloads/"))));
   assert.match(ler("site", "src", "content", "downloads.ts"), /BASE_PADRAO = "\/downloads"/);
   assert.match(ler("site", ".gitignore"), /^public\/downloads\/$/m);
 });

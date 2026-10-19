@@ -418,4 +418,19 @@ for nome, (versao, marcador) in travadas.items():
     assert instalada == versao, (nome, instalada, versao)
 ok("PAC-13 requirements.txt com versões travadas (==) e iguais às instaladas")
 
+# PAC-15 · o .zip baixado do site abre: o gancho tira a marca "baixado da internet" antes do pythonnet carregar
+espec = (RAIZ / "implantacao" / "painel" / "rotaguard-painel.spec").read_text(encoding="utf-8")
+assert 'runtime_hooks=[str(AQUI / "rthook_desbloquear.py")]' in espec, "o .spec precisa do gancho de desbloqueio"
+gancho = carregar(RAIZ / "implantacao" / "painel" / "rthook_desbloquear.py", "rthook_desbloquear")
+if sys.platform == "win32":
+    with tempfile.TemporaryDirectory() as pasta:
+        dll = escrever(Path(pasta) / "pythonnet" / "runtime" / "Python.Runtime.dll", "dll")
+        escrever(Path(pasta) / "limpo.txt", "sem marca")
+        marca = Path(f"{dll}:Zone.Identifier")
+        marca.write_text("[ZoneTransfer]\nZoneId=3\n", encoding="ascii")
+        assert marca.exists()
+        assert gancho.desbloquear(pasta) == 1
+        assert not marca.exists() and dll.read_text(encoding="utf-8") == "dll"
+ok("PAC-15 rthook_desbloquear tira o Zone.Identifier dos arquivos do pacote")
+
 print(f"\n{checks} verificações OK")
