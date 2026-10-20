@@ -18,7 +18,7 @@ export const ITENS_MENU: readonly ItemMenu[] = [
   { href: "/viagens/", rotulo: "Viagens", icone: "trips", acao: "ver_viagens", grupo: "principal" },
   { href: "/motoristas/", rotulo: "Motoristas", icone: "driver", acao: "ver_viagens", grupo: "principal" },
   { href: "/veiculos/", rotulo: "Veículos e caixas", icone: "vehicle", acao: "ver_viagens", grupo: "principal" },
-  // Spec 026: testes feitos no RotaGuard Teste de outros computadores, recebidos pela central.
+  // Spec 026: testes feitos no RotaGuard Script de outros computadores, recebidos pela central.
   { href: "/remotos/", rotulo: "Testes à distância", icone: "monitor", acao: "ver_viagens", grupo: "principal" },
   { href: "/equipe/", rotulo: "Equipe", icone: "team", acao: "equipe", grupo: "principal" },
   { href: "/configuracoes/", rotulo: "Configurações", icone: "settings", acao: "configuracoes", grupo: "principal" },

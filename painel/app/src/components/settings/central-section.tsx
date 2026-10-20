@@ -12,7 +12,7 @@ import { Row, Section, type SaveState } from "./section";
 
 type Erro = { texto: string; campo?: string } | null;
 
-// Configurações › Central (spec 026, decisão 7): o painel executável busca na central os testes feitos no RotaGuard Teste
+// Configurações › Central (spec 026, decisão 7): o painel executável busca na central os testes feitos no RotaGuard Script
 // de outros computadores. Guarda só o token da sessão (no Windows, protegido pelo DPAPI); a senha nunca é gravada.
 export function CentralSection() {
   const { toast } = useToast();
@@ -115,7 +115,7 @@ export function CentralSection() {
   return (
     <Section
       title="Central"
-      summary="Recebe os testes feitos no RotaGuard Teste de outros computadores da empresa: eventos, resumo de cada sessão e trechos de vídeo."
+      summary="Recebe os testes feitos no RotaGuard Script de outros computadores da empresa: eventos, resumo de cada sessão e trechos de vídeo."
     >
       <Row label="Situação" description={estado.conectado ? `O painel busca novidades a cada ${estado.intervalo_s} s enquanto está aberto.` : undefined}>
         <p className={cn("text-[14px]", status.alarme ? "font-semibold text-alarme" : "text-tinta")}>{status.texto}</p>
@@ -201,7 +201,7 @@ export function CentralSection() {
                   Vale por {codigo.validade_min} min, até <b className="font-semibold">{hora(codigo.expira_em)}</b>, e só uma vez.
                 </p>
                 <ol className="mt-3 grid list-decimal gap-1 pl-5 text-[14px]">
-                  <li>No outro computador, abra o RotaGuard Teste › Conectar à empresa e digite este código.</li>
+                  <li>No outro computador, abra o RotaGuard Script › Conectar à empresa e digite este código.</li>
                   <li>Lá aparece o nome da empresa e o aviso do que vai ser enviado.</li>
                   <li>Os testes daquele computador aparecem em Testes à distância, em até 30 s.</li>
                 </ol>

@@ -165,7 +165,8 @@
     "testeLinux": "Linux x86_64 · archivo .tar.gz",
     "testeInstrucoes": "Abre RotaGuard Script y haz clic en «Iniciar teste» (Iniciar prueba): la cámara se detecta sola. Durante la prueba: Q cierra, C recalibra, M cambia la malla, S activa o desactiva el sonido.",
     "aviso": "Versiones de prueba sin firma digital. En Windows, en «Windows protegió su PC», haz clic en Más información → Ejecutar de todas formas.",
-    "depois": "Panel para Linux y aplicación móvil: en preparación."
+    "depois": "Panel para Linux y aplicación móvil: en preparación.",
+    "compilacao": "Versión para descargar"
   },
   "creditos": {
     "titulo": "Imágenes con dirección.",

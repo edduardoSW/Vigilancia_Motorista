@@ -79,7 +79,7 @@ export const TERMOS_FICTICIOS = [
   "ANA-NOTE",
   "GARAGEM-01",
   "Webcam HD integrada",
-  "RotaGuard Teste 0.4",
+  "RotaGuard Script 0.4",
   // faixa e textos da prévia (auth-gate.tsx, layout.tsx, moment-dialog.tsx, about-section.tsx, guide.ts)
   "dados fictícios",
   "Prévia com dados",

@@ -165,7 +165,8 @@
     "testeLinux": "Linux x86_64 · .tar.gz file",
     "testeInstrucoes": "Open RotaGuard Script and click “Iniciar teste” (Start test): the camera is found automatically. During the test: Q quits, C recalibrates, M changes the face overlay, S turns the sound on or off.",
     "aviso": "Test builds without a digital signature. On Windows, at “Windows protected your PC”, click More info → Run anyway.",
-    "depois": "Dashboard for Linux and mobile app: in preparation."
+    "depois": "Dashboard for Linux and mobile app: in preparation.",
+    "compilacao": "Version to download"
   },
   "creditos": {
     "titulo": "Images with a direction.",

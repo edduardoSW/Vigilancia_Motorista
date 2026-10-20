@@ -218,6 +218,7 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 | Q4 | Por quanto tempo os trechos ficam guardados depois da coleta, e quem pode vê-los? | 30 dias; só gestor e admin da empresa; motorista vê os próprios |
 | Q5 | Tipo de veículo por caixa (carga ou passageiros) | Configurado no pareamento; padrão "carga" |
 | Q6 | Número de WhatsApp, oferta de piloto e preço | Sem valor inventado: o site mostra "a configurar" |
+| Q7 | Quem pode ativar o painel num computador? Hoje qualquer pessoa com o link baixa e ativa | Fica aberto até o Matheus decidir (20/10/2026: "por enquanto mantenha assim"); opções: arquivo da empresa obrigatório ou código gerado pela central |
 
 ## 11. Histórico de decisões (11/09/2026)
 
@@ -346,6 +347,29 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 - **Nome:** "troque o nome não quero que seja rotaguard test coloque rotaguard script" → spec 031: o app passa a se
   chamar **RotaGuard Script** (executável, pacote, site, painel e central); a pasta de dados antiga é trazida sozinha.
 
+### 20/10/2026
+
+- **Ativação em outro computador:** "uma pessoa baixou o painel e apareceu essa tela" ("Ativar o painel" com "Algo deu
+  errado"). Correções: a Ponte aceita todos os argumentos que a tela manda (`tests/test_painel_contrato.py`, ATV-01/02);
+  falha inesperada vai para `registro-painel.log` com um código na tela (ATV-03); o build do painel faz o primeiro uso
+  dentro do `.exe` (ATV-04). A causa exata no computador da pessoa não foi reproduzida aqui: com a versão nova, o código
+  na tela e o registro mostram o erro.
+- **Quem pode ativar:** "não entendi o motivo dessa tela sendo que a pessoa que tem o painel da empresa que vai criar o
+  cadastro para ela pois se for assim qualquer um com o link pode baixar o app e usar entendeu, mas por enquanto mantenha
+  assim porem preciso que tudo isso funcione" → fica como está (qualquer computador ativa o próprio painel). Pergunta
+  aberta Q7: exigir o arquivo ou um código da empresa para ativar.
+- **Qualquer computador:** "eu preciso muito tambem que isso funcione em qualquer dispositivo" → instalador Inno Setup
+  como download principal, gancho que tira a marca "baixado da internet" nos dois apps, primeiro uso testado no pacote.
+- **Mesma versão no site e no computador:** "o executavel que esta no site eu não acho que esta com a mesma versão que
+  esta nesse computador" → `versao.txt` com a compilação em cada pacote, mostrada no app e no site
+  (`site/public/downloads/versoes.json`, VER-01); publicação por `implantacao/publicar_downloads.py`.
+- **Batimento:** "fala que não consegue captar muito por causa da luz isso não faz sentido e quando não consegue
+  simplesmente para de funcionar"; "coloque um indicativo que esta em andamento".
+- **Tela do script:** "o menu lateral que aparece do lado da camera não esta legal tudo esta muito junto e confuso".
+- **Olhos esfregados:** "coçar os olhos não esta pegando muito bem".
+- **Documento:** "coloque no meu downloads um documento explicando as coisas como funciona para eu mandar para um amigo
+  fazer a documentação oficial".
+
 ## 12. Specs
 
 | Spec | Cobre |
@@ -381,3 +405,4 @@ Cada spec usa o valor padrão abaixo até ele decidir.
 | `docs/specs/029-malha-discreta-e-tela-do-teste-mais-clara.md` | RF-17, RF-18, RF-65 (malha que não cobre rosto nem olho, trechos com o rosto limpo, tela e resumo organizados por pergunta); 19/10/2026 |
 | `docs/specs/030-painel-sem-dados-ficticios.md` | RF-20, RF-21, RF-26, RF-40, RF-66 (painel só com dados reais, estados vazios, migração do painel ativado em demonstração); 19/10/2026 |
 | `docs/specs/031-nome-rotaguard-script.md` | RF-18, RF-27 (o app de teste passa a se chamar RotaGuard Script; pasta de dados migrada; painel reconhece os dois nomes); 19/10/2026 |
+| `docs/specs/032-olhos-esfregados-e-maos.md` | RF-01 (olhos esfregados: qualquer parte da mão, olho tapado e mexendo, mãos sem pular medida, caixa que é a mão não apaga o gesto); 20/10/2026 |

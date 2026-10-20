@@ -1,4 +1,5 @@
-"""Spec 023: nova tela do RotaGuard Teste (servidor local, estado, resumo, malha e pacote). TEL-01 a TEL-16.
+"""Spec 023: tela do RotaGuard Script, antes RotaGuard Teste (servidor local, estado, resumo, malha e pacote).
+TEL-01 a TEL-24; painel ao lado do vídeo refeito em 20/10 (PAI-01 a PAI-03); nome e versão (NOM-01, VER-01).
 
 Precisa de numpy, opencv e mediapipe (caixa/requirements.txt). O pywebview não é usado aqui (a janela não abre):
     python tests/test_tela_teste.py
@@ -813,6 +814,111 @@ ok("TEL-18 o topo mostra uma frase do estado atual (normal, olho fechado, celula
    "e o risco aparece num lugar só")
 
 
+# ---------------------------------------------------------------- 20/10 · painel ao lado do vídeo enxuto (PAI-01 a PAI-03)
+# Pedido do Matheus: "o menu lateral que aparece do lado da câmera não está legal, tudo está muito junto e confuso".
+cartoes = {c["id"]: c for c in painel["cartoes"]}
+assert [m["id"] for m in [cartoes["sono"]["principal"], *cartoes["sono"]["medidas"]]] == ["olho_aberto",
+                                                                                       "olho_fechado_3min"]
+assert [m["id"] for m in [cartoes["atencao"]["principal"], *cartoes["atencao"]["medidas"]]] == [
+    "para_onde_olha", "celular", "olhos_esfregados"]
+assert [m["id"] for m in [cartoes["coracao"]["principal"], *cartoes["coracao"]["medidas"]]] == ["pulso", "confianca"]
+grupos = {g["id"]: [m["id"] for m in g["medidas"]] for g in painel["detalhes"]}
+assert list(grupos)[0] == "sono" and {"duracao_piscada", "piscadas_min", "bocejos", "cabeceios",
+                                      "fechamentos_longos"} <= set(grupos["sono"]), grupos
+assert "tempo_fora" in grupos["olhar"], grupos
+for cartao in painel["cartoes"]:
+    for medida in [cartao["principal"], *cartao["medidas"]]:
+        assert len(medida["nome"]) <= 32, medida["nome"]
+        if medida["valor"] is None:
+            assert medida["espera_curta"] and len(medida["espera_curta"]) <= 40, medida
+sem_perclos = estado_mod.medidas(estado_tela(janela={}))["painel"]
+espera_curta = {m["id"]: m for _, m in todas_as_medidas(sem_perclos)}["olho_fechado_3min"]["espera_curta"]
+assert espera_curta == "Pronto em 1 min e meio", espera_curta
+ok("PAI-01 blocos de cima enxutos: Sono com 2 números, Atenção com 3 linhas, Coração com pulso e confiança; o resto em "
+   "Ver mais detalhes, com nomes curtos e o que falta medir em poucas palavras")
+
+assert 'id="detalhes"' in indice_web and "Ver mais detalhes" in indice_web
+pos_agora, pos_cartoes = indice_web.index('id="agora"'), indice_web.index('id="cartoes"')
+assert indice_web.index('id="leituras"') < pos_agora < pos_cartoes < indice_web.index('id="detalhes"'), \
+    "a frase do agora é o topo do painel ao lado do vídeo, antes dos blocos e dos detalhes"
+assert "O que os números de cima querem dizer" in script_web and "espera_curta" in script_web
+assert "status-word" in script_web and "medida.nivel === 0" in script_web, "linha normal sem palavra colorida (ISA-101)"
+ok("PAI-02 painel ao lado do vídeo: frase do agora no topo, depois os 3 blocos e Ver mais detalhes recolhido, que "
+   "começa explicando cada número de cima")
+
+
+def coracao_de(**campos):
+    leitura = SimpleNamespace(estado="medindo", bpm=None, confianca=0.0, snr_db=None, respiracao_rpm=None,
+                              rmssd_ms=None, progresso=0.0, onda=[], historico_bpm=[], canal="rgb", rois=rois,
+                              ultimo_bpm=None)
+    for chave, valor in campos.items():
+        setattr(leitura, chave, valor)
+    cartao = next(c for c in estado_mod.medidas(estado_tela(cardio=leitura))["painel"]["cartoes"] if c["id"] == "coracao")
+    return cartao, json.dumps(cartao, ensure_ascii=False)
+
+
+# Aquecimento: anel com o progresso e "faltam ~N s"; sem o campo novo, o tempo sai do progresso (15 s de sinal bom).
+cartao, texto_cartao = coracao_de(estado="medindo", progresso=0.4)
+medicao = cartao["medicao"]
+assert medicao["ativa"] and medicao["progresso"] == 0.4 and medicao["faltam_s"] == 9, medicao
+assert medicao["texto"] == "Medindo seu pulso, faltam ~9 s" and medicao["motivo"] is None, medicao
+assert "luz" not in texto_cartao.lower(), "sem motivo do cardio, nada de falar de luz"
+cartao, _ = coracao_de(estado="medindo", progresso=0.4, segundos_para_medida=4.2)
+assert cartao["medicao"]["texto"] == "Medindo seu pulso, faltam ~5 s", cartao["medicao"]
+# Perdeu o sinal: medindo de novo, último valor bom esmaecido e o motivo só quando o cardio diz.
+cartao, texto_cartao = coracao_de(estado="movimento", ultimo_bpm=72.4, progresso=1.0)
+medicao = cartao["medicao"]
+assert medicao["ativa"] and medicao["ultimo"] == "72" and medicao["texto"] == "Medindo de novo", medicao
+assert medicao["motivo"] == "Fique parado por alguns segundos" and "luz" not in texto_cartao.lower(), medicao
+assert cartao["principal"]["valor"] == "72" and "último valor" in cartao["principal"]["unidade"], cartao["principal"]
+cartao, texto_cartao = coracao_de(estado="sinal_fraco", ultimo_bpm=70.0, segundos_para_medida=6.0, progresso=0.5)
+assert cartao["medicao"]["texto"] == "Medindo de novo, faltam ~6 s" and cartao["medicao"]["progresso"] == 0.5
+assert cartao["medicao"]["motivo"] is None and "luz" not in texto_cartao.lower(), cartao["medicao"]
+for motivo, esperado in (("mexendo", "Fique parado por alguns segundos"), ("pouca_luz", "Pouca luz no rosto"),
+                         ("luz_estourada", "Luz forte demais no rosto")):
+    cartao, _ = coracao_de(estado="sinal_fraco", motivo=motivo, ultimo_bpm=70.0)
+    assert cartao["medicao"]["motivo"] == esperado, (motivo, cartao["medicao"])
+cartao, _ = coracao_de(estado="medindo", progresso=0.2, motivo="camera_lenta", fps=12.0)
+assert cartao["medicao"]["motivo"] == "Câmera lenta (12 quadros/s)", cartao["medicao"]
+cartao, _ = coracao_de(estado="pronto", bpm=71.6, confianca=0.82, progresso=1.0, ultimo_bpm=71.6)
+assert not cartao["medicao"]["ativa"] and cartao["principal"]["valor"] == "72", cartao
+assert estado_mod.cardio_json(SimpleNamespace(estado="medindo"))["motivo"] is None, "sem os campos novos, None"
+assert "heart-progress" in script_web and "último valor" in script_web and "girando" in script_web
+ok("PAI-03 coração com andamento: anel e 'faltam ~N s' no aquecimento e ao medir de novo, último valor esmaecido, "
+   "motivo só quando o cardio diz (luz nunca sem ele)")
+
+
+# ---------------------------------------------------------------- spec 031 · nome visível e linha da versão (NOM-01)
+from tela_teste import app as tela_app  # noqa: E402
+from tela_teste import sessao as sessao_mod  # noqa: E402
+
+assert tela_app.NOME_APP == "RotaGuard Script"
+visiveis = [PASTA_WEB / "index.html", PASTA_WEB / "app.js", RAIZ / "caixa" / "textos_legais.py",
+            RAIZ / "caixa" / "tela_teste" / "central.py", RAIZ / "caixa" / "tela_teste" / "sessao.py"]
+for arquivo in visiveis:
+    assert "RotaGuard Teste" not in arquivo.read_text(encoding="utf-8"), arquivo.name
+assert "<title>RotaGuard Script</title>" in indice_web
+ok("NOM-01 tela, textos legais e envio para a empresa dizem RotaGuard Script; 'RotaGuard Teste' não aparece mais")
+
+assert sessao_mod.linha_de_versao(congelado=False) == "versão de desenvolvimento"
+with tempfile.TemporaryDirectory() as pasta_exe:
+    exe = Path(pasta_exe) / "RotaGuardScript.exe"
+    exe.write_bytes(b"")
+    from vision import __version__ as versao_atual  # noqa: E402
+    assert sessao_mod.linha_de_versao(congelado=True, executavel=str(exe)) == f"RotaGuard Script {versao_atual}", \
+        "sem versao.txt ao lado do executável: o nome e a versão, sem quebrar"
+    (Path(pasta_exe) / "versao.txt").write_text("RotaGuard Script 0.3.0 · compilação e94ca11 · 20/10/2026 13:10\n",
+                                                encoding="utf-8")
+    assert sessao_mod.linha_de_versao(congelado=True, executavel=str(exe)) == \
+        "RotaGuard Script 0.3.0 · compilação e94ca11 · 20/10/2026 13:10"
+    (Path(pasta_exe) / "versao.txt").write_bytes(b"")
+    assert sessao_mod.linha_de_versao(congelado=True, executavel=str(exe)).startswith("RotaGuard Script")
+assert 'id="compilacao-inicio"' in indice_web and 'id="compilacao-legal"' in indice_web
+assert "dados.compilacao" in script_web and "textosLegais.compilacao" in script_web
+ok("VER-01 linha da versão: lê versao.txt ao lado do executável no pacote, 'versão de desenvolvimento' fora dele, e "
+   "aparece no rodapé do início e na janela de privacidade")
+
+
 # ---------------------------------------------------------------- privacidade do cardio e dos resumos (spec 022 e 023)
 import textos_legais  # noqa: E402
 
@@ -1009,7 +1115,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert esperar(lambda: any(s.get("encerrada_em") for s in falsa.sessoes.values()), 20), falsa.sessoes
         enviada = next(iter(falsa.sessoes.values()))
         assert "frequencia_cardiaca" not in json.dumps(enviada) and enviada["resumo"]["duracao_s"] > 0, enviada
-        assert enviada["programa"].startswith("RotaGuard Teste") and enviada["camera"] == "Vídeo sintetico.avi"
+        assert enviada["programa"].startswith("RotaGuard Script") and enviada["camera"] == "Vídeo sintetico.avi"
         assert "frequencia_cardiaca" in estado(servidor)["resumo"], "o resumo local continua com o cardio"
         assert any(p[1] == "/api/devices/heartbeat" for p in falsa.pedidos), "sinal de vida enviado"
         assert esperar(lambda: estado(servidor)["central"]["situacao"] == "em_dia", 15)

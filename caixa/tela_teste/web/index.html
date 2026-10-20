@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="rg-token" content="__TOKEN__">
-  <title>RotaGuard Teste</title>
+  <title>RotaGuard Script</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="app.css?t=__TOKEN__">
   <script src="app.js?t=__TOKEN__" defer></script>
@@ -22,7 +22,7 @@
         </svg>
         <span>rota<span class="wordmark-light">guard</span></span>
       </span>
-      <span class="tag">Teste</span>
+      <span class="tag">Script</span>
       <nav class="start-nav" aria-label="Informações">
         <button type="button" class="btn btn-quiet btn-small" data-acao-ui="legal">Privacidade, LGPD e termos</button>
       </nav>
@@ -105,13 +105,13 @@
           <h2 id="titulo-medidas">O que a tela mostra</h2>
           <dl class="measure-list">
             <div><dt>Agora</dt><dd>Uma frase com o estado da pessoa: tudo normal, olhos fechando, celular na mão</dd></div>
-            <div><dt>Sono</dt><dd>Olho aberto, tempo de olho fechado, piscadas, bocejos e cabeceios</dd></div>
-            <div><dt>Atenção na estrada</dt><dd>Para onde olha, tempo olhando fora, celular e olhos esfregados</dd></div>
-            <div><dt>Coração</dt><dd>Pulso estimado pela câmera, com a confiança da leitura</dd></div>
+            <div><dt>Sono</dt><dd>Olho aberto agora e quanto o olho ficou fechado nos últimos 3 minutos</dd></div>
+            <div><dt>Atenção na estrada</dt><dd>Para onde olha, celular e olhos esfregados</dd></div>
+            <div><dt>Coração</dt><dd>Pulso estimado pela câmera e a confiança da leitura; enquanto mede, quanto falta</dd></div>
             <div><dt>Linha do tempo</dt><dd>Cada alerta com a hora; no fim, um relatório do teste</dd></div>
           </dl>
-          <p class="side-note">A malha discreta marca os olhos por fora, sem cobrir o rosto. Cada medida diz o que é,
-            se está normal e o seu normal na calibração.</p>
+          <p class="side-note">A malha discreta marca os olhos por fora, sem cobrir o rosto. Em Ver mais detalhes, cada
+            número diz o que é, se está normal e o seu normal na calibração.</p>
         </section>
 
         <section class="side-block" aria-labelledby="titulo-central">
@@ -163,6 +163,7 @@
           </div>
         </section>
         <p class="fineprint" id="versao-inicio">Protótipo em validação. Não é diagnóstico.</p>
+        <p class="fineprint build-line" id="compilacao-inicio"></p>
       </aside>
     </main>
   </div>
@@ -201,36 +202,19 @@
     </header>
 
     <main class="test-grid">
-      <section class="stage" aria-label="Agora, vídeo e linha do tempo">
-        <section class="now" id="agora" data-nivel="0" aria-labelledby="agora-rotulo">
-          <div class="now-text">
-            <p class="now-label" id="agora-rotulo">Agora</p>
-            <p class="now-sentence" id="agora-frase" aria-live="polite">Esperando a primeira imagem</p>
-            <p class="now-detail" id="agora-detalhe">A detecção começa assim que a câmera mandar imagem.</p>
-          </div>
-          <span class="status-word status-large" id="agora-situacao" data-nivel="n">Aguardando</span>
-          <p class="now-message" id="agora-mensagem" hidden></p>
-          <p class="now-note" id="agora-nota" hidden></p>
-          <div class="now-calibration" id="calibracao" hidden>
-            <div class="calibration-head">
-              <span class="calibration-title">Aprendendo o seu normal</span>
-              <span class="calibration-value" id="calibracao-valor">0%</span>
+      <section class="stage" aria-label="Vídeo e linha do tempo">
+        <div class="video-area">
+          <div class="video-frame" id="quadro-video" data-nivel="0">
+            <img id="video" alt="Imagem da câmera com a malha discreta do rosto">
+            <div class="video-loading" id="video-carregando">
+              <p class="loading-title" id="etapa">Preparando o teste</p>
+              <div class="loading-bar" aria-hidden="true"><span></span></div>
+              <p class="loading-note">Na primeira vez a detecção leva alguns segundos para carregar.</p>
             </div>
-            <div class="bar" aria-hidden="true"><span id="calibracao-barra"></span></div>
-            <p class="calibration-note" id="calibracao-texto">Olhe para a câmera e pisque normalmente.</p>
-          </div>
-        </section>
-
-        <div class="video-frame" id="quadro-video" data-nivel="0">
-          <img id="video" alt="Imagem da câmera com a malha discreta do rosto">
-          <div class="video-loading" id="video-carregando">
-            <p class="loading-title" id="etapa">Preparando o teste</p>
-            <div class="loading-bar" aria-hidden="true"><span></span></div>
-            <p class="loading-note">Na primeira vez a detecção leva alguns segundos para carregar.</p>
-          </div>
-          <div class="video-empty" id="sem-rosto" hidden>
-            <p class="empty-title" id="sem-rosto-titulo">Procurando o rosto</p>
-            <p class="empty-text" id="sem-rosto-texto">Centralize o rosto na câmera, com luz de frente.</p>
+            <div class="video-empty" id="sem-rosto" hidden>
+              <p class="empty-title" id="sem-rosto-titulo">Procurando o rosto</p>
+              <p class="empty-text" id="sem-rosto-texto">Centralize o rosto na câmera, com luz de frente.</p>
+            </div>
           </div>
         </div>
 
@@ -255,10 +239,26 @@
       </section>
 
       <aside class="readouts" id="leituras" aria-label="Medidas ao vivo">
+        <section class="now" id="agora" data-nivel="0" aria-labelledby="agora-rotulo">
+          <h2 class="visually-hidden" id="agora-rotulo">Agora</h2>
+          <div class="now-head">
+            <p class="now-sentence" id="agora-frase" aria-live="polite">Esperando a primeira imagem</p>
+            <span class="status-word status-large" id="agora-situacao" data-nivel="n">Aguardando</span>
+          </div>
+          <p class="now-detail" id="agora-detalhe">A detecção começa assim que a câmera mandar imagem.</p>
+          <p class="now-message" id="agora-mensagem" hidden></p>
+          <p class="now-note" id="agora-nota" hidden></p>
+          <div class="now-calibration" id="calibracao" hidden>
+            <span class="calibration-title">Calibração</span>
+            <div class="bar" aria-hidden="true"><span id="calibracao-barra"></span></div>
+            <span class="calibration-value" id="calibracao-valor">0%</span>
+            <span class="calibration-note" id="calibracao-texto"></span>
+          </div>
+        </section>
         <div class="cards" id="cartoes"></div>
         <details class="details" id="detalhes">
-          <summary><span class="details-title">Detalhes</span>
-            <span class="details-sub">cabeça e boca, olhar e mãos, mais do coração, sinais experimentais e desempenho</span></summary>
+          <summary><span class="details-title">Ver mais detalhes</span>
+            <span class="details-sub">explicações e outras medidas</span></summary>
           <div class="details-body" id="detalhes-grupos"></div>
           <p class="fineprint">Os sinais experimentais são calculados só neste computador e nunca enviados. Servem para
             avaliar o protótipo: sinais compatíveis, não é diagnóstico.</p>
@@ -372,6 +372,7 @@
       <div class="dialog-head">
         <h2 id="legal-titulo">Privacidade, LGPD e termos</h2>
         <p class="muted small">Só para consulta: nada aqui precisa ser aceito para usar o app.</p>
+        <p class="muted small build-line" id="compilacao-legal"></p>
       </div>
       <div class="tabs" role="tablist" id="legal-abas" aria-label="Seções"></div>
       <div class="dialog-text" id="legal-texto" role="tabpanel" tabindex="0"></div>
@@ -393,6 +394,6 @@
 
   <div class="toast" id="aviso" role="status" aria-live="polite" hidden></div>
   <div class="offline" id="sem-conexao" role="alert" hidden>A tela perdeu a conexão com o programa. Feche e abra o
-    RotaGuard Teste de novo.</div>
+    RotaGuard Script de novo.</div>
 </body>
 </html>

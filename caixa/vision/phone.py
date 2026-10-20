@@ -483,11 +483,14 @@ class PhoneMonitor:
     def update(self, metrics, frame=None, moving: bool = True) -> PhoneAssessment:
         t = metrics.timestamp
         if frame is not None and t >= self._next_detection:
-            self._next_detection = t + self.every_s
             face = face_snapshot(metrics)
             if self.background:
-                self._submit(frame, t, face)
+                # GES-12: com a detecção anterior ainda rodando, o quadro é recusado e o próximo tenta de novo. Antes o
+                # intervalo avançava mesmo assim e as mãos caíam para ~2 por segundo (olhos esfregados se perdiam).
+                if self._submit(frame, t, face) is not False:
+                    self._next_detection = t + self.every_s
             else:
+                self._next_detection = t + self.every_s
                 self.observe(self._run(frame, t, face), metrics)
         if self.background:
             with self._lock:
@@ -547,9 +550,16 @@ class PhoneMonitor:
                 self._last["phone_away"] = t
         if ears is not None and any(hand_near_ear(hand, ears, face_width) for hand in observation.hands):
             self._last["hand_ear"] = t
-        # Mão segurando o celular não é gesto de sono.
+        # Mão segurando o celular não é gesto de sono. GES-13: caixa que é a própria mão (na cor da pele da pessoa,
+        # spec 028) não tira a mão dos gestos, senão esfregar o olho virava "celular na mão". Só a cor decide aqui: um
+        # celular de verdade segurado perto do olho também fica quase todo dentro do contorno da mão.
+        def pode_ser_aparelho(check) -> bool:
+            pele = getattr(check, "skin_fraction", None) if check is not None else None
+            return not (pele is not None and pele >= SKIN_MAX_FRACTION)
+
+        aparelhos = [phone for phone, check in phones if pode_ser_aparelho(check)]
         self._touch_hands = (t, [hand for hand in observation.hands
-                                 if not any(hand_touches_phone(hand, phone) for phone, _ in phones)])
+                                 if not any(hand_touches_phone(hand, phone) for phone in aparelhos)])
 
     def close(self) -> None:
         self.face_touch.close()
@@ -699,12 +709,14 @@ class PhoneMonitor:
         return any(math.hypot(x - first_x, y - first_y) >= PHONE_MOVE_FACES * scale
                    for _, x, y, scale in self._phone_centers)
 
-    def _submit(self, frame, t: float, face) -> None:
+    def _submit(self, frame, t: float, face) -> bool:
+        """False quando ainda processa o anterior: o quadro é pulado e o próximo tenta de novo (GES-12)."""
         with self._lock:
             if self._busy:
-                return  # ainda processando o anterior: pula este quadro
+                return False
             self._job, self._busy = (frame.copy(), t, face), True
         self._wake.set()
+        return True
 
     def _worker(self) -> None:
         while not self._stop.is_set():

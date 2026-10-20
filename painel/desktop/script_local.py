@@ -34,8 +34,11 @@ ARQUIVO_CAPTURAS = "capturas.db"
 SINAL_MAX_S = 15.0
 INTERVALO_VIGIA_S = 2.0
 LOTE = 500
-EXECUTAVEIS = ("rotaguardteste.exe", "rotaguardteste")
-MARCAS_NA_LINHA = ("app_teste.py", "run_monitor.py", "rotaguardteste")
+# Spec 031: o app se chama RotaGuard Script; o pacote antigo (RotaGuardTeste) continua reconhecido.
+PROGRAMA = "RotaGuard Script"
+NOMES_ANTIGOS = ("RotaGuard Teste",)
+EXECUTAVEIS = ("rotaguardscript.exe", "rotaguardscript", "rotaguardteste.exe", "rotaguardteste")
+MARCAS_NA_LINHA = ("app_teste.py", "run_monitor.py", "rotaguardscript", "rotaguardteste")
 CHAVES_ESTADO = ("aberto", "programa", "desde", "pid", "camera", "ultimo_sinal", "eventos", "pasta")
 RISCO_DE_ALERTA = 2  # risco médio ou alto: o que o Início conta como alerta (spec 030)
 
@@ -69,20 +72,21 @@ def _ler_iso(texto) -> datetime | None:
 
 def pastas_padrao_do_script(sistema: str | None = None, ambiente: Mapping[str, str] | None = None,
                             home: Path | None = None) -> list[Path]:
-    """Pasta do RotaGuard Teste (spec 010, decisão 4) e a padrão do run_monitor.py (~/.drivesafe ou DRIVESAFE_DATA_DIR)."""
+    """Pasta do RotaGuard Script (spec 031: RotaGuard/Script e a antiga RotaGuard/Teste do pacote anterior) e a padrão
+    do run_monitor.py (~/.drivesafe ou DRIVESAFE_DATA_DIR)."""
     sistema = sys.platform if sistema is None else sistema
     ambiente = os.environ if ambiente is None else ambiente
     home = Path.home() if home is None else home
     if sistema.startswith("win"):
         base = Path(ambiente["LOCALAPPDATA"]) if ambiente.get("LOCALAPPDATA") else home / "AppData" / "Local"
-        teste = base / "RotaGuard" / "Teste"
+        do_app = [base / "RotaGuard" / "Script", base / "RotaGuard" / "Teste"]
     else:
         base = Path(ambiente["XDG_DATA_HOME"]) if ambiente.get("XDG_DATA_HOME") else home / ".local" / "share"
-        teste = base / "rotaguard" / "teste"
+        do_app = [base / "rotaguard" / "script", base / "rotaguard" / "teste"]
     pastas = []
     if (ambiente.get("DRIVESAFE_DATA_DIR") or "").strip():
         pastas.append(Path(ambiente["DRIVESAFE_DATA_DIR"].strip()).expanduser())
-    for pasta in (teste, home / ".drivesafe"):
+    for pasta in (*do_app, home / ".drivesafe"):
         if pasta not in pastas:
             pastas.append(pasta)
     return pastas
@@ -121,6 +125,15 @@ def listar_processos_do_sistema() -> list[Processo]:
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug("Lista de processos indisponível: %s", exc)
         return []
+
+
+def nome_mostrado(programa) -> str:
+    """O que o painel mostra: o anúncio do pacote antigo diz "RotaGuard Teste 0.x"; para quem usa, é o RotaGuard Script."""
+    texto = str(programa or "").strip() or "RotaGuard"
+    for antigo in NOMES_ANTIGOS:
+        if texto.startswith(antigo):
+            return PROGRAMA + texto[len(antigo):]
+    return texto
 
 
 def eh_processo_do_script(processo: Processo) -> bool:
@@ -292,7 +305,7 @@ class ScriptLocal:
             self._vistos.clear()
             return {"aberto": True, "origem": "anuncio",
                     "chave": f"anuncio:{anuncio.get('sessao') or anuncio['pid']}:{_iso(iniciado)}",
-                    "programa": anuncio.get("programa") or "RotaGuard", "pid": anuncio["pid"], "desde": _iso(iniciado),
+                    "programa": nome_mostrado(anuncio.get("programa")), "pid": anuncio["pid"], "desde": _iso(iniciado),
                     "camera": anuncio.get("camera"), "ultimo_sinal": _iso(_ler_iso(anuncio["ultimo_sinal"])),
                     "pasta": str(pasta)}
         processos = self._processos()
@@ -301,7 +314,9 @@ class ScriptLocal:
             self._vistos = {p.pid: self._vistos.get(p.pid, _iso(agora)) for p in processos}
             desde = self._vistos[processo.pid]
             pasta = self._pasta_com_eventos() or (self._pastas[0] if self._pastas else None)
-            programa = "RotaGuard Teste" if processo.nome.lower() in EXECUTAVEIS else "RotaGuard (Python)"
+            linha = processo.linha.lower()
+            pacote = processo.nome.lower() in EXECUTAVEIS or "rotaguardscript" in linha or "rotaguardteste" in linha
+            programa = PROGRAMA if pacote else "RotaGuard (Python)"
             return {"aberto": True, "origem": "processo", "chave": f"processo:{processo.pid}:{desde}",
                     "programa": programa, "pid": processo.pid, "desde": desde, "camera": None,
                     "ultimo_sinal": _iso(agora), "pasta": str(pasta) if pasta else None}

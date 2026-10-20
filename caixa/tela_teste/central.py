@@ -125,7 +125,7 @@ class CentralDoTeste:
             raise ValueError("O código tem 8 letras e números, como ABCD-2345.")
         try:
             troca = trocar_codigo(endereco, codigo, computador=socket.gethostname()[:100],
-                                  programa=f"RotaGuard Teste {__version__}")
+                                  programa=f"RotaGuard Script {__version__}")
         except ApiError as exc:
             if exc.status == 429:
                 raise ValueError("Muitas tentativas. Espere um minuto e tente de novo.") from exc
@@ -220,7 +220,7 @@ class CentralDoTeste:
         self.envio = EnvioCentral(self.abrir_fila(), cliente, status=self.status, intervalo=self.intervalo,
                                   device_info=lambda: {"hostname": socket.gethostname()[:100],
                                                        "software_version": __version__,
-                                                       "platform": "RotaGuard Teste"},
+                                                       "platform": "RotaGuard Script"},
                                   ao_recusar=self._recusado)
         self.envio.start()
         if self.config.get("enviar", True):

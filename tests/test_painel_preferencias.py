@@ -27,7 +27,7 @@ ADMIN = {"nome": "Marina Lopes", "usuario": "marina.lopes", "senha": SENHA_ADM}
 EMPRESA = "Transportes Lima"  # spec 030: ativar sem arquivo cria a empresa com o nome digitado
 TELAS = ["viagens", "momentos", "motoristas", "veiculos", "caixas", "equipe"]
 PADRAO = {"tema": "claro", "visao": {tela: "cards" for tela in TELAS}}
-ORDEM_ESTADO = ["ativado", "modo", "empresa", "sessao", "bloqueado", "versao", "bloqueio_min", "texto_maior", "tema",
+ORDEM_ESTADO = ["ativado", "modo", "empresa", "sessao", "bloqueado", "versao", "compilacao", "bloqueio_min", "texto_maior", "tema",
                 "preferencias", "videos_dias"]
 
 

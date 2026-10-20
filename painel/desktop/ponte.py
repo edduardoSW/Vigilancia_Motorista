@@ -32,6 +32,8 @@ from preferencias import Preferencias
 AQUI = Path(__file__).resolve().parent
 MENSAGEM_FALHA = "Algo deu errado. Tente de novo; se continuar, fale com a RotaGuard."
 ARQUIVO_REGISTRO = "registro-painel.log"
+ARQUIVO_COMPILACAO = "versao.txt"
+TAMANHO_MAXIMO_COMPILACAO = 200
 TAMANHO_MAXIMO_REGISTRO = 1_000_000
 MENSAGEM_JA_ATIVADO = "O painel já foi ativado neste computador."
 MENSAGEM_NAO_ATIVADO = "O painel ainda não foi ativado."
@@ -48,6 +50,25 @@ def versao_app() -> str:
         return json.loads((AQUI.parent / "app" / "package.json").read_text(encoding="utf-8"))["version"]
     except (OSError, ValueError, KeyError):
         return "0.0.0"
+
+
+def compilacao_do_pacote(congelado: bool | None = None, executavel: str | None = None) -> str | None:
+    """Linha que o build grava em versao.txt ao lado do RotaGuardPainel.exe ("RotaGuard Painel 0.1.0 · compilação
+    e94ca11 · 20/10/2026 13:10"), para conferir se o programa deste computador é o mesmo do site (pedido de 20/10/2026).
+    Fora do pacote congelado, ou sem o arquivo, None. Só para mostrar: qualquer falha de leitura vira None."""
+    congelado = bool(getattr(sys, "frozen", False)) if congelado is None else congelado
+    if not congelado:
+        return None
+    try:
+        caminho = Path(executavel or sys.executable).resolve().parent / ARQUIVO_COMPILACAO
+        with open(caminho, "rb") as arquivo:
+            bruto = arquivo.read(4096)
+        texto = bruto.decode("utf-8-sig", errors="replace")
+        linha = next((linha.strip() for linha in texto.splitlines() if linha.strip()), "")
+        linha = "".join(letra for letra in linha if letra.isprintable() and letra != "�").strip()
+        return linha[:TAMANHO_MAXIMO_COMPILACAO] or None
+    except Exception:  # noqa: BLE001 - o arquivo é só informativo: nunca derruba o estado()
+        return None
 
 
 def _resposta(travar: bool = True):
@@ -252,7 +273,8 @@ class Ponte:
         preferencias = n.preferencias.ler(sessao["id"]) if sessao else None
         return {"ativado": ativado, "modo": n.banco.meta_ler("modo") if ativado else None,
                 "empresa": {"nome": config["empresa"]["nome"]} if ativado else None, "sessao": sessao,
-                "bloqueado": bloqueado, "versao": versao_app(), "bloqueio_min": config["acesso"]["bloqueio_min"],
+                "bloqueado": bloqueado, "versao": versao_app(), "compilacao": compilacao_do_pacote(),
+                "bloqueio_min": config["acesso"]["bloqueio_min"],
                 "texto_maior": bool(config["aparencia"]["texto_maior"]) if ativado else False,
                 "tema": preferencias["tema"] if preferencias else n.preferencias.tema_ultimo(),
                 "preferencias": preferencias, "videos_dias": config["guarda"]["videos_dias"]}

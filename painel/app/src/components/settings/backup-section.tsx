@@ -39,7 +39,7 @@ export function BackupSection() {
   }
 
   return (
-    <Section title="Cópia de segurança" summary="Um arquivo só com as viagens, as decisões, os cadastros, os vídeos no prazo e as configurações.">
+    <Section title="Cópia de segurança" summary="Um arquivo só com as viagens, as decisões, os cadastros, os termos importados e as configurações. Não leva vídeos nem os testes e trechos baixados da central.">
       <form className="grid max-w-[560px] gap-5 pt-5" onSubmit={fazer} noValidate>
         <p className="text-[14px]">
           <b className="font-semibold">Sem esta senha, a cópia não abre.</b> Anote e guarde junto com o código de recuperação.

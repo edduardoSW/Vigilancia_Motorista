@@ -67,7 +67,7 @@ export function erroDaCamera(nome: string, { instalado }: { instalado: boolean }
     case "AbortError":
       return {
         titulo: "A câmera está ocupada",
-        texto: "Outro programa está usando a câmera, por exemplo o RotaGuard Teste ou uma chamada de vídeo. Feche esse programa e tente de novo.",
+        texto: "Outro programa está usando a câmera, por exemplo o RotaGuard Script ou uma chamada de vídeo. Feche esse programa e tente de novo.",
         comoLiberar: [],
         tentarDeNovo: true,
       };
@@ -109,13 +109,13 @@ export function erroDaCamera(nome: string, { instalado }: { instalado: boolean }
   }
 }
 
-export type ModoDaMalha = "completa" | "pontos" | "essencial" | "desligada";
+// Spec 029 (decisão 3, MAL-08): os mesmos modos do script Python. Discreta é o padrão; "Pontos" e "Essencial" saíram.
+export type ModoDaMalha = "discreta" | "completa" | "desligada";
 
 export const MODOS_DA_MALHA: { id: ModoDaMalha; rotulo: string }[] = [
+  { id: "discreta", rotulo: "Discreta" },
   { id: "completa", rotulo: "Completa" },
-  { id: "pontos", rotulo: "Pontos" },
-  { id: "essencial", rotulo: "Essencial" },
-  { id: "desligada", rotulo: "Desligada" },
+  { id: "desligada", rotulo: "Só o rosto" },
 ];
 
 const ROTULOS_DE_EVENTO: Record<string, string> = {
@@ -170,4 +170,69 @@ export function formatarPorcentagem(valor: number): string {
 
 export function formatarSegundos(segundos: number): string {
   return `${decimal(segundos)} s`;
+}
+
+/** O mesmo AQUECIMENTO_S do camera-rppg.ts (o teste confere): segundos de imagem boa até o primeiro número. */
+const AQUECIMENTO_DO_PULSO_S = 15;
+
+type LeituraDoCoracao = {
+  estado: "sem_rosto" | "medindo" | "pronto" | "sinal_fraco" | "movimento";
+  bpm: number | null;
+  confianca: number;
+  progresso: number;
+  ultimoBpm: number | null;
+};
+
+export type SituacaoDoPulso = {
+  /** Número mostrado (bpm inteiro) ou null para "–". */
+  numero: number | null;
+  /** O número é a última leitura boa, mostrada apagada enquanto o monitor continua medindo. */
+  esmaecido: boolean;
+  rotulo: string;
+  alarme: boolean;
+  /** Indicativo de andamento: barra com o progresso do aquecimento, ou contínuo (progresso null) quando o sinal piorou. */
+  andamento: { texto: string; progresso: number | null } | null;
+  aviso: string;
+};
+
+/**
+ * Spec 029 · o cartão do coração: com o sinal ruim ele nunca para. Mostra o último valor esmaecido e diz que continua
+ * medindo; no aquecimento, "Medindo seu pulso, faltam ~N s" (como o script, caixa/tela_teste/estado.py).
+ */
+export function situacaoDoPulso(cardio: LeituraDoCoracao | null): SituacaoDoPulso {
+  const estado = cardio?.estado ?? "sem_rosto";
+  if (estado === "pronto" && cardio?.bpm != null) {
+    return {
+      numero: Math.round(cardio.bpm),
+      esmaecido: false,
+      rotulo: `Confiança ${formatarPorcentagem(cardio.confianca)}`,
+      alarme: false,
+      andamento: null,
+      aviso: "Pela cor da pele na testa e nas bochechas.",
+    };
+  }
+  const ultimo = cardio?.ultimoBpm ?? null;
+  const anterior = { numero: ultimo === null ? null : Math.round(ultimo), esmaecido: ultimo !== null };
+  if (estado === "medindo") {
+    const progresso = Math.min(1, Math.max(0, cardio?.progresso ?? 0));
+    const faltam = Math.max(1, Math.round((1 - progresso) * AQUECIMENTO_DO_PULSO_S));
+    return {
+      ...anterior,
+      rotulo: "Medindo",
+      alarme: false,
+      andamento: { texto: `Medindo seu pulso, faltam ~${faltam} s`, progresso },
+      aviso: "Fique parado, com luz de frente no rosto.",
+    };
+  }
+  if (estado === "sinal_fraco" || estado === "movimento") {
+    const movimento = estado === "movimento";
+    return {
+      ...anterior,
+      rotulo: movimento ? "Mexeu" : "Sinal fraco",
+      alarme: true,
+      andamento: { texto: movimento ? "A cabeça mexeu, continua medindo" : "Sinal fraco, continua medindo", progresso: null },
+      aviso: movimento ? "Fique parado: o número volta sozinho." : "Mais luz de frente no rosto e menos movimento: o número volta sozinho.",
+    };
+  }
+  return { numero: null, esmaecido: false, rotulo: "Sem rosto", alarme: false, andamento: null, aviso: "O pulso volta a medir quando o rosto aparecer." };
 }

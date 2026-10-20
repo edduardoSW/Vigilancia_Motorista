@@ -97,3 +97,23 @@
 - **Resumo local do app de teste** pode ter média, mínimo e máximo do bpm: fica só no computador da pessoa e nunca vai
   para evento, fila, central ou registro da viagem (RNF-16 e spec 026).
 - **Modo YuNet** não tem os 478 pontos: o cardio fica indisponível e a tela diz isso (não "sem rosto").
+
+## Revisão de 20/10/2026 (pedido: "fala que não consegue captar muito por causa da luz isso não faz sentido e quando não consegue simplesmente para de funcionar")
+
+Causa: o portão de 15 quadros/s. Num notebook a ~12 quadros/s o código nunca mostrava número (no vídeo de teste, 90% do
+tempo em "sinal fraco") e a tela pedia luz sem medir luz.
+
+| ID | Critério |
+|---|---|
+| CAR-15 | Sinal bom, 4 s de ruído, bom de novo: o número volta em ≤ 5 s (medido: 3,0 s; antes 11 s) |
+| CAR-16 | `motivo` medido: `pouca_luz` (luminância Y < 50), `luz_estourada` (> 25% saturado), `mexendo`, `camera_lenta` (< 10 quadros/s), `sinal_fraco`; `None` quando nada foi medido |
+| CAR-17 | `progresso` e `segundos_para_medida` também na retomada depois de perder o sinal |
+| CAR-18 | A partir de 10 quadros/s há número (janela de 12 s e confiança menor entre 10 e 15) |
+| CAR-19 | POS, CHROM e GREEN: o vencedor precisa concordar com o POS ou com as últimas janelas |
+| CAR-20 | Pico na borda da banda (a menos de 0,05 Hz de 0,7 ou 3,0 Hz) nunca vira número (o "42 bpm" da captura) |
+| CAR-21 | Confiança abaixo de 0,40 não publica número; abaixo de 60 bpm o SNR exigido sobe 2 dB (ruído 1/f dava 46 a 55 bpm falsos) |
+| CAR-22 | Ruído puro nunca vira número (máximo de −2,1 dB em 408 janelas) |
+
+Resultado no vídeo de teste (pulso sintético de 72 bpm): a 12 quadros/s, de 0% para 100% do tempo com número, erro médio
+de 0,05 bpm; a 8 quadros/s, sem número e com o motivo `camera_lenta` medido. Ferramenta:
+`ferramentas/diagnosticar_cardio.py <vídeo> --bpm-real 72`. Os limiares de luz (50 e 25%) são hipótese até a webcam real.

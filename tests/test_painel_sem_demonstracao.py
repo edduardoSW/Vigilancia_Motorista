@@ -346,7 +346,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     assert hoje == {"testes": 3, "testes_central": 2, "testes_locais": 1, "eventos": 6, "alertas": 3,
                     "alertas_por_tipo": {"celular_na_mao": 1, "microssono": 1, "sono": 1}, "testando_agora": 1,
                     "computadores": 2, "script_aberto": False, "central_conectada": False}, f"SDF-05 números: {hoje}"
-    processos.append(sl.Processo(812, "RotaGuardTeste.exe"))
+    processos.append(sl.Processo(812, "RotaGuardScript.exe"))
     hoje = resumo_de_hoje(ponte)
     assert (hoje["script_aberto"], hoje["testando_agora"], hoje["testes_locais"], hoje["testes"]) == (True, 2, 2, 4), \
         f"SDF-05 o script aberto neste computador conta como testando agora e como teste de hoje: {hoje}"

@@ -38,7 +38,7 @@ function situacaoDaSessao(sessao: SessaoRemota) {
   return "Encerrada";
 }
 
-// Testes à distância (spec 026, decisão 8): o que o RotaGuard Teste de outros computadores mandou para a central e o
+// Testes à distância (spec 026, decisão 8): o que o RotaGuard Script de outros computadores mandou para a central e o
 // painel já baixou. Tudo vem do banco local: sem a central, a tela continua com o que já tinha (PCE-05).
 export function RemoteScreen() {
   const { pode } = useSession();
@@ -190,7 +190,7 @@ export function RemoteScreen() {
           <ol className="mt-3 grid list-decimal gap-1.5 pl-5 text-[14px]">
             <li>Em Configurações › Central, conecte este painel com o usuário da empresa na central.</li>
             <li>Ainda lá, gere um código para o outro computador.</li>
-            <li>No outro computador, abra o RotaGuard Teste › Conectar à empresa e digite o código.</li>
+            <li>No outro computador, abra o RotaGuard Script › Conectar à empresa e digite o código.</li>
           </ol>
           <p className="mt-3 text-[13.5px] text-grafite">
             Os eventos, o resumo de cada sessão e os trechos de vídeo chegam aqui e ficam guardados neste computador.

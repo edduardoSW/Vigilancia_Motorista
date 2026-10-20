@@ -52,6 +52,9 @@ a = Analysis(  # noqa: F821
     datas=datas,
     hiddenimports=hiddenimports,
     excludes=["pytest", "IPython", "notebook", "jupyter"],
+    # O mesmo gancho do painel: tira a marca "baixado da internet" do pacote extraído do .zip do site antes do
+    # pythonnet carregar (sem isso a janela não abre em outro computador e o app cai no navegador).
+    runtime_hooks=[str(RAIZ / "implantacao" / "painel" / "rthook_desbloquear.py")],
     noarchive=False,
 )
 pyz = PYZ(a.pure)  # noqa: F821

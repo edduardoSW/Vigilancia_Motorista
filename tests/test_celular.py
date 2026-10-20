@@ -511,9 +511,40 @@ def cel14():
     return f"custo das verificações: mediana {median:.2f} ms, p95 {p95:.2f} ms por detecção (limite 2 ms)"
 
 
+def ges12():
+    """Detecção ainda ocupada: o quadro seguinte tenta de novo, sem pular um intervalo inteiro (mãos a ~4 por segundo)."""
+    monitor = PhoneMonitor(FakeDetector(lambda t: ([], [])), background=True, every_s=0.25)
+    tentativas = []
+    respostas = iter([False, True, True])
+    monitor._submit = lambda frame, t, face: (tentativas.append(t), next(respostas))[1]
+    for t in (0.00, 0.03, 0.06):
+        monitor.update(Frame(timestamp=t, face_found=True, pitch=0.0, face_box=FACE_BOX, ear_points=EARS), IMAGE)
+    monitor.close()
+    assert tentativas == [0.00, 0.03], tentativas
+    return "ocupado no quadro 0,00 s: tentou de novo em 0,03 s e só então esperou o intervalo"
+
+
+def ges13():
+    """Caixa de "celular" que é a própria mão (pele, dentro do contorno) não tira a mão dos gestos; celular real tira."""
+    from vision.phone import PhoneCheck, PhoneObservation
+
+    monitor = PhoneMonitor(FakeDetector(lambda t: ([], [])), background=False)
+    frame = Frame(timestamp=1.0, face_found=True, pitch=0.0, face_box=FACE_BOX, ear_points=EARS)
+    mao_falsa = PhoneObservation(1.0, [(*HAND_BOX, 0.6)], [HAND_ON_EAR],
+                                 [PhoneCheck(skin_fraction=0.9, outside_hand_fraction=0.6)])
+    monitor.observe(mao_falsa, frame)
+    assert len(monitor._touch_hands[1]) == 1, "a mão sumiu dos gestos por causa de uma caixa que é ela mesma"
+    celular_real = PhoneObservation(1.25, [(*HAND_BOX, 0.6)], [HAND_ON_EAR],
+                                    [PhoneCheck(skin_fraction=0.2, outside_hand_fraction=0.6)])
+    monitor.observe(celular_real, Frame(timestamp=1.25, face_found=False, pitch=0.0))
+    monitor.close()
+    assert monitor._touch_hands[1] == [], "mão segurando celular de verdade continua fora dos gestos"
+    return "caixa que é a mão não tira a mão dos gestos; caixa de celular de verdade tira"
+
+
 failures = []
-for criterion in (cel04, cel05, cel06, cel07, cel08, cel09, cel10, cel11, cel12, cel13, cel14):
-    name = criterion.__name__.upper().replace("CEL", "CEL-")
+for criterion in (cel04, cel05, cel06, cel07, cel08, cel09, cel10, cel11, cel12, cel13, cel14, ges12, ges13):
+    name = criterion.__name__.upper().replace("CEL", "CEL-").replace("GES", "GES-")
     try:
         ok(f"{name} {criterion()}")
     except Exception as exc:  # noqa: BLE001  (junta todos os critérios que falham, como num relatório de testes)

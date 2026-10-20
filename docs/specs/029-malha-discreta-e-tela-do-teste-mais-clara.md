@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | aprovada (pedido do Matheus em 19/10/2026) → em implementação |
+| Status | implementada em 19 e 20/10/2026 (MAL-01 a MAL-08, TEL-17 a TEL-24, PAI-01 a PAI-03); capturas em `docs/app-teste/capturas-2026-10-20/` |
 | PRD | RF-17, RF-18, RF-65 |
 | Pedido | "esta muito bom porem o script nessa parte da face esta algo muito feio esses quadrados e etc visualmente não ficou muito legal e dificulta realmente ver a face e o olho da pessoa pela camera então em investigação isso pode ser ruim, além disso no script no resumo final e naquela parte que mostra as coisas no script estão muito confusas não estão muito faceis de identificar o que é cada coisa mas eu gostei bastante" (19/10/2026, com captura da tela) |
 | Muda | spec 023 (decisão 4: malha) e spec 026 (decisão 5: "o vídeo vai com a malha desenhada") |
@@ -68,3 +68,15 @@
 | TEL-22 | Resumo tem lista de alertas com hora, duração e botão do vídeo quando houver trecho |
 | TEL-23 | Detalhes técnicos do resumo ficam recolhidos por padrão |
 | TEL-24 | Capturas novas da tela e do resumo em `docs/app-teste/capturas-2026-10-19-v2/`, conferidas |
+
+## Revisão de 20/10/2026 (pedido: "o menu lateral que aparece do lado da camera não esta legal tudo esta muito junto e confuso")
+
+- Vídeo maior (668 × 501 em 1366 × 697); à direita um bloco por vez: **Agora** (frase grande e calibração numa linha),
+  **Sono** (só "Olho aberto agora" e "Olho fechado nos últimos 3 min"), **Atenção na estrada** (para onde olha, celular,
+  olhos esfregados), **Coração** (bpm grande, onda, confiança) e **Ver mais detalhes** recolhido.
+- **Decisão sobre o TEL-17:** a frase de "o que é" de cada número saiu dos blocos de cima e foi para o primeiro grupo de
+  "Ver mais detalhes" ("O que os números de cima querem dizer"), a um clique. Motivo: o pedido de menos coisa junta.
+- Coração com andamento: anel "Medindo seu pulso, faltam ~N s", "Medindo de novo" com o último valor esmaecido, e motivo
+  só quando o `cardio.motivo` mediu.
+- Testes PAI-01 a PAI-03 em `tests/test_tela_teste.py`; capturas em `docs/app-teste/capturas-2026-10-20/`.
+- Malha discreta também na câmera do painel (MAL-07, `painel/app/scripts/testes/camera-malha.test.mjs`).

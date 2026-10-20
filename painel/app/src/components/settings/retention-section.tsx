@@ -25,7 +25,7 @@ export function RetentionSection({ config, onSaved }: { config: Configuracoes; o
   const erroDo = (campo: keyof Guarda) => (erro?.campo === campo ? erro.texto : undefined);
 
   return (
-    <Section title="Vídeos e guarda dos dados" summary="Depois do prazo, o painel apaga sozinho e anota o que apagou.">
+    <Section title="Vídeos e guarda dos dados" summary="Prazo combinado para guardar cada tipo de dado. A limpeza automática ainda não está pronta: por enquanto, o painel não apaga nada sozinho.">
       <form onSubmit={enviar} noValidate>
         <Row
           label="Vídeos curtos"
@@ -67,7 +67,7 @@ export function RetentionSection({ config, onSaved }: { config: Configuracoes; o
         </Row>
         <Row
           label="Dados de motorista desligado"
-          description="Nome, CNH, telefone e CPF. Depois do prazo, as viagens antigas ficam com “Motorista desligado” no lugar do nome."
+          description="Nome, CNH, telefone e CPF. Quando a limpeza automática estiver pronta, as viagens antigas ficam com “Motorista desligado” no lugar do nome."
           htmlFor="guarda-desligados"
           error={erroDo("desligados_anos")}
         >

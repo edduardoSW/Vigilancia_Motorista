@@ -80,10 +80,10 @@ def rgclip():
 RGCLIP = rgclip()
 T0 = datetime(2026, 10, 19, 14, 0, tzinfo=timezone.utc).timestamp()
 APARELHOS = [
-    {"uid": uid(1), "nome": "Notebook da Ana", "computador": "ANA-PC", "programa": "RotaGuard Teste 0.4",
+    {"uid": uid(1), "nome": "Notebook da Ana", "computador": "ANA-PC", "programa": "RotaGuard Script 0.4",
      "pareado_em": iso(T0 - 86400), "ultimo_sinal": iso(T0 - 5), "testando_agora": True, "risco_atual": 2,
      "sessao_atual_uid": uid(11), "alterado_em": iso(T0 - 5)},
-    {"uid": uid(2), "nome": "Desktop da garagem", "computador": "GARAGEM", "programa": "RotaGuard Teste 0.4",
+    {"uid": uid(2), "nome": "Desktop da garagem", "computador": "GARAGEM", "programa": "RotaGuard Script 0.4",
      "pareado_em": iso(T0 - 7200), "ultimo_sinal": iso(T0 - 3600), "testando_agora": False, "risco_atual": None,
      "sessao_atual_uid": None, "alterado_em": iso(T0 - 3600)},
 ]
@@ -91,9 +91,9 @@ RESUMO = {"duracao_s": 1200, "eventos_por_tipo": {"microssono": 1, "uso_celular"
           "piscadas_por_minuto": 14.5, "trechos": 2, "fps_medio": 24.8}
 SESSOES = [
     {"uid": uid(11), "aparelho_uid": uid(1), "iniciada_em": iso(T0 - 1200), "encerrada_em": None,
-     "programa": "RotaGuard Teste 0.4", "camera": "Webcam HD", "resumo": RESUMO, "alterado_em": iso(T0 - 60)},
+     "programa": "RotaGuard Script 0.4", "camera": "Webcam HD", "resumo": RESUMO, "alterado_em": iso(T0 - 60)},
     {"uid": uid(12), "aparelho_uid": uid(2), "iniciada_em": iso(T0 - 7200), "encerrada_em": iso(T0 - 5400),
-     "programa": "RotaGuard Teste 0.4", "camera": "USB", "resumo": {**RESUMO, "duracao_s": 1800, "trechos": 0},
+     "programa": "RotaGuard Script 0.4", "camera": "USB", "resumo": {**RESUMO, "duracao_s": 1800, "trechos": 0},
      "alterado_em": iso(T0 - 5400)},
 ]
 EVENTOS = [

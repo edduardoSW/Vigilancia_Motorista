@@ -146,6 +146,11 @@ def cardio_json(leitura) -> dict:
         "respiracao_rpm": numero(getattr(leitura, "respiracao_rpm", None), 1),
         "rmssd_ms": inteiro(getattr(leitura, "rmssd_ms", None)),
         "progresso": numero(getattr(leitura, "progresso", None), 3),
+        # Campos novos do vision/cardio.py: por que a leitura não sai (pouca_luz, luz_estourada, mexendo, camera_lenta,
+        # sinal_fraco ou None), a taxa de quadros do pulso e quanto falta para o próximo número. Sem eles, None.
+        "motivo": getattr(leitura, "motivo", None) or None,
+        "fps": numero(getattr(leitura, "fps", None), 1),
+        "segundos_para_medida": numero(getattr(leitura, "segundos_para_medida", None), 1),
         "onda": [numero(v, 3) or 0.0 for v in list(onda)[-240:]],
         "historico_bpm": [numero(v, 1) for v in list(historico)[-120:] if numero(v) is not None],
         "canal": getattr(leitura, "canal", None),
@@ -356,10 +361,13 @@ def _br(valor, casas: int = 0) -> str:
 
 
 def _medida(id_, nome: str, o_que_e: str, valor=None, unidade: str = "", situacao: str = "Normal", nivel=0,
-            seu_normal: str | None = None, tecnico: str | None = None, espera: str | None = None) -> dict:
-    """nivel: 0 a 3 pinta a situação (0 sem cor); None é situação neutra (medindo, em pausa, desligado)."""
+            seu_normal: str | None = None, tecnico: str | None = None, espera: str | None = None,
+            espera_curta: str | None = None) -> dict:
+    """nivel: 0 a 3 pinta a situação (0 sem cor); None é situação neutra (medindo, em pausa, desligado).
+    espera_curta: o que falta medir em poucas palavras, para os blocos de cima (a frase inteira fica nos detalhes)."""
     return {"id": id_, "nome": nome, "valor": valor, "unidade": unidade, "situacao": situacao, "nivel": nivel,
-            "o_que_e": o_que_e, "seu_normal": seu_normal, "tecnico": tecnico, "espera": espera}
+            "o_que_e": o_que_e, "seu_normal": seu_normal, "tecnico": tecnico, "espera": espera,
+            "espera_curta": espera_curta or espera}
 
 
 def _plural(n: int, um: str, varios: str) -> str:
@@ -428,19 +436,20 @@ def _situacao_por_razao(razao):
 
 
 def _cartao_sono(d: dict) -> dict:
+    """Bloco Sono da tela: só os dois números que respondem a pergunta (olho aberto agora e olho fechado nos últimos
+    3 min). Piscadas, duração, bocejos e cabeceios ficam em "Ver mais detalhes" (_sono_mais)."""
     olhos, risco, rosto = d["olhos"], d["risco"], d["rosto"]
     comparacao = olhos.get("comparacao") or {}
     calibrando = bool(d["calibracao"].get("ativa"))
-    fps = (d.get("desempenho") or {}).get("fps")
 
     abertura, fechado = olhos.get("abertura"), olhos.get("fechado_s") or 0.0
     o_que_e = "Quanto o olho está aberto agora; 100% é o seu olho aberto. Abaixo de 20% conta como fechado."
     if not rosto["encontrado"]:
         principal = _medida("olho_aberto", "Olho aberto agora", o_que_e, situacao="Em pausa", nivel=None,
-                            espera="Sem rosto na imagem.")
+                            espera="Sem rosto na imagem.", espera_curta="Sem rosto")
     elif abertura is None:
         principal = _medida("olho_aberto", "Olho aberto agora", o_que_e, situacao="Em pausa", nivel=None,
-                            espera=f"{olhos.get('pausa') or 'Abertura em pausa'}.")
+                            espera=f"{olhos.get('pausa') or 'Abertura em pausa'}.", espera_curta="Em pausa")
     else:
         situacao, nivel = "Normal", 0
         if abertura < 0.2 and fechado >= 1.0:
@@ -453,18 +462,41 @@ def _cartao_sono(d: dict) -> dict:
     perclos, base = olhos.get("perclos_3min"), comparacao.get("perclos_base")
     o_que_e = "Parte dos últimos 3 min com o olho quase fechado. Alerta a partir de 12%."
     seu_normal = f"seu normal: {_br(base * 100, 1)}%" if base is not None else None
+    nome = "Olho fechado nos últimos 3 min"
     if perclos is None:
-        fechado_3min = _medida("olho_fechado_3min", "Tempo de olho fechado", o_que_e, situacao="Medindo", nivel=None,
+        fechado_3min = _medida("olho_fechado_3min", nome, o_que_e, situacao="Medindo", nivel=None,
                                seu_normal=seu_normal, tecnico="PERCLOS de 3 min",
-                               espera="Ainda medindo: fica pronto com 1 min e meio de rosto na câmera.")
+                               espera="Ainda medindo: fica pronto com 1 min e meio de rosto na câmera.",
+                               espera_curta="Pronto em 1 min e meio")
     else:
         situacao, nivel = "Normal", 0
         if perclos >= 0.12:
             situacao, nivel = "Alto", 2
         elif perclos >= max(0.08, 1.5 * base if base is not None else 0.08):
             situacao, nivel = "Atenção", 1
-        fechado_3min = _medida("olho_fechado_3min", "Tempo de olho fechado", o_que_e, _br(perclos * 100, 1),
-                               "% em 3 min", situacao, nivel, seu_normal, "PERCLOS de 3 min")
+        fechado_3min = _medida("olho_fechado_3min", nome, o_que_e, _br(perclos * 100, 1), "% do tempo", situacao,
+                               nivel, seu_normal, "PERCLOS de 3 min")
+
+    nivel = int(risco.get("risco_sono") or 0)
+    motivos = [texto_motivo(m) for m in risco.get("motivos_codigos") or () if m not in MOTIVOS_DISTRACAO]
+    if fechado >= 1.0:
+        nivel = 3
+        resumo = "Olhos fechados agora."
+    elif nivel > 0:
+        resumo = (" · ".join(motivos[:3]) + ".") if motivos else "Sinais de sono acima do seu normal."
+    elif calibrando:
+        resumo = "Aprendendo o seu normal: os sinais leves de sono contam depois da calibração."
+    else:
+        resumo = "Nenhum sinal de sono agora."
+    return {"id": "sono", "titulo": "Sono", "pergunta": "Tem sinal de sono?", "nivel": nivel,
+            "situacao": SITUACAO[nivel], "resumo": resumo, "principal": principal, "medidas": [fechado_3min]}
+
+
+def _sono_mais(d: dict) -> list:
+    """O resto do Sono, para "Ver mais detalhes": duração da piscada, piscadas, fechamentos longos, bocejos e cabeceios."""
+    olhos = d["olhos"]
+    comparacao = olhos.get("comparacao") or {}
+    fps = (d.get("desempenho") or {}).get("fps")
 
     por_min, razao = olhos.get("piscadas_por_min"), comparacao.get("razao_frequencia_piscadas")
     o_que_e = "Média dos últimos 5 min. O comum é de 10 a 20 por minuto; sozinha não muda o risco."
@@ -510,20 +542,14 @@ def _cartao_sono(d: dict) -> dict:
         situacao, nivel = ("Alto", 2) if cabeceios_n >= 3 else ("Atenção", 1) if cabeceios_n >= 2 else ("Normal", 0)
         cabeceios = _medida("cabeceios", "Cabeceios", o_que_e, str(cabeceios_n), "em 10 min", situacao, nivel)
 
-    nivel = int(risco.get("risco_sono") or 0)
-    motivos = [texto_motivo(m) for m in risco.get("motivos_codigos") or () if m not in MOTIVOS_DISTRACAO]
-    if fechado >= 1.0:
-        nivel = 3
-        resumo = "Olhos fechados agora."
-    elif nivel > 0:
-        resumo = (" · ".join(motivos[:3]) + ".") if motivos else "Sinais de sono acima do seu normal."
-    elif calibrando:
-        resumo = "Aprendendo o seu normal: os sinais leves de sono contam depois da calibração."
-    else:
-        resumo = "Nenhum sinal de sono agora."
-    return {"id": "sono", "titulo": "Sono", "pergunta": "Tem sinal de sono?", "nivel": nivel,
-            "situacao": SITUACAO[nivel], "resumo": resumo, "principal": principal,
-            "medidas": [fechado_3min, duracao_piscada, piscadas, bocejos, cabeceios]}
+    longos = olhos.get("fechamentos_longos_5min")
+    o_que_e = "Olho fechado de meio segundo a 1 s. Um já é sinal leve; três em 5 min, sinal forte."
+    longos_m = (_medida("fechamentos_longos", "Fechamentos longos do olho", o_que_e, situacao="Medindo", nivel=None,
+                        espera="Aparece com o rosto na câmera.") if longos is None else
+                _medida("fechamentos_longos", "Fechamentos longos do olho", o_que_e, str(longos), "em 5 min",
+                        "Alto" if longos >= 3 else "Atenção" if longos >= 1 else "Normal",
+                        2 if longos >= 3 else 1 if longos >= 1 else 0))
+    return [duracao_piscada, piscadas, longos_m, bocejos, cabeceios]
 
 
 def _direcao(d: dict):
@@ -543,7 +569,19 @@ def _direcao(d: dict):
     return "Para a frente"
 
 
+def _tempo_fora(d: dict) -> dict:
+    o_que_e = "Olhar contínuo fora da estrada agora. Um olhar de 3 s ou mais vira alerta."
+    fora = (d.get("distracao") or {}).get("olhar_fora_s")
+    if fora is None:
+        return _medida("tempo_fora", "Tempo olhando fora", o_que_e, situacao="Indisponível", nivel=None,
+                       espera="Aparece quando a frente do motorista estiver aprendida.")
+    situacao, nivel = ("Alto", 2) if fora >= 3 else ("Atenção", 1) if fora >= 2 else ("Normal", 0)
+    return _medida("tempo_fora", "Tempo olhando fora", o_que_e, _br(fora, 1), "s", situacao, nivel)
+
+
 def _cartao_atencao(d: dict) -> dict:
+    """Bloco Atenção na estrada: para onde olha, celular e olhos esfregados, uma linha cada. O tempo olhando fora, a soma
+    de 30 s e as mãos ficam em "Ver mais detalhes"."""
     risco, rosto, celular = d["risco"], d["rosto"], d["celular"]
     distracao = d.get("distracao") or {}
     nivel_canal = int(distracao.get("nivel") or 0)
@@ -551,28 +589,22 @@ def _cartao_atencao(d: dict) -> dict:
     o_que_e = "Para onde o rosto e os olhos apontam. Fora da estrada por mais de 2 s pede atenção."
     if not rosto["encontrado"]:
         principal = _medida("para_onde_olha", "Para onde olha", o_que_e, situacao="Em pausa", nivel=None,
-                            espera="Sem rosto na imagem.")
+                            espera="Sem rosto na imagem.", espera_curta="Sem rosto na imagem")
     elif distracao.get("estado") == "aprendendo_frente":
         principal = _medida("para_onde_olha", "Para onde olha", o_que_e, _direcao(d), "", "Aprendendo", None)
     else:
-        principal = _medida("para_onde_olha", "Para onde olha", o_que_e, _direcao(d), "",
-                            SITUACAO[nivel_canal], nivel_canal)
-
-    o_que_e = "Olhar contínuo fora da estrada agora. Um olhar de 3 s ou mais vira alerta."
-    fora = distracao.get("olhar_fora_s")
-    if fora is None:
-        tempo_fora = _medida("tempo_fora", "Tempo olhando fora", o_que_e, situacao="Indisponível", nivel=None,
-                             espera="Aparece quando a frente do motorista estiver aprendida.")
-    else:
-        situacao, nivel = ("Alto", 2) if fora >= 3 else ("Atenção", 1) if fora >= 2 else ("Normal", 0)
-        tempo_fora = _medida("tempo_fora", "Tempo olhando fora", o_que_e, _br(fora, 1), "s", situacao, nivel)
+        direcao = _direcao(d)
+        fora = distracao.get("olhar_fora_s")
+        if nivel_canal > 0 and fora:
+            direcao = f"{direcao}, há {_br(fora, 1)} s"
+        principal = _medida("para_onde_olha", "Para onde olha", o_que_e, direcao, "", SITUACAO[nivel_canal],
+                            nivel_canal)
 
     o_que_e = "Celular na mão, no ouvido ou o olhar no celular. Vira alerta depois de 2 a 3 s."
+    o_que_e_olhos = "Vezes que a mão esfregou os olhos. Três em 10 min contam como sinal leve de sono."
     if not celular.get("ligado"):
         uso = _medida("celular", "Celular", o_que_e, "Desligado", "", "Desligado", None)
-        esfregados = _medida("olhos_esfregados", "Olhos esfregados",
-                             "Vezes que a mão esfregou os olhos. Três em 10 min contam como sinal leve de sono.",
-                             "Desligado", "", "Desligado", None)
+        esfregados = _medida("olhos_esfregados", "Olhos esfregados", o_que_e_olhos, "Desligado", "", "Desligado", None)
     else:
         estado = celular.get("estado") or "sem_celular"
         if estado == "sem_celular":
@@ -583,9 +615,9 @@ def _cartao_atencao(d: dict) -> dict:
             uso = _medida("celular", "Celular", o_que_e, f"{CELULAR_CURTO.get(estado, 'Em uso')} há {int(duracao)} s",
                           "", "Alto" if alto else "Atenção", 2 if alto else 1)
         n = celular.get("esfregados_10min") or 0
-        esfregados = _medida("olhos_esfregados", "Olhos esfregados",
-                             "Vezes que a mão esfregou os olhos. Três em 10 min contam como sinal leve de sono.",
-                             str(n), "em 10 min", "Atenção" if n >= 3 else "Normal", 1 if n >= 3 else 0)
+        esfregados = _medida("olhos_esfregados", "Olhos esfregados", o_que_e_olhos,
+                             "Nenhuma vez" if n == 0 else _plural(n, "vez", "vezes"), "em 10 min",
+                             "Atenção" if n >= 3 else "Normal", 1 if n >= 3 else 0)
 
     nivel = int(risco.get("risco_distracao") or 0)
     if uso["nivel"]:
@@ -598,7 +630,49 @@ def _cartao_atencao(d: dict) -> dict:
         resumo = "Olhando para a estrada."
     return {"id": "atencao", "titulo": "Atenção na estrada", "pergunta": "Está olhando para a estrada?",
             "nivel": nivel, "situacao": SITUACAO[nivel], "resumo": resumo, "principal": principal,
-            "medidas": [tempo_fora, uso, esfregados]}
+            "medidas": [uso, esfregados]}
+
+
+# Por que o pulso não sai: só quando o vision/cardio.py diz o motivo. Nunca falar de luz sem ele dizer que é a luz.
+MOTIVOS_CARDIO = {"mexendo": "Fique parado por alguns segundos", "pouca_luz": "Pouca luz no rosto",
+                  "luz_estourada": "Luz forte demais no rosto", "sinal_fraco": "Sinal do pulso ainda fraco"}
+AQUECIMENTO_CARDIO_S = 15.0  # vision/cardio.py AQUECIMENTO_S: o progresso vai de 0 a 1 nesse tempo de sinal bom
+
+
+def _motivo_cardio(cardio: dict, estado: str | None) -> str | None:
+    motivo = cardio.get("motivo") or ("mexendo" if estado == "movimento" else None)
+    if motivo == "camera_lenta":
+        fps = cardio.get("fps")
+        return f"Câmera lenta ({_br(fps)} quadros/s)" if fps is not None else "Câmera lenta"
+    return MOTIVOS_CARDIO.get(motivo)
+
+
+def _medicao_cardio(cardio: dict, estado: str | None) -> dict:
+    """O andamento da medida do pulso para a tela: anel de progresso, quanto falta, o último número bom (esmaecido) e o
+    motivo quando o cardio disser. Nunca tela vazia nem "parou"."""
+    progresso = cardio.get("progresso")
+    faltam = cardio.get("segundos_para_medida")
+    ultimo = cardio.get("ultimo_bpm")
+    motivo = _motivo_cardio(cardio, estado)
+    ultimo_txt = str(ultimo) if ultimo is not None else None
+    if estado == "medindo":
+        progresso = min(max(progresso or 0.0, 0.0), 1.0)
+        if faltam is None:
+            faltam = (1.0 - progresso) * AQUECIMENTO_CARDIO_S
+        restam = max(1, int(math.ceil(faltam)))
+        return {"ativa": True, "progresso": progresso, "faltam_s": restam,
+                "texto": f"Medindo seu pulso, faltam ~{restam} s", "motivo": motivo, "ultimo": ultimo_txt}
+    if estado in ("sinal_fraco", "movimento"):
+        # Perdeu o sinal e mede de novo. Com o tempo que falta, o anel enche; sem ele, o anel gira sem número.
+        restam = max(1, int(math.ceil(faltam))) if faltam is not None else None
+        andamento = None
+        if restam is not None and progresso is not None and 0 < progresso < 1:
+            andamento = min(max(progresso, 0.0), 1.0)
+        texto = f"Medindo de novo, faltam ~{restam} s" if restam is not None else "Medindo de novo"
+        return {"ativa": True, "progresso": andamento, "faltam_s": restam, "texto": texto, "motivo": motivo,
+                "ultimo": ultimo_txt}
+    return {"ativa": False, "progresso": None, "faltam_s": None, "texto": None, "motivo": None,
+            "ultimo": ultimo_txt if estado == "sem_rosto" else None}
 
 
 def _cartao_coracao(d: dict) -> dict:
@@ -609,21 +683,21 @@ def _cartao_coracao(d: dict) -> dict:
     o_que_e = ("Estimativa pela cor da pele da testa e das bochechas; não é medida médica. Em repouso, o comum é de 60 "
                "a 100 bpm.")
     bpm, ultimo, confianca = cardio.get("bpm"), cardio.get("ultimo_bpm"), cardio.get("confianca")
+    medicao = _medicao_cardio(cardio, estado)
+    andamento = (f"{medicao['texto']}." + (f" {medicao['motivo']}." if medicao["motivo"] else "")
+                 if medicao["ativa"] else None)
     if estado == "pronto" and bpm is not None:
         boa = confianca is not None and confianca >= 0.5
         principal = _medida("pulso", "Pulso", o_que_e, str(bpm), "bpm", "Leitura boa" if boa else "Leitura fraca", None)
     elif estado == "medindo":
-        progresso = min(max(cardio.get("progresso") or 0.0, 0.0), 1.0)
-        restam = max(1, int(round((1.0 - progresso) * 15)))
-        principal = _medida("pulso", "Pulso", o_que_e, situacao="Medindo", nivel=None,
-                            espera=f"Medindo: faltam {restam} s. Fique parado, com luz de frente no rosto.")
+        principal = _medida("pulso", "Pulso", o_que_e, situacao="Medindo", nivel=None, espera=andamento,
+                            espera_curta=medicao["texto"])
     elif estado in ("sinal_fraco", "movimento"):
-        espera = ("Movimento: fique parado para medir." if estado == "movimento" else
-                  "Sinal fraco: mais luz no rosto e menos movimento.")
         principal = _medida("pulso", "Pulso", o_que_e, str(ultimo) if ultimo is not None else None,
-                            "bpm (última leitura)", "Sinal fraco", None, espera=espera)
+                            "bpm (último valor)", "Medindo", None, espera=andamento, espera_curta=medicao["texto"])
     elif estado == "sem_rosto":
-        principal = _medida("pulso", "Pulso", o_que_e, situacao="Sem rosto", nivel=None, espera="Sem rosto para medir.")
+        principal = _medida("pulso", "Pulso", o_que_e, situacao="Sem rosto", nivel=None, espera="Sem rosto para medir.",
+                            espera_curta="Esperando o rosto aparecer")
     elif estado == "sem_pontos":
         principal = _medida("pulso", "Pulso", o_que_e, situacao="Indisponível", nivel=None,
                             espera="Pulso indisponível neste modo de câmera.")
@@ -641,7 +715,7 @@ def _cartao_coracao(d: dict) -> dict:
                        tecnico=f"sinal-ruído {_br(cardio['snr_db'], 1)} dB" if cardio.get("snr_db") is not None else None)
     return {"id": "coracao", "titulo": "Coração (estimativa)", "pergunta": "Como está o pulso?", "nivel": 0,
             "situacao": principal["situacao"], "resumo": "Estimativa pela câmera, não é medida médica.",
-            "principal": principal, "medidas": [conf]}
+            "principal": principal, "medidas": [conf], "medicao": medicao}
 
 
 def _detalhes(d: dict) -> list:
@@ -657,7 +731,6 @@ def _detalhes(d: dict) -> list:
         return _medida(id_, nome, o_que_e, texto, "", "Atenção" if abs(valor) >= limite else "Normal",
                        1 if abs(valor) >= limite else 0)
 
-    longos = olhos.get("fechamentos_longos_5min")
     grupo_cabeca = [
         angulo("inclinacao", "Cabeça para baixo ou para cima", cabeca.get("inclinacao"), "para baixo", "para cima",
                "reta", 20, "Inclinação da cabeça. Uma queda rápida de 15° conta como cabeceio."),
@@ -668,17 +741,11 @@ def _detalhes(d: dict) -> list:
          _medida("boca", "Boca aberta", "Quanto a boca está aberta. Aberta por 2 s ou mais conta como bocejo.",
                  _br(min(boca["abertura"], 1.0) * 100), "%", "Atenção" if boca["abertura"] >= 0.45 else "Normal",
                  1 if boca["abertura"] >= 0.45 else 0)),
-        (_medida("fechamentos_longos", "Fechamentos longos do olho",
-                 "Olho fechado de meio segundo a 1 s. Um já é sinal leve; três em 5 min, sinal forte.",
-                 situacao="Medindo", nivel=None, espera="Aparece com o rosto na câmera.") if longos is None else
-         _medida("fechamentos_longos", "Fechamentos longos do olho",
-                 "Olho fechado de meio segundo a 1 s. Um já é sinal leve; três em 5 min, sinal forte.",
-                 str(longos), "em 5 min", "Alto" if longos >= 3 else "Atenção" if longos >= 1 else "Normal",
-                 2 if longos >= 3 else 1 if longos >= 1 else 0)),
     ]
 
     soma = distracao.get("soma_30s_s")
     grupo_olhar = [
+        _tempo_fora(d),
         (_medida("soma_fora", "Olhares fora em 30 s", "Soma dos olhares fora da estrada nos últimos 30 s. Com 10 s "
                  "vira alerta.", situacao="Indisponível", nivel=None, espera="Aparece quando a frente do motorista "
                  "estiver aprendida.") if soma is None else
@@ -761,6 +828,7 @@ def _detalhes(d: dict) -> list:
         grupo_sessao.append(_medida("horario", "Horário", "Na madrugada e no começo da tarde os sinais leves de sono "
                                     "pesam mais.", contexto.get("circadiano_texto") or "Madrugada", "", "Atenção", 1))
     return [
+        {"id": "sono", "titulo": "Sono, mais medidas", "medidas": _sono_mais(d)},
         {"id": "cabeca", "titulo": "Cabeça e boca", "medidas": grupo_cabeca},
         {"id": "olhar", "titulo": "Olhar e mãos", "medidas": grupo_olhar},
         {"id": "coracao", "titulo": "Coração, mais medidas", "medidas": grupo_coracao},

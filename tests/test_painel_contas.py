@@ -816,7 +816,7 @@ ok("INI-02 primeiros_passos_esconder só com bool e só administrador; grava na 
    "e continua depois de reabrir")
 
 # CFG-09 (ponte) · estado() leva texto_maior, na ordem do contrato, para qualquer função
-ORDEM_ESTADO = ["ativado", "modo", "empresa", "sessao", "bloqueado", "versao", "bloqueio_min", "texto_maior", "tema",
+ORDEM_ESTADO = ["ativado", "modo", "empresa", "sessao", "bloqueado", "versao", "compilacao", "bloqueio_min", "texto_maior", "tema",
                 "preferencias", "videos_dias"]  # spec 019 acrescenta os três últimos, nesta ordem
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     t = [T0]

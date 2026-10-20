@@ -227,6 +227,7 @@ def main(argv=None) -> int:
         conferir_interface()
         rodar_pyinstaller()
     conferir_pacote()
+    APP_TESTE.gravar_carimbo(DIST / PASTA_APP, PRODUTO, versao())
     if not args.sem_fumaca:
         teste_de_fumaca()
         teste_do_primeiro_uso()

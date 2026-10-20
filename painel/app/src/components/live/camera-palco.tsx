@@ -196,16 +196,16 @@ function Legenda() {
   return (
     <ul className="absolute bottom-3 left-3 hidden flex-wrap gap-x-4 gap-y-1 rounded-[8px] bg-video/75 px-3 py-1.5 text-[12px] text-sobre-video/85 @min-[560px]:flex">
       <li className="flex items-center gap-1.5">
-        <span aria-hidden="true" className="size-2 rounded-full bg-lima text-sobre-lima" />
-        Olhos e íris
+        <span aria-hidden="true" className="h-2.5 w-1.5 border-y border-l border-lima" />
+        Olhos, marcados por fora
       </li>
       <li className="flex items-center gap-1.5">
         <span aria-hidden="true" className="size-2 rounded-full bg-sobre-video" />
         Boca e pontos do rosto
       </li>
       <li className="flex items-center gap-1.5">
-        <span aria-hidden="true" className="size-2.5 rounded-[2px] border border-lima" />
-        Áreas do pulso
+        <span aria-hidden="true" className="size-2.5 border-l border-t border-lima" />
+        Cantos das áreas do pulso
       </li>
     </ul>
   );

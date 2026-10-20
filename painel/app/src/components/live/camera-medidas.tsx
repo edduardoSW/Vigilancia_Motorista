@@ -14,9 +14,9 @@ import {
   formatarRelogio,
   formatarSegundos,
   rotuloDoEvento,
+  situacaoDoPulso,
   type ModoDaMalha,
 } from "./camera-regras";
-import type { EstadoDoPulso } from "./camera-rppg";
 import { ALERT_PERCLOS, MIN_FPS_FOR_DURATION, P80_OPENNESS, type EventoDaSessao } from "./camera-sono";
 
 const CARTAO = "rounded-[12px] border border-fio bg-superficie";
@@ -125,7 +125,6 @@ export function CartaoOlhos({ leitura }: { leitura: Instantaneo | null }) {
 export function CartaoPulso({ leitura, sessao }: { leitura: Instantaneo | null; sessao: SessaoDaCamera | null }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const cardio = leitura?.cardio ?? null;
-  const estado = cardio?.estado ?? "sem_rosto";
 
   // A onda é refeita 10 vezes por segundo pelo monitor (como na caixa); aqui só é desenhada.
   useEffect(() => {
@@ -154,49 +153,43 @@ export function CartaoPulso({ leitura, sessao }: { leitura: Instantaneo | null; 
     return () => cancelAnimationFrame(id);
   }, [sessao]);
 
-  const situacao: Record<EstadoDoPulso, string> = {
-    pronto: `Confiança ${formatarPorcentagem(cardio?.confianca ?? 0)}`,
-    medindo: "Medindo",
-    sinal_fraco: "Sinal fraco",
-    movimento: "Mexeu",
-    sem_rosto: "Sem rosto",
-  };
-  const apagado = estado !== "pronto" && cardio?.ultimoBpm != null;
-  const numero = estado === "pronto" && cardio?.bpm != null ? cardio.bpm : apagado ? cardio!.ultimoBpm! : null;
+  // Spec 029: com o sinal ruim o cartão nunca para; o último valor fica esmaecido e o andamento continua visível.
+  const situacao = situacaoDoPulso(cardio);
+  const { numero, esmaecido, andamento } = situacao;
   return (
     <section className={cn(CARTAO, "p-5")} aria-label="Pulso estimado">
-      <Rotulo extra={<span className={cn("text-[13px] font-semibold", estado === "sinal_fraco" || estado === "movimento" ? "text-alarme" : "text-tinta")}>{situacao[estado]}</span>}>
+      <Rotulo extra={<span className={cn("text-[13px] font-semibold", situacao.alarme ? "text-alarme" : "text-tinta")}>{situacao.rotulo}</span>}>
         Pulso estimado
       </Rotulo>
       <p className="mt-1 flex items-baseline gap-2">
-        <span className={cn("font-titulo text-[40px] font-semibold leading-none tabular-nums", apagado && "text-apagado")}>{numero === null ? "–" : Math.round(numero)}</span>
+        <span className={cn("font-titulo text-[40px] font-semibold leading-none tabular-nums transition-opacity duration-200", esmaecido && "text-apagado opacity-60")}>
+          {numero === null ? "–" : numero}
+        </span>
         <span className="text-[14px] font-semibold text-grafite">bpm</span>
-        {apagado && <span className="text-[12.5px] text-grafite">última leitura</span>}
+        {esmaecido && <span className="text-[12.5px] text-grafite">última leitura</span>}
       </p>
       <canvas ref={canvas} className="mt-3 block h-14 w-full" aria-hidden="true" />
-      {estado === "medindo" && (
-        <div
-          role="progressbar"
-          aria-label="Medindo o pulso"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round((cardio?.progresso ?? 0) * 100)}
-          className="mt-2 h-1.5 overflow-hidden rounded-[3px] bg-trilho"
-        >
-          <div className="h-full rounded-[3px] bg-verde transition-[width] duration-200" style={{ width: `${(cardio?.progresso ?? 0) * 100}%` }} />
+      {andamento && (
+        <div className="mt-2" role="status">
+          <p className="flex items-center gap-2 text-[12.5px] font-semibold tabular-nums text-tinta">
+            {andamento.progresso === null && <span aria-hidden="true" className="pulse-dot" />}
+            {andamento.texto}
+          </p>
+          {andamento.progresso !== null && (
+            <div
+              role="progressbar"
+              aria-label="Medindo o pulso"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(andamento.progresso * 100)}
+              className="mt-1.5 h-1.5 overflow-hidden rounded-[3px] bg-trilho"
+            >
+              <div className="h-full rounded-[3px] bg-verde transition-[width] duration-200" style={{ width: `${andamento.progresso * 100}%` }} />
+            </div>
+          )}
         </div>
       )}
-      <p className="mt-2 text-[12.5px] text-grafite">
-        {estado === "medindo"
-          ? "Parado para medir: o primeiro número sai depois de 15 s de imagem boa."
-          : estado === "sinal_fraco"
-            ? "Sinal fraco: fique parado, com luz de frente no rosto."
-            : estado === "movimento"
-              ? "A cabeça mexeu: o pulso volta a medir quando ela parar."
-              : estado === "sem_rosto"
-                ? "O pulso volta a medir quando o rosto aparecer."
-                : "Pela cor da pele na testa e nas bochechas."}
-      </p>
+      <p className="mt-2 text-[12.5px] text-grafite">{situacao.aviso}</p>
       <p className="mt-3 border-t border-fio pt-3 text-[12.5px] font-semibold">Estimativa pela câmera, não é medida médica.</p>
     </section>
   );

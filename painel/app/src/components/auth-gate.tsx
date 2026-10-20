@@ -86,12 +86,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         </TelaDeFora>
       )}
       {fase === "ativar" && (
-        <TelaDeFora versao={estado?.versao ?? null}>
+        <TelaDeFora versao={estado?.versao ?? null} compilacao={estado?.compilacao ?? null}>
           <Ativar onAtivado={setCodigo} />
         </TelaDeFora>
       )}
       {fase === "codigo" && codigo && (
-        <TelaDeFora versao={estado?.versao ?? null}>
+        <TelaDeFora versao={estado?.versao ?? null} compilacao={estado?.compilacao ?? null}>
           <CodigoRecuperacao
             codigo={codigo}
             onAnotei={async () => {
@@ -102,12 +102,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         </TelaDeFora>
       )}
       {fase === "entrar" && (
-        <TelaDeFora versao={estado?.versao ?? null}>
+        <TelaDeFora versao={estado?.versao ?? null} compilacao={estado?.compilacao ?? null}>
           <Entrar empresa={estado?.empresa?.nome ?? null} onEntrou={atualizar} />
         </TelaDeFora>
       )}
       {fase === "trocar" && usuario && (
-        <TelaDeFora versao={estado?.versao ?? null}>
+        <TelaDeFora versao={estado?.versao ?? null} compilacao={estado?.compilacao ?? null}>
           <TrocarSenha nome={usuario.nome} onTrocou={atualizar} onSair={sair} />
         </TelaDeFora>
       )}
@@ -164,14 +164,15 @@ function useVigiaDeUso(ativo: boolean, atualizar: () => Promise<void>) {
   }, [ativo, atualizar]);
 }
 
-function TelaDeFora({ children, versao }: { children: React.ReactNode; versao: string | null }) {
+// Rodapé: a linha da compilação (versao.txt do pacote) quando existe, para conferir se é o mesmo programa do site.
+function TelaDeFora({ children, versao, compilacao = null }: { children: React.ReactNode; versao: string | null; compilacao?: string | null }) {
   return (
     <div className="flex min-h-[var(--altura-janela)] flex-col">
       <div className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="anim-enter w-full max-w-[400px]">{children}</div>
       </div>
       <p className="no-print pb-5 text-center text-[12.5px] text-grafite">
-        RotaGuard Painel{versao ? ` ${versao}` : ""} · Os dados ficam guardados neste computador.
+        {compilacao ?? `RotaGuard Painel${versao ? ` ${versao}` : ""}`} · Os dados ficam guardados neste computador.
       </p>
     </div>
   );

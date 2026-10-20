@@ -119,3 +119,15 @@ test("NOM-01 nenhum texto do site diz RotaGuard Teste", () => {
     assert.match(texto, /RotaGuard Script/, idioma);
   }
 });
+
+// VER-01 (20/10/2026): "o executável que está no site eu não acho que está com a mesma versão que está nesse
+// computador". O site mostra, embaixo de cada app, a mesma linha de compilação gravada no versao.txt do pacote.
+test("VER-01 a área de download lê /downloads/versoes.json e mostra a compilação de cada app", () => {
+  const area = readFileSync(new URL("../../src/components/download-area.tsx", import.meta.url), "utf8");
+  assert.match(area, /versoes\.json/);
+  assert.match(area, /t\("compilacao"\)/);
+  for (const idioma of ["pt-BR", "en", "es", "fr", "zh-CN"]) {
+    const mensagens = JSON.parse(readFileSync(new URL(`../../messages/${idioma}.json`, import.meta.url), "utf8"));
+    assert.ok(mensagens.app?.compilacao?.trim(), `${idioma} sem app.compilacao`);
+  }
+});

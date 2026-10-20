@@ -64,7 +64,7 @@ def painel(tmp, pasta_script, **opcoes):
 
 # SCR-01 · nada aberto → fechado, com as chaves do ScriptEstado
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
+    pasta = Path(tmp) / "RotaGuard" / "Script"
     local = painel(tmp, pasta)
     estado = local.estado()
     assert tuple(estado) == sl.CHAVES_ESTADO, estado
@@ -76,14 +76,14 @@ ok("SCR-01 sem anúncio e sem processo: aberto false, campos nulos, 0 eventos")
 
 # SCR-02 · aberto pelo anúncio do script (sinal novo e pid vivo), sem precisar listar processos
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
-    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Teste", relogio=relogio_em(T0), pid=4242)
+    pasta = Path(tmp) / "RotaGuard" / "Script"
+    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Script", relogio=relogio_em(T0), pid=4242)
     anuncio.definir_camera("Câmera 1")
     listagens = []
     local = painel(tmp, pasta, relogio=relogio_em(T0 + timedelta(seconds=4)), pid_vivo=lambda pid: pid == 4242,
                    listar_processos=lambda: listagens.append(1) or [])
     estado = local.estado()
-    assert estado["aberto"] is True and estado["programa"] == "RotaGuard Teste" and estado["pid"] == 4242, estado
+    assert estado["aberto"] is True and estado["programa"] == "RotaGuard Script" and estado["pid"] == 4242, estado
     assert estado["desde"] == "2026-09-14T17:20:00.000+00:00" and estado["camera"] == "Câmera 1", estado
     assert estado["ultimo_sinal"] == "2026-09-14T17:20:00.000+00:00" and estado["pasta"] == str(pasta), estado
     assert listagens == [], "com anúncio válido não precisa listar processos"
@@ -92,16 +92,16 @@ ok("SCR-02 anúncio com sinal de 4 s e pid vivo: aberto, programa, desde, pid, c
 
 # SCR-03 · plano B: processo achado pelo nome (pacote instalado que ainda não anuncia)
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
-    local = painel(tmp, pasta, relogio=relogio_em(T0), listar_processos=lambda: [sl.Processo(812, "RotaGuardTeste.exe")])
+    pasta = Path(tmp) / "RotaGuard" / "Script"
+    local = painel(tmp, pasta, relogio=relogio_em(T0), listar_processos=lambda: [sl.Processo(812, "RotaGuardScript.exe")])
     estado = local.estado()
-    assert estado["aberto"] is True and estado["pid"] == 812 and estado["programa"] == "RotaGuard Teste", estado
+    assert estado["aberto"] is True and estado["pid"] == 812 and estado["programa"] == "RotaGuard Script", estado
     assert estado["camera"] is None and estado["desde"] == "2026-09-14T17:20:00.000+00:00", estado
     local.parar()
     tasklist = ('"System Idle Process","0","Services","0","8 K"\r\n"python.exe","22464","Console","3","44.312 K"\r\n'
-                '"RotaGuardTeste.exe","812","Console","3","1.204.556 K"\r\n')
+                '"RotaGuardScript.exe","812","Console","3","1.204.556 K"\r\n')
     assert sl.ler_tasklist_csv(tasklist) == [sl.Processo(0, "System Idle Process"), sl.Processo(22464, "python.exe"),
-                                             sl.Processo(812, "RotaGuardTeste.exe")]
+                                             sl.Processo(812, "RotaGuardScript.exe")]
     ps = "    1 /sbin/init\n  900 /usr/bin/python3 caixa/app_teste.py --monitor --camera auto\n 950 python3 outro.py\n"
     processos = sl.ler_ps(ps)
     assert [p.pid for p in processos if sl.eh_processo_do_script(p)] == [900], processos
@@ -111,12 +111,12 @@ with tempfile.TemporaryDirectory() as tmp:
     filho = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True)
     assert sl.pid_vivo_do_sistema(int(filho.stdout.strip())) is False
     assert sl.pid_vivo_do_sistema(0) is False
-ok("SCR-03 processo RotaGuardTeste.exe (tasklist) ou python app_teste.py (ps) conta como aberto; pid vivo sem psutil")
+ok("SCR-03 processo RotaGuardScript.exe (tasklist) ou python app_teste.py (ps) conta como aberto; pid vivo sem psutil")
 
 # SCR-04 · sinal velho ou pid morto = fechado
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
-    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Teste", relogio=relogio_em(T0), pid=4242)
+    pasta = Path(tmp) / "RotaGuard" / "Script"
+    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Script", relogio=relogio_em(T0), pid=4242)
     anuncio.renovar()
     velho = painel(tmp, pasta, relogio=relogio_em(T0 + timedelta(seconds=16)))
     assert velho.estado()["aberto"] is False
@@ -135,7 +135,7 @@ ok("SCR-04 sinal de 16 s, pid morto ou anúncio ilegível = fechado; 14 s ainda 
 
 # SCR-05 · captura incremental, sem duplicar, com uid/criado_em/alterado_em
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
+    pasta = Path(tmp) / "RotaGuard" / "Script"
     pasta.mkdir(parents=True)
     store = fila.EventStore(pasta / "eventos.db")
     for tipo, risco, duracao in (("sono", 4, 3.07), ("microssono", 3, 1.0), ("celular_no_ouvido", 3, 3.03)):
@@ -165,11 +165,11 @@ ok("SCR-05 captura 3, depois 0, depois 2; eventos(desde_id); painel reaberto nã
 
 # SCR-06 · os arquivos do script não mudam e o script continua gravando durante a captura
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
+    pasta = Path(tmp) / "RotaGuard" / "Script"
     pasta.mkdir(parents=True)
     store = fila.EventStore(pasta / "eventos.db")
     store.add("sono", 4, 3.0)
-    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Teste")
+    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Script")
     anuncio.renovar()
     local = painel(tmp, pasta)
     assert local.capturar() == 1
@@ -198,11 +198,11 @@ ok("SCR-06 eventos.db e em_execucao.json intactos; conexão mode=ro recusa escri
 
 # SCR-07 · sessão nova cada vez que o script abre
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
+    pasta = Path(tmp) / "RotaGuard" / "Script"
     pasta.mkdir(parents=True)
     store = fila.EventStore(pasta / "eventos.db")
     local = painel(tmp, pasta, pid_vivo=lambda pid: pid == os.getpid())
-    primeira = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Teste")
+    primeira = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Script")
     primeira.renovar()
     assert local.estado()["aberto"] is True
     store.add("sono", 4, 3.0)
@@ -212,7 +212,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert not (pasta / sl.ARQUIVO_ANUNCIO).exists()
     assert local.estado()["aberto"] is False
     time.sleep(0.02)
-    segunda = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Teste")
+    segunda = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Script")
     segunda.definir_camera("Câmera 2")
     assert local.estado()["aberto"] is True and local.estado()["eventos"] == 0
     store.add("celular_na_mao", 3, 2.0)
@@ -236,13 +236,24 @@ ok("SCR-07 fechar e reabrir o script cria outra sessão; eventos separados por s
 with tempfile.TemporaryDirectory() as tmp:
     pasta = Path(tmp) / "dados"
     assert anuncio_mod.INTERVALO_S <= 5 and anuncio_mod.AnuncioExecucao(pasta, "x", intervalo_s=60)._intervalo <= 5
-    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Teste", intervalo_s=0.05)
+    anuncio = anuncio_mod.AnuncioExecucao(pasta, "RotaGuard Script", intervalo_s=0.05)
     anuncio.iniciar()
-    dados = json.loads((pasta / "em_execucao.json").read_text(encoding="utf-8"))
+
+    def ler_durante_a_troca():
+        """No Windows, ler no instante em que a thread troca o arquivo dá PermissionError: tenta de novo, como o painel
+        faz no ciclo seguinte (ler_anuncio devolve None nesse instante)."""
+        for _ in range(50):
+            try:
+                return json.loads((pasta / "em_execucao.json").read_text(encoding="utf-8"))
+            except PermissionError:
+                time.sleep(0.01)
+        raise AssertionError("o anúncio ficou travado por 0,5 s")
+
+    dados = ler_durante_a_troca()
     assert {"formato", "sessao", "pid", "programa", "iniciado_em", "camera", "ultimo_sinal"} <= set(dados), dados
     assert dados["pid"] == os.getpid() and dados["formato"] == "rotaguard-em-execucao/1", dados
     time.sleep(0.3)
-    assert json.loads((pasta / "em_execucao.json").read_text(encoding="utf-8"))["ultimo_sinal"] != dados["ultimo_sinal"]
+    assert ler_durante_a_troca()["ultimo_sinal"] != dados["ultimo_sinal"]
     outro = anuncio_mod.AnuncioExecucao(pasta, "outro")
     anuncio.parar()
     assert not (pasta / "em_execucao.json").exists() and not list(pasta.glob(".em_execucao*"))
@@ -254,20 +265,20 @@ with tempfile.TemporaryDirectory() as tmp:
     assert anuncio_mod.descrever_camera(type("C", (), {"describe": lambda self: r"OpenCV 'C:\v\teste.mp4'"})()) == \
         "Vídeo teste.mp4"
     assert anuncio_mod.descrever_camera(fonte="rtsp://user:senha@10.0.0.9/stream") == "Câmera de rede"
-    assert anuncio_mod.nome_do_programa(congelado=True, argv0="x") == "RotaGuard Teste"
-    assert anuncio_mod.nome_do_programa(congelado=False, argv0="caixa/app_teste.py") == "RotaGuard Teste"
+    assert anuncio_mod.nome_do_programa(congelado=True, argv0="x") == "RotaGuard Script"
+    assert anuncio_mod.nome_do_programa(congelado=False, argv0="caixa/app_teste.py") == "RotaGuard Script"
 fonte = (RAIZ / "caixa" / "run_monitor.py").read_text(encoding="utf-8")
 corpo = fonte[fonte.index("def main("):]
 assert corpo.index("AnuncioExecucao(data_dir") < corpo.index("try:") < corpo.index("anuncio.definir_camera(")
 assert corpo.index("finally:") < corpo.index("anuncio.parar()") < corpo.index("store.close()")
 legais = carregar(RAIZ / "caixa" / "textos_legais.py", "textos_legais_do_script")
-assert "em_execucao.json" in "\n".join(texto for _, texto in legais.secoes(Path("/dados/RotaGuard/Teste"), "")), \
+assert "em_execucao.json" in "\n".join(texto for _, texto in legais.secoes(Path("/dados/RotaGuard/Script"), "")), \
     "a seção de privacidade do app de teste precisa citar o arquivo novo da pasta de dados"
 ok("SCR-08 em_execucao.json com pid, programa, iniciado_em, câmera e sinal renovado; apagado ao sair; ligado no run_monitor")
 
 # SCR-09 · vigia em thread captura sozinha a cada volta e para limpo
 with tempfile.TemporaryDirectory() as tmp:
-    pasta = Path(tmp) / "RotaGuard" / "Teste"
+    pasta = Path(tmp) / "RotaGuard" / "Script"
     pasta.mkdir(parents=True)
     store = fila.EventStore(pasta / "eventos.db")
     local = painel(tmp, pasta, intervalo_s=0.05)
@@ -286,11 +297,50 @@ ok("SCR-09 iniciar() captura em thread (2 s por padrão) e parar() encerra a thr
 
 # SCR-10 · pastas padrão do script
 assert sl.pastas_padrao_do_script("win32", {"LOCALAPPDATA": r"C:\U\AppData\Local"}, Path(r"C:\U")) == \
-    [Path(r"C:\U\AppData\Local") / "RotaGuard" / "Teste", Path(r"C:\U") / ".drivesafe"]
+    [Path(r"C:\U\AppData\Local") / "RotaGuard" / "Script", Path(r"C:\U\AppData\Local") / "RotaGuard" / "Teste",
+     Path(r"C:\U") / ".drivesafe"]
 assert sl.pastas_padrao_do_script("linux", {}, Path("/home/m")) == \
-    [Path("/home/m/.local/share/rotaguard/teste"), Path("/home/m/.drivesafe")]
+    [Path("/home/m/.local/share/rotaguard/script"), Path("/home/m/.local/share/rotaguard/teste"),
+     Path("/home/m/.drivesafe")]
 assert sl.pastas_padrao_do_script("linux", {"XDG_DATA_HOME": "/x", "DRIVESAFE_DATA_DIR": "/dados"}, Path("/home/m")) == \
-    [Path("/dados"), Path("/x/rotaguard/teste"), Path("/home/m/.drivesafe")]
-ok("SCR-10 pastas do script: RotaGuard\\Teste (Windows), rotaguard/teste (Linux), ~/.drivesafe e DRIVESAFE_DATA_DIR")
+    [Path("/dados"), Path("/x/rotaguard/script"), Path("/x/rotaguard/teste"), Path("/home/m/.drivesafe")]
+ok("SCR-10/NOM-05 pastas do script: RotaGuard\\Script e a antiga RotaGuard\\Teste (Windows), rotaguard/script e "
+   "rotaguard/teste (Linux), ~/.drivesafe e DRIVESAFE_DATA_DIR")
+
+# NOM-05 · o painel reconhece o script com o nome novo e com o antigo (processo, anúncio e pasta) e mostra RotaGuard Script
+for nome in ("RotaGuardScript.exe", "RotaGuardTeste.exe", "RotaGuardScript", "RotaGuardTeste"):
+    assert sl.eh_processo_do_script(sl.Processo(812, nome)), nome
+for linha in ("/opt/rotaguard/RotaGuardScript --camera auto", "/opt/rotaguard/RotaGuardTeste",
+              "python3 caixa/app_teste.py", "python run_monitor.py"):
+    assert sl.eh_processo_do_script(sl.Processo(900, "x", linha)), linha
+with tempfile.TemporaryDirectory() as tmp:
+    pasta = Path(tmp) / "RotaGuard" / "Script"
+    antigo = painel(tmp, pasta, relogio=relogio_em(T0), listar_processos=lambda: [sl.Processo(813, "RotaGuardTeste.exe")])
+    estado = antigo.estado()
+    assert estado["aberto"] is True and estado["pid"] == 813 and estado["programa"] == "RotaGuard Script", estado
+    antigo.parar()
+    linux = painel(tmp, pasta, relogio=relogio_em(T0),
+                   listar_processos=lambda: [sl.Processo(814, "RotaGuardTeste", "/opt/rg/RotaGuardTeste")])
+    assert linux.estado()["programa"] == "RotaGuard Script"
+    linux.parar()
+with tempfile.TemporaryDirectory() as tmp:
+    base = Path(tmp) / "AppData" / "Local"
+    pastas = sl.pastas_padrao_do_script("win32", {"LOCALAPPDATA": str(base)}, Path(tmp))
+    velha = base / "RotaGuard" / "Teste"  # pacote antigo: grava na pasta Teste e se anuncia como "RotaGuard Teste"
+    velha.mkdir(parents=True)
+    store = fila.EventStore(velha / "eventos.db")
+    store.add("sono", 4, 3.0)
+    anuncio = anuncio_mod.AnuncioExecucao(velha, "RotaGuard Teste", relogio=relogio_em(T0), pid=4343)
+    anuncio.renovar()
+    local = sl.ScriptLocal(Path(tmp) / "painel", pastas, relogio=relogio_em(T0 + timedelta(seconds=3)),
+                           listar_processos=sem_processos, pid_vivo=lambda pid: pid == 4343, cache_processos_s=0)
+    estado = local.estado()
+    assert estado["aberto"] is True and estado["pid"] == 4343 and estado["pasta"] == str(velha), estado
+    assert estado["programa"] == "RotaGuard Script", estado
+    assert local.capturar() == 1 and [e["tipo"] for e in local.eventos(0)] == ["sono"]
+    local.parar()
+    store.close()
+ok("NOM-05 RotaGuardScript.exe e o antigo RotaGuardTeste.exe contam como aberto; anúncio e fila na pasta antiga "
+   "RotaGuard\\Teste são lidos; o programa mostrado é RotaGuard Script")
 
 print(f"\n{checks} verificações OK")

@@ -37,8 +37,26 @@ test("SCR-13 tela ao vivo: consulta a ponte (3 s e 2 s), para ao sair, ponto só
   assert.match(fontes, /2000/);
   assert.match(fontes, /clearInterval|clearTimeout/);
   assert.match(fontes, /export function LiveScriptCard\(\)/);
-  assert.match(fontes, /O script não está aberto\. Abra o RotaGuard Teste neste computador e ele aparece aqui sozinho\./);
+  assert.match(fontes, /O script não está aberto\. Abra o RotaGuard Script neste computador e ele aparece aqui sozinho\./);
   assert.match(fontes, /aberto && <span[^>]*pulse-dot/);
   assert.match(fontes, /anim-row/);
   assert.doesNotMatch(fontes, /rounded-full[^"]*px-|uppercase|font-mono/);
+});
+
+// Spec 031 · NOM-01: o app de teste se chama RotaGuard Script; nenhum texto do painel diz o nome antigo.
+function arquivosDe(pasta) {
+  return readdirSync(pasta, { withFileTypes: true }).flatMap((item) =>
+    item.isDirectory() ? arquivosDe(path.join(pasta, item.name)) : [path.join(pasta, item.name)],
+  );
+}
+
+test("NOM-01 nenhum texto do painel (src/) diz RotaGuard Teste; o nome é RotaGuard Script", () => {
+  const arquivos = arquivosDe(path.join(raiz, "src")).filter((caminho) => /\.(tsx?|json|css|md)$/.test(caminho));
+  assert.ok(arquivos.length > 20, "achou os arquivos do painel");
+  for (const caminho of arquivos) {
+    assert.doesNotMatch(readFileSync(caminho, "utf8"), /RotaGuard Teste|RotaGuardTeste|RotaGuard-Teste/, caminho);
+  }
+  const fontes = arquivos.map((caminho) => readFileSync(caminho, "utf8")).join("\n");
+  assert.match(fontes, /Abra o RotaGuard Script neste computador/);
+  assert.match(fontes, /abra o RotaGuard Script › Conectar à empresa/);
 });

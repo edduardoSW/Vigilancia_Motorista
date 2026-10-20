@@ -38,7 +38,7 @@ def nome_do_programa(congelado: bool | None = None, argv0: str | None = None) ->
     congelado = bool(getattr(sys, "frozen", False)) if congelado is None else congelado
     argv0 = (sys.argv[0] if sys.argv else "") if argv0 is None else argv0
     if congelado or "app_teste" in Path(argv0).name.lower():
-        return "RotaGuard Teste"
+        return "RotaGuard Script"  # antes "RotaGuard Teste" (spec 031)
     return "RotaGuard (run_monitor.py)"
 
 

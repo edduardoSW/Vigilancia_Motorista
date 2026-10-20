@@ -407,6 +407,7 @@ export function criarDemonstracao({ comDados = true }: { comDados?: boolean } = 
         sessao: sessao() ? publico(sessao()!) : null,
         bloqueado: Boolean(sessao()) && bloqueado,
         versao: VERSAO,
+        compilacao: null,
         bloqueio_min: config.acesso.bloqueio_min,
         texto_maior: config.aparencia.texto_maior,
         tema: sessao()?.preferencias.tema ?? temaUltimo,
@@ -1135,8 +1136,8 @@ function criarRemotosDemo(inicio: number) {
     fps_medio: 24.6,
   });
   const aparelhos = [
-    { uid: uidDemo(1), nome: "Notebook da Ana", computador: "ANA-NOTE", programa: "RotaGuard Teste 0.4", pareado_em: em(60 * 26) },
-    { uid: uidDemo(2), nome: "Desktop da garagem", computador: "GARAGEM-01", programa: "RotaGuard Teste 0.4", pareado_em: em(60 * 50) },
+    { uid: uidDemo(1), nome: "Notebook da Ana", computador: "ANA-NOTE", programa: "RotaGuard Script 0.4", pareado_em: em(60 * 26) },
+    { uid: uidDemo(2), nome: "Desktop da garagem", computador: "GARAGEM-01", programa: "RotaGuard Script 0.4", pareado_em: em(60 * 50) },
   ];
   const sessoes = [
     { uid: uidDemo(11), aparelho_uid: uidDemo(1), iniciada_em: em(18), encerrada_em: null as string | null, camera: "Webcam HD integrada",
@@ -1186,7 +1187,7 @@ function criarRemotosDemo(inicio: number) {
       encerrada_em: item.encerrada_em,
       em_andamento: andamento,
       sem_fim: item.encerrada_em === null && !andamento,
-      programa: "RotaGuard Teste 0.4",
+      programa: "RotaGuard Script 0.4",
       camera: item.camera,
       resumo: structuredClone(item.resumo),
       eventos: eventos.filter((evento) => evento.sessao_uid === item.uid).length,

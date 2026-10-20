@@ -1,4 +1,5 @@
-"""Spec 022 · frequência cardíaca pela face (rPPG): critérios CAR-01 a CAR-14.
+"""Spec 022 · frequência cardíaca pela face (rPPG): critérios CAR-01 a CAR-14 e, do pedido de 20/10/2026 (webcam de
+notebook: "não estão pegando muito", "para de funcionar", "indicativo que está em andamento"), CAR-15 a CAR-21.
 
 O número só aparece depois do aquecimento (AQUECIMENTO_S, 15 s de dados bons: ~3 janelas de 10 s seguidas, pedido da
 coordenação a partir da pesquisa rPPG de 19/10/2026); por isso as séries têm 16,5 s. A janela do espectro continua 10 s
@@ -548,18 +549,265 @@ limpa = dict(segundos=20.0, amp=0.005, ruido_quadro=0.02, ruido_px=1.0, semente=
 final = medir(serie(72, **limpa))[1][-1]
 assert final.snr_db >= 10.0 and final.rmssd_ms is not None and 0.0 <= final.rmssd_ms < 40.0, \
     ("RMSSD com pulso regular fica no piso", final.rmssd_ms, final.snr_db)
-comum = medir(serie(72, segundos=20.0, semente=15))[1][-1]
-assert comum.estado == "pronto" and comum.snr_db < 10.0 and comum.rmssd_ms is None, \
-    ("RMSSD com SNR comum", comum.snr_db)
+monitor_comum, leituras_comum = medir(serie(72, segundos=20.0, semente=15))
+comum = leituras_comum[-1]
+snr_pos_comum = monitor_comum.diagnostico["pos"][1]  # a variabilidade usa o POS (foi calibrada com ele)
+assert comum.estado == "pronto" and snr_pos_comum < 10.0 and comum.rmssd_ms is None, \
+    ("RMSSD com SNR comum", snr_pos_comum)
 lento = medir(serie(72, fps=20.0, **limpa))[1][-1]
 assert lento.estado == "pronto" and lento.rmssd_ms is None, ("RMSSD a 20 quadros/s", lento.estado, lento.rmssd_ms)
-devagar = medir(serie(72, segundos=20.0, fps=12.0, semente=15))[1][-1]
-assert devagar.estado == "sinal_fraco" and devagar.bpm is None, \
-    ("menos de 15 quadros/s não mostra número", devagar.estado)
 monitor.reset()
 assert monitor.amostras == 0
 ok(f"RMSSD experimental: {final.rmssd_ms:.0f} ms num pulso regular com SNR {final.snr_db:.1f} dB (piso); nenhuma com "
-   f"SNR {comum.snr_db:.1f} dB nem a 20 quadros/s; a 12 quadros/s não mostra bpm (mínimo 15); reset zera")
+   f"SNR {snr_pos_comum:.1f} dB no POS nem a 20 quadros/s; reset zera")
+
+
+# ===================================================================================================================
+# Pedido de 20/10/2026 (webcam de notebook): "não estão pegando muito", "fala que não consegue captar por causa da luz
+# isso não faz sentido e quando não consegue simplesmente para de funcionar", "coloque um indicativo que está em
+# andamento". Critérios CAR-15 a CAR-21.
+# ===================================================================================================================
+
+def emendar(*partes):
+    """Junta séries geradas por trechos de tempo (cada parte: (início, fim, kwargs do serie))."""
+    tempos = np.arange(int(round(partes[-1][1] * 30.0))) / 30.0
+    geradores = []
+    for inicio, fim, kw in partes:
+        geradores.extend(serie(tempos=tempos[(tempos >= inicio) & (tempos < fim)], **kw))
+    return geradores
+
+
+# CAR-15 · nunca para: sinal bom 20 s → 4 s de ruído forte → bom de novo: o número volta em <= 5 s, sem novo
+# aquecimento; no ruído o último bpm bom fica disponível e as janelas não são zeradas.
+for semente in (31, 32, 33):
+    partes = emendar((0.0, 20.0, dict(bpm=72, semente=semente)),
+                     (20.0, 24.0, dict(bpm=72, semente=semente + 50, ruido_quadro=3.0, ruido_px=6.0)),
+                     (24.0, 40.0, dict(bpm=72, semente=semente)))
+    monitor, leituras = medir(partes)
+    tempos_l = [t for t, _ in partes]
+    no_ruido = [r for t, r in zip(tempos_l, leituras) if 20.0 <= t < 24.0]
+    perdeu = [r for t, r in zip(tempos_l, leituras) if 20.0 <= t < 26.0 and r.estado != "pronto"]
+    assert perdeu, ("CAR-15 o ruído precisa derrubar o número", semente, [r.estado for r in no_ruido][::15])
+    assert all(r.ultimo_bpm is not None and abs(r.ultimo_bpm - 72.0) <= 3.0 for r in no_ruido), "CAR-15 último bpm"
+    assert all(r.bpm is None for r in perdeu), "CAR-15 sem número enquanto ruim"
+    volta = next((t for t, r in zip(tempos_l, leituras) if t >= 24.0 and r.estado == "pronto"), None)
+    assert volta is not None and volta - 24.0 <= 5.0, ("CAR-15 número volta em <= 5 s", semente, volta)
+    depois = [r for t, r in zip(tempos_l, leituras) if t >= volta]
+    assert all(r.estado == "pronto" and abs(r.bpm - 72.0) <= 3.0 for r in depois), \
+        ("CAR-15 continua certo", semente, [(r.estado, r.bpm) for r in depois if r.estado != "pronto"][:3])
+    assert monitor.amostras > 0, "CAR-15 janelas não zeradas"
+ok(f"CAR-15 4 s de ruído forte no meio: perde o número, guarda o último bpm ({no_ruido[-1].ultimo_bpm:.1f}) e volta "
+   f"{volta - 24.0:.1f} s depois do fim do ruído, sem novo aquecimento")
+
+
+# CAR-16 · motivo medido: pouca luz só com luminância baixa; luz estourada só com pixels saturados; mexendo pelo
+# movimento; câmera lenta pela taxa medida; "sinal_fraco" sem causa medida; None quando está tudo bem.
+so_ruido = medir(serie(None, segundos=20.0, semente=41))[1][-1]
+assert so_ruido.estado == "sinal_fraco" and so_ruido.motivo == "sinal_fraco", ("CAR-16 sinal fraco", so_ruido.motivo)
+assert so_ruido.luminancia is not None and so_ruido.luminancia > 100.0 and so_ruido.fracao_saturada < 0.01
+escuro = medir(serie(None, segundos=20.0, semente=42, luz=lambda t: 0.25))[1][-1]
+assert escuro.estado == "sinal_fraco" and escuro.motivo == "pouca_luz" and escuro.bpm is None, \
+    ("CAR-16 pouca luz", escuro.estado, escuro.motivo, escuro.luminancia)
+
+
+def estourado(quadros, linhas=slice(0, 48, 2)):
+    for t, imagem in quadros:
+        imagem = imagem.copy()
+        imagem[linhas] = 255  # metade das linhas estourada (reflexo forte de luz)
+        yield t, imagem
+
+
+claro = medir(estourado(serie(None, segundos=20.0, semente=43)))[1][-1]
+assert claro.estado == "sinal_fraco" and claro.motivo == "luz_estourada" and claro.fracao_saturada >= 0.4, \
+    ("CAR-16 luz estourada", claro.estado, claro.motivo, claro.fracao_saturada)
+assert set(claro.rois) == {"testa", "bochecha_esq", "bochecha_dir"}, "CAR-16 metade estourada não derruba a ROI"
+bom = medir(serie(72, segundos=20.0, semente=44))[1]
+assert bom[-1].estado == "pronto" and bom[-1].motivo is None, ("CAR-16 tudo bem", bom[-1].motivo)
+assert all(r.motivo is None for r in bom[:200]), ("CAR-16 medindo com luz boa: sem motivo", {r.motivo for r in bom})
+assert abs(bom[-1].fps - 30.0) < 1.0, ("CAR-16 fps medido", bom[-1].fps)
+monitor = CardioMonitor()
+base_mov = rosto((32, 24, 64, 48))
+for t, imagem in serie(72, segundos=17.6, tamanho=(96, 128), semente=45):
+    pontos = base_mov
+    if t >= 17.0:
+        pontos = base_mov + np.float32([60.0 * (t - 17.0), 0.0])
+    mexendo = monitor.update(imagem, pontos, t)
+assert mexendo.estado == "movimento" and mexendo.motivo == "mexendo", ("CAR-16 mexendo", mexendo.estado, mexendo.motivo)
+lenta = medir(serie(72, segundos=24.0, fps=8.0, semente=46))[1]
+assert lenta[-1].motivo == "camera_lenta" and abs(lenta[-1].fps - 8.0) < 0.5 and lenta[-1].bpm is None, \
+    ("CAR-16 câmera lenta", lenta[-1].estado, lenta[-1].motivo, lenta[-1].fps)
+assert not any(r.estado == "pronto" for r in lenta), "CAR-16 câmera lenta não mostra número"
+assert lenta[-1].segundos_para_medida is None, "CAR-16 câmera lenta: não dá para estimar quanto falta"
+ok(f"CAR-16 motivo medido: só ruído com luz boa → sinal_fraco (luz {so_ruido.luminancia:.0f}); escuro → pouca_luz "
+   f"(luz {escuro.luminancia:.0f}); metade estourada → luz_estourada ({100 * claro.fracao_saturada:.0f}%); andando → "
+   f"mexendo; 8 quadros/s → camera_lenta ({lenta[-1].fps:.1f} medido); pulso bom → None")
+
+
+# CAR-17 · indicativo de andamento: no aquecimento, segundos_para_medida cai junto com o progresso; depois de perder o
+# sinal, o progresso volta a andar até o número voltar.
+monitor = CardioMonitor()
+anteriores = []
+for t, imagem in serie(72, segundos=16.0, semente=47):
+    leitura = monitor.update(imagem, rosto(), t)
+    if t < AQUECIMENTO_S - 0.01:
+        anteriores.append((leitura.progresso, leitura.segundos_para_medida))
+assert all(s is not None for _, s in anteriores), "CAR-17 segundos durante o aquecimento"
+assert anteriores[0][1] >= AQUECIMENTO_S - 1.0 and anteriores[-1][1] <= 1.0, ("CAR-17", anteriores[0], anteriores[-1])
+assert all(b[1] <= a[1] + 1e-9 for a, b in zip(anteriores, anteriores[1:])), "CAR-17 segundos não sobem no aquecimento"
+assert leitura.estado == "pronto" and leitura.segundos_para_medida == 0.0 and leitura.progresso == 1.0
+partes = emendar((0.0, 20.0, dict(bpm=72, semente=48)),
+                 (20.0, 24.0, dict(bpm=72, semente=98, ruido_quadro=3.0, ruido_px=6.0)),
+                 (24.0, 32.0, dict(bpm=72, semente=48)))
+_, leituras = medir(partes)
+tempos_l = [t for t, _ in partes]
+volta = next(t for t, r in zip(tempos_l, leituras) if t >= 24.0 and r.estado == "pronto")
+retomada = [r for t, r in zip(tempos_l, leituras) if 24.0 <= t < volta]
+assert retomada and all(r.estado != "pronto" and 0.0 <= r.progresso < 1.0 for r in retomada), "CAR-17 retomada"
+assert all(r.segundos_para_medida is not None and r.segundos_para_medida > 0.0 for r in retomada), "CAR-17 faltam"
+assert retomada[-1].progresso > retomada[0].progresso, ("CAR-17 progresso anda", retomada[0].progresso,
+                                                        retomada[-1].progresso)
+ok(f"CAR-17 andamento: aquecimento com {anteriores[0][1]:.0f} s → {anteriores[-1][1]:.1f} s; depois de perder o sinal, "
+   f"progresso {retomada[0].progresso:.2f} → {retomada[-1].progresso:.2f} até voltar")
+
+
+# CAR-18 · notebook lento: a partir de 10 quadros/s mede com janela maior e confiança menor; abaixo, camera_lenta.
+for fps_lento in (10.0, 12.0):
+    leituras = medir(serie(72, segundos=24.0, fps=fps_lento, semente=49))[1]
+    final = leituras[-1]
+    assert final.estado == "pronto" and abs(final.bpm - 72.0) <= 3.0, ("CAR-18", fps_lento, final.estado, final.bpm)
+    assert final.motivo is None and abs(final.fps - fps_lento) < 0.5
+rapido = medir(serie(72, segundos=24.0, semente=49))[1][-1]
+assert final.confianca < rapido.confianca, ("CAR-18 confiança menor a 12 quadros/s", final.confianca,
+                                            rapido.confianca)
+for semente in range(50, 54):
+    leituras = medir(serie(None, segundos=24.0, fps=10.0, semente=semente))[1]
+    assert not any(r.estado == "pronto" for r in leituras), ("CAR-18 ruído a 10 quadros/s", semente)
+ok(f"CAR-18 10 e 12 quadros/s: {final.bpm:.1f} bpm com confiança {final.confianca:.2f} (30 quadros/s: "
+   f"{rapido.confianca:.2f}); só ruído a 10 quadros/s nunca mostra número")
+
+
+# CAR-19 · pele clara com luz forte: a faixa de pixel válido (8 a 251) não joga fora metade da ROI; ROI quase toda
+# estourada continua com os pixels bons.
+clara = np.clip(np.random.default_rng(55).normal((205.0, 228.0, 247.0), 3.0, (48, 64, 3)), 0, 255).astype(np.uint8)
+_, rois_clara, pixels_clara = media_das_rois(clara, rosto())
+_, _, pixels_todos = media_das_rois(np.full((48, 64, 3), (150, 150, 150), np.uint8), rosto())
+assert pixels_clara >= 0.85 * pixels_todos and len(rois_clara) == 3, ("CAR-19", pixels_clara, pixels_todos)
+quase = np.full((48, 64, 3), PELE_BGR, np.uint8)
+quase[:, :, 2] = 255
+quase[::4] = PELE_BGR.astype(np.uint8)  # só 1 linha em 4 sem o vermelho estourado
+_, rois_quase, pixels_quase = media_das_rois(quase, rosto())
+assert len(rois_quase) == 3 and 0 < pixels_quase < 0.35 * pixels_todos, ("CAR-19 ROI quase estourada", pixels_quase)
+ok(f"CAR-19 pele clara (R ~247): {pixels_clara} de {pixels_todos} pixels úteis; 75% estourado: as 3 ROIs ficam com "
+   f"{pixels_quase} pixels")
+
+
+# CAR-20 · POS, CHROM e GREEN: cada janela fica com o de melhor SNR, POS como padrão; outro método só ganha se o pico
+# concordar com o do POS (ou com as últimas janelas). Ruído forte no vermelho e no azul: GREEN ganha e acerta. Luz
+# piscando a 90 bpm (variação só de intensidade): o GREEN pegaria a luz, então fica o POS (ou o CHROM) e dá 72.
+from vision.cardio import chrom  # noqa: E402
+
+rgb_chrom = np.array([180.0, 130.0, 100.0]) * (1 - 0.003 * pulso30[:, None] * PULSO_BGR[::-1]) + \
+    np.random.default_rng(56).normal(0, 0.1, (300, 3))
+bpm_chrom, snr_chrom = estimar_bpm(chrom(rgb_chrom, 30.0), 30.0)
+assert abs(bpm_chrom - 72.0) <= 2.0 and snr_chrom >= LIMIAR_SNR_DB, ("CAR-20 CHROM puro", bpm_chrom, snr_chrom)
+
+
+def ruido_rb(quadros, semente, nivel=1.2):
+    rng_rb = np.random.default_rng(semente)
+    for t, imagem in quadros:
+        imagem = imagem.astype(np.float64)
+        imagem[:, :, 0] += rng_rb.normal(0.0, nivel)  # B
+        imagem[:, :, 2] += rng_rb.normal(0.0, nivel)  # R
+        yield t, np.clip(np.rint(imagem), 0, 255).astype(np.uint8)
+
+
+verde = medir(ruido_rb(serie(72, segundos=20.0, semente=57), 58))[1][-1]
+assert verde.estado == "pronto" and abs(verde.bpm - 72.0) <= 3.0 and verde.metodo == "green", \
+    ("CAR-20 GREEN", verde.estado, verde.bpm, verde.metodo, verde.snr_db)
+pisca = medir(serie(72, segundos=20.0, semente=59, luz=lambda t: 1.0 + 0.006 * math.sin(2 * math.pi * 1.5 * t)))
+assert pisca[0].diagnostico["green"][0] > 85.0, ("CAR-20 o GREEN pega a luz piscando", pisca[0].diagnostico)
+pisca = pisca[1][-1]
+assert pisca.estado == "pronto" and abs(pisca.bpm - 72.0) <= 3.0 and pisca.metodo in ("pos", "chrom"), \
+    ("CAR-20 luz piscando", pisca.estado, pisca.bpm, pisca.metodo)
+assert medir(serie(72, mono=True, amp=0.002, semente=9))[1][-1].metodo == "ir"
+ruido_snr = []
+for semente in range(60, 72):
+    leituras = medir(serie(None, segundos=30.0, semente=semente))[1]
+    assert not any(r.estado == "pronto" for r in leituras), ("CAR-20 ruído com 3 métodos", semente)
+    ruido_snr.append(max(r.snr_db for r in leituras if r.snr_db is not None))
+ok(f"CAR-20 CHROM acha {bpm_chrom:.1f} bpm; ruído no R e no B → GREEN {verde.bpm:.1f} bpm; luz piscando a 90 bpm → "
+   f"{pisca.metodo.upper()} {pisca.bpm:.1f} bpm; só ruído "
+   f"em 12 séries de 30 s com os 3 métodos: nunca número (SNR máximo {max(ruido_snr):.1f} dB)")
+
+
+# CAR-21 · consistência entre janelas: com pulso fraco (SNR em volta do limiar) o número aparece mais vezes, certo, e a
+# janela abaixo do limiar (até LIMIAR_SNR_CONSISTENTE_DB) só entra se concordar com a mediana das boas ou com o último
+# número. Pulso de 0,08% no verde: SNR mediano de +1 dB, com parte das janelas abaixo de 0 dB (medido em 20/10/2026; o
+# código antigo, só POS e limiar de 0 dB, tinha SNR mediano de -4 dB aqui e não mostrava número).
+fracoes, erros_fracos, abaixo_total = [], [], 0
+for semente in (73, 74, 75):
+    leituras = medir(serie(72, segundos=40.0, amp=0.0008, semente=semente))[1]
+    depois = leituras[int(16.0 * 30):]
+    prontas = [r for r in depois if r.estado == "pronto"]
+    fracoes.append(len(prontas) / len(depois))
+    erros_fracos.extend(abs(r.bpm - 72.0) for r in prontas)
+    abaixo = [r for r in prontas if r.snr_db < LIMIAR_SNR_DB]
+    assert all(abs(r.bpm - 72.0) <= 3.0 for r in abaixo), ("CAR-21 abaixo do limiar só se concordar", semente)
+    abaixo_total += len(abaixo)
+assert np.mean(fracoes) >= 0.6 and max(erros_fracos) <= 3.0, ("CAR-21", fracoes, max(erros_fracos, default=None))
+assert abaixo_total > 0, "CAR-21 nenhuma leitura usou o limiar da consistência"
+ok(f"CAR-21 pulso fraco (0,08%): número em {100 * np.mean(fracoes):.0f}% do tempo depois do aquecimento, erro máximo "
+   f"{max(erros_fracos):.1f} bpm; {abaixo_total} leituras com SNR abaixo de {LIMIAR_SNR_DB} dB aceitas por concordarem")
+
+
+# CAR-22 · nunca 42 bpm na borda: tendência e ruído de baixa frequência vazam para dentro da banda e o maior valor da
+# banda vira a própria borda (0,70 Hz = 42 bpm, visto na tela em 20/10/2026 com o motorista.avi). O pico precisa ser
+# máximo local de verdade e longe da borda; confiança abaixo de 0,40 não publica número. A semente 93 sem pulso dava
+# número falso também no código antigo (54 bpm por 2 s).
+from vision.cardio import BORDA_HZ, CONFIANCA_MINIMA, espectro, pico_e_snr  # noqa: E402
+
+vazando = 5.0 * np.sin(2 * np.pi * 0.55 * t30) + 0.3 * np.sin(2 * np.pi * 1.2 * t30 + 0.3)  # 10 s a 30 Hz
+f_v, p_v = espectro(vazando, 30.0)
+banda_v = (f_v >= 0.7) & (f_v <= 3.0)
+assert abs(f_v[banda_v][np.argmax(p_v[banda_v])] - 0.7) < 0.02, "CAR-22 o caso precisa ter o máximo da banda na borda"
+f0_v, _ = pico_e_snr(f_v, p_v)
+assert f0_v is not None and abs(60.0 * f0_v - 72.0) <= 2.0, ("CAR-22 pico de verdade, não a borda", f0_v)
+
+
+def rosa(n, semente, colunas=3):
+    """Ruído 1/f (rosa) com desvio 1 por coluna: espectro do branco escalado por 1/sqrt(f)."""
+    branco = np.fft.rfft(np.random.default_rng(semente).normal(size=(n, colunas)), axis=0)
+    f = np.fft.rfftfreq(n, 1.0 / 30.0)
+    branco[1:] /= np.sqrt(f[1:, None])
+    branco[0] = 0.0
+    x = np.fft.irfft(branco, n, axis=0)
+    return x / x.std(axis=0)
+
+
+def com_deriva(bpm, semente, segundos=40.0, nivel=0.004):
+    """Pele com deriva lenta de cor (R +3%, B -2% em 40 s), luz respirando 2% a 0,15 Hz e ruído rosa por canal."""
+    tempos = np.arange(int(segundos * 30)) / 30.0
+    rosa_bgr = rosa(len(tempos), semente)
+    for k, (t, imagem) in enumerate(serie(bpm, tempos=tempos, semente=semente)):
+        deriva = np.array([-0.02, 0.0, 0.03]) * t / segundos + 0.02 * math.sin(2 * math.pi * 0.15 * t)
+        fator = 1.0 + deriva + nivel * rosa_bgr[k]
+        yield t, np.clip(np.rint(imagem * fator), 0, 255).astype(np.uint8)
+
+
+todas = []
+for semente in (81, 82, 83):
+    com = medir(com_deriva(72, semente))[1]
+    sem = medir(com_deriva(None, semente + 10))[1]
+    todas.extend(com + sem)
+    assert all(abs(r.bpm - 72.0) <= 3.0 for r in com if r.bpm is not None),         ("CAR-22 com pulso", semente, sorted({r.bpm for r in com if r.bpm is not None})[:5])
+    assert any(r.estado == "pronto" for r in com), ("CAR-22 com pulso precisa medir", semente)
+    assert not any(r.estado == "pronto" for r in sem),         ("CAR-22 sem pulso não mostra número", semente, sorted({r.bpm for r in sem if r.bpm is not None}))
+numeros = [v for r in todas for v in (r.bpm, r.ultimo_bpm) if v is not None]
+assert min(numeros) >= 60.0 * (0.7 + BORDA_HZ), ("CAR-22 número na borda", min(numeros))
+assert all(r.bpm is None or r.confianca >= CONFIANCA_MINIMA for r in todas), "CAR-22 número com confiança baixa"
+ok(f"CAR-22 vazamento abaixo da banda: pico em {60 * f0_v:.1f} bpm (o máximo da banda era a borda, 42); ruído rosa + "
+   f"deriva de cor e de luz em 6 séries: nenhum número abaixo de {60 * (0.7 + BORDA_HZ):.0f} bpm (menor: "
+   f"{min(numeros):.1f}), nenhum com confiança < {CONFIANCA_MINIMA}")
 
 if pulados:
     print(f"\n{len(pulados)} critério(s) PULADO(S): " + "; ".join(pulados))

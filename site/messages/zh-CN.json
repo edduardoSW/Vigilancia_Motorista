@@ -165,7 +165,8 @@
     "testeLinux": "Linux x86_64 · .tar.gz 文件",
     "testeInstrucoes": "打开 RotaGuard Script 并点击“Iniciar teste”（开始测试）：会自动找到摄像头。测试中：按 Q 退出，按 C 重新校准，按 M 切换面部网格，按 S 开关声音。",
     "aviso": "测试版本没有数字签名。在 Windows 上，如出现“Windows 已保护你的电脑”，请点击“更多信息”→“仍要运行”。",
-    "depois": "Linux 版管理面板和手机应用：筹备中。"
+    "depois": "Linux 版管理面板和手机应用：筹备中。",
+    "compilacao": "下载版本"
   },
   "creditos": {
     "titulo": "有设计方向的图片。",

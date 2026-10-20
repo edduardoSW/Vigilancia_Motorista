@@ -37,7 +37,7 @@ e a janela Python `painel/desktop/rotaguard_painel.py` (pywebview 6.2.1 + WebVie
 | Agente | Arquivos |
 |---|---|
 | 1 Python núcleo | `painel/desktop/dados.py`, `contas.py`, `cadastros.py`, `configuracoes.py`, `atividades.py`, `copia.py`, `ponte.py`; ligação do `js_api` em `rotaguard_painel.py`; `implantacao/painel/rotaguard-painel.spec` (só se precisar de import oculto); `tests/test_painel_contas.py`, `tests/test_painel_cadastros.py`, `tests/test_painel_configuracoes.py` |
-| 2 Script local | `docs/specs/018-script-local-no-painel.md`, `painel/desktop/script_local.py`, `tests/test_painel_script_local.py`, mudança mínima no lado da caixa/app de teste para anunciar que está aberto (+ teste), `painel/app/src/app/ao-vivo/page.tsx`, `painel/app/src/components/live/*` |
+| 2 Script local | `docs/specs/018-script-local-no-painel.md`, `painel/desktop/script_local.py`, `tests/test_painel_script_local.py`, mudança mínima no lado da caixa/RotaGuard Script (app de teste) para anunciar que está aberto (+ teste), `painel/app/src/app/ao-vivo/page.tsx`, `painel/app/src/components/live/*` |
 | 3 Casca da interface | `painel/app/src/lib/bridge.ts`, `src/lib/demo-backend.ts`, `src/components/ui/*`, `src/components/session-provider.tsx`, `src/components/auth-gate.tsx`, `src/components/sidebar.tsx`, `src/components/command-palette.tsx`, `src/components/decisions-provider.tsx`, `src/components/moment-list.tsx`, `src/app/layout.tsx`, `src/app/globals.css`, `src/app/page.tsx` (Início), `src/app/viagens/page.tsx`, `src/app/viagens/[id]/page.tsx`, `scripts/testes/previa.test.mjs`, `scripts/testes/shell.test.mjs` |
 | 4 Cadastros | `src/app/motoristas/page.tsx`, `src/components/drivers/*`, `src/app/veiculos/page.tsx`, `src/components/vehicles/*`, `src/lib/validators.ts`, `scripts/testes/cadastros.test.mjs` |
 | 5 Equipe, configurações e guia | `src/app/equipe/page.tsx`, `src/components/team/*`, `src/app/configuracoes/page.tsx`, `src/components/settings/*`, `src/app/guia/page.tsx`, `src/components/guide/*`, `src/content/guide.ts`, `scripts/testes/guia.test.mjs` |
@@ -60,7 +60,8 @@ e a janela Python `painel/desktop/rotaguard_painel.py` (pywebview 6.2.1 + WebVie
 type Funcao = "administrador" | "supervisor" | "consulta";
 type Acao = "ver_viagens" | "ver_video" | "importar" | "decidir" | "cadastrar" | "equipe" | "configuracoes" | "atividades";
 interface Usuario { id: number; nome: string; usuario: string; funcao: Funcao; ativo: boolean; ultimo_acesso: string | null; trocar_senha: boolean }
-interface Estado { ativado: boolean; modo: "demonstracao" | "empresa" | null; empresa: { nome: string } | null; sessao: Usuario | null; bloqueado: boolean; versao: string; bloqueio_min: number;
+interface Estado { ativado: boolean; modo: "local" | "empresa" | null /* spec 030: "local" = ativado sem o arquivo da empresa */; empresa: { nome: string } | null; sessao: Usuario | null; bloqueado: boolean; versao: string;
+  compilacao: string | null /* 20/10/2026: linha do versao.txt que o build grava ao lado do RotaGuardPainel.exe ("RotaGuard Painel 0.1.0 · compilação e94ca11 · 20/10/2026 13:10"); null fora do pacote ou sem o arquivo. A tela mostra em Configurações › Sobre e no rodapé da entrada */; bloqueio_min: number;
   texto_maior: boolean /* 15/09: aparência de Configurações, vale inclusive na tela de entrar */;
   tema: Tema /* spec 019: o da pessoa que entrou; sem sessão, o último usado neste computador */; preferencias: Preferencias | null; videos_dias: number }
 // Spec 019 (15/09): tema e lista ou cards por pessoa; termo importado como comprovante.
@@ -90,8 +91,8 @@ interface EventoScript { id: number; em: string; tipo: string; risco: number; du
 | Método | Quem pode | Devolve |
 |---|---|---|
 | `estado()` | qualquer um | `Estado` |
-| `ativar_demonstracao(admin: {nome, usuario, senha})` | só sem ativação | `{ codigo_recuperacao }` (cria "Viação Demonstração" com os motoristas, veículos e caixas de demonstração e já entra) |
-| `ativar_com_arquivo(conteudo: string, admin)` | só sem ativação | `{ codigo_recuperacao }` (arquivo `rotaguard-chaveiro-coleta/1` da spec 003) |
+| `ativar_local(empresa: string, admin: {nome, usuario, senha}, opcoes?: { codigo_ativacao? })` | só sem ativação | `{ codigo_recuperacao }` (spec 030: cria a empresa com o nome digitado e o administrador, sem nenhum registro, e já entra; `modo` vira `"local"`. `opcoes.codigo_ativacao` só vale no painel pela web, spec 024; no app instalado é ignorado) |
+| `ativar_com_arquivo(conteudo: string, admin, opcoes?: { codigo_ativacao? })` | só sem ativação | `{ codigo_recuperacao }` (arquivo `rotaguard-chaveiro-coleta/1` da spec 003) |
 | `entrar(usuario, senha)` | qualquer um | `Usuario` ou `codigo: "espera"` com `esperar_s` |
 | `sair()`, `bloquear()` | sessão | `{}` |
 | `tocar()` | sessão | `{ bloqueado }` (a tela chama no máximo a cada 30 s quando há uso; o Python bloqueia sozinho depois de `bloqueio_min`) |
@@ -135,6 +136,13 @@ Ligação do script local: `painel/desktop/script_local.py` (agente 2) tem `clas
 com `estado() -> dict`, `eventos(desde_id: int) -> list[dict]`, `iniciar()` e `parar()` (vigia em thread que captura os
 eventos para `capturas.db` na pasta de dados do painel). A Ponte (agente 1) importa com `try/except ImportError` e, sem o
 módulo, devolve `aberto: false`.
+
+Spec 031: o app de teste se chama **RotaGuard Script** (antes RotaGuard Teste). `ScriptEstado.programa` mostra
+"RotaGuard Script" também para o pacote antigo. O script aberto é reconhecido pelos dois nomes de processo
+(`RotaGuardScript.exe` e o antigo `RotaGuardTeste.exe`; no Linux `RotaGuardScript`, `RotaGuardTeste`, `app_teste.py` ou
+`run_monitor.py`), e o anúncio `em_execucao.json` e a fila `eventos.db` são procurados nas duas pastas:
+`%LOCALAPPDATA%\RotaGuard\Script` e a antiga `%LOCALAPPDATA%\RotaGuard\Teste` (Linux `rotaguard/script` e
+`rotaguard/teste` em `$XDG_DATA_HOME`), além de `~/.drivesafe` e `DRIVESAFE_DATA_DIR`.
 
 ### Dados de demonstração (os dois lados iguais)
 - Empresa "Viação Demonstração".

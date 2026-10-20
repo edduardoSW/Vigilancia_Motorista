@@ -56,8 +56,8 @@ export function CameraDoAparelho() {
   const versaoVista = useRef(-1);
   const ultimaLeitura = useRef<Instantaneo | null>(null);
 
-  // Celular: malha leve (só contornos, olhos, íris e boca) até a pessoa escolher outra.
-  const modo = escolhaDeModo ?? (estreito ? "essencial" : "completa");
+  // Spec 029: a malha abre na Discreta (no computador e no celular) até a pessoa escolher outra.
+  const modo = escolhaDeModo ?? "discreta";
   useEffect(() => {
     sessao?.definirModo(modo);
   }, [sessao, modo]);

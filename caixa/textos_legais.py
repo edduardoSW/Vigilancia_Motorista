@@ -1,4 +1,4 @@
-"""Privacidade, LGPD e termos de uso do RotaGuard Teste (spec 010, decisão 13; cardio e resumos: specs 022 e 023).
+"""Privacidade, LGPD e termos de uso do RotaGuard Script (spec 010, decisão 13; cardio e resumos: specs 022 e 023).
 
 Ficam numa seção da tela de início, para consulta, sem aceite obrigatório para usar (pedido do Matheus em 14/09/2026).
 O texto descreve o que o app faz de verdade: se mudar o que ele grava ou envia, atualize aqui e nos testes APT-21.
@@ -21,11 +21,11 @@ def contato(canal: str = CONTATO_PRIVACIDADE) -> str:
 
 
 def politica_de_privacidade(pasta: Path) -> str:
-    return f"""POLÍTICA DE PRIVACIDADE · RotaGuard Teste
+    return f"""POLÍTICA DE PRIVACIDADE · RotaGuard Script
 Versão de {VERSAO_TEXTOS}
 
 1. O que é este app
-O RotaGuard Teste roda neste computador o mesmo programa da caixa RotaGuard, para testar a detecção de sinais de sono e \
+O RotaGuard Script roda neste computador o mesmo programa da caixa RotaGuard, para testar a detecção de sinais de sono e \
 de uso de celular com a câmera do computador ou com um vídeo que você escolher. É um protótipo em validação e não é \
 diagnóstico médico nem exame toxicológico.
 
@@ -130,11 +130,11 @@ O app não é destinado a crianças e adolescentes.
 
 
 def termos_de_uso() -> str:
-    return f"""TERMOS DE USO · RotaGuard Teste
+    return f"""TERMOS DE USO · RotaGuard Script
 Versão de {VERSAO_TEXTOS}
 
 1. Sobre estes termos
-Estes termos valem para o uso do RotaGuard Teste. Não é preciso aceitar nada para começar a usar: eles ficam nesta \
+Estes termos valem para o uso do RotaGuard Script. Não é preciso aceitar nada para começar a usar: eles ficam nesta \
 seção para consulta.
 
 2. O que o app é
@@ -176,7 +176,7 @@ Estes termos podem mudar; a data da versão fica no topo. Aplica-se a legislaç�
 
 def licencas(avisos_de_terceiros: str = "") -> str:
     detalhes = avisos_de_terceiros.strip() or "Arquivo THIRD_PARTY_NOTICES.md não encontrado neste pacote."
-    return f"""LICENÇAS DE TERCEIROS · RotaGuard Teste
+    return f"""LICENÇAS DE TERCEIROS · RotaGuard Script
 
 O app inclui estes componentes, cada um com a própria licença:
 • MediaPipe (Google): Apache 2.0, com os modelos Face Landmarker, Hand Landmarker e EfficientDet-Lite0 (Apache 2.0).

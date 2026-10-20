@@ -15,7 +15,7 @@ from tela_teste.sessao import SessaoTeste
 
 logger = logging.getLogger("drivesafe.tela")
 
-NOME_APP = "RotaGuard Teste"
+NOME_APP = "RotaGuard Script"
 TAMANHO = (1360, 860)
 TAMANHO_MINIMO = (1024, 640)
 COR_FUNDO = "#fafcf7"  # papel do RotaGuard, enquanto a página carrega

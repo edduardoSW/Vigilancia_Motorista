@@ -1,5 +1,5 @@
 /*
- * RotaGuard Teste (specs 023 e 029): a página só conversa com o servidor local que a serviu (127.0.0.1, com token).
+ * RotaGuard Script (specs 023, 029 e 031): a página só conversa com o servidor local que a serviu (127.0.0.1, com token).
  * Consulta /estado várias vezes por segundo durante o teste, mostra o vídeo de /video.mjpg (a malha já vem desenhada
  * pelo Python) e manda as ações para /acao. Textos dinâmicos sempre por textContent, nunca innerHTML.
  * Spec 029: a tela responde perguntas. O servidor manda o painel pronto (estado.py, montar_painel): uma frase do agora
@@ -241,7 +241,8 @@
     }
     texto("pasta-dados", dados.pasta);
     desenharCentral(dados.central);
-    texto("versao-inicio", `RotaGuard Teste ${dados.versao}. Protótipo em validação, não é diagnóstico.`);
+    texto("versao-inicio", `RotaGuard Script ${dados.versao}. Protótipo em validação, não é diagnóstico.`);
+    texto("compilacao-inicio", dados.compilacao || "");
     desenharCameras(dados.cameras);
 
     const erro = dados.fase === "erro" ? dados.erro : null;
@@ -516,8 +517,7 @@
       if (calibracao.piscadas != null) {
         partes.push(`${calibracao.piscadas} ${calibracao.piscadas === 1 ? "piscada" : "piscadas"}`);
       }
-      partes.push("olhe para a câmera e pisque normalmente.");
-      textoLivre("calibracao-texto", partes.join(" · "));
+      textoLivre("calibracao-texto", partes.length ? partes.join(" · ") : "Olhe para a câmera e pisque normalmente.");
     }
   }
 
@@ -577,35 +577,6 @@
     if (mudou) lista.replaceChildren(...ordem);
   }
 
-  function criarCartao(dado) {
-    const cartao = criar("article", "card");
-    cartao.dataset.cartao = dado.id;
-    const cabeca = criar("header", "card-head");
-    const titulos = criar("div", "card-titles");
-    const titulo = criar("h2", "card-title", dado.titulo);
-    titulo.id = `cartao-${dado.id}`;
-    cartao.setAttribute("aria-labelledby", titulo.id);
-    titulos.append(titulo, criar("p", "card-question", dado.pergunta));
-    const situacao = criar("span", "status-word");
-    cabeca.append(titulos, situacao);
-    const resumo = criar("p", "card-summary");
-    const principal = criarMedida(true);
-    cartao.append(cabeca, resumo, principal);
-    let grafico = null;
-    if (dado.id === "sono") {
-      grafico = criarGrafico("Abertura do olho nos últimos 60 s", "Abaixo da linha tracejada, o olho conta como fechado.",
-        "chart-eyes");
-    } else if (dado.id === "coracao") {
-      grafico = criarGrafico("Onda do pulso nos últimos 6 s", "A barra embaixo da onda é a confiança da leitura.",
-        "chart-wave");
-    }
-    if (grafico) cartao.append(grafico);
-    const lista = criar("ul", "measures");
-    cartao.append(lista);
-    cartao.partes = { situacao, resumo, principal, lista, grafico: grafico && grafico.querySelector("canvas") };
-    return cartao;
-  }
-
   function criarGrafico(titulo, nota, classe) {
     const figura = criar("figure", "chart-box");
     const legenda = criar("figcaption", "chart-caption");
@@ -614,6 +585,177 @@
     tela.setAttribute("aria-hidden", "true");
     figura.append(legenda, tela);
     return figura;
+  }
+
+  // Painel ao lado do vídeo (pedido de 20/10: "tudo muito junto e confuso"): três blocos com pouca coisa cada.
+  // Sono: dois números grandes. Atenção na estrada: uma linha por pergunta. Coração: o pulso, a onda e a confiança
+  // embaixo; enquanto mede, um anel com quanto falta. A explicação de cada número fica em "Ver mais detalhes".
+  function criarNumero(medida) {
+    const raiz = criar("div", "tile");
+    const nome = criar("p", "tile-name");
+    const valor = criar("p", "tile-value");
+    const numero = criar("span", "tile-number");
+    const unidade = criar("span", "tile-unit");
+    valor.append(numero, unidade);
+    const espera = criar("p", "tile-wait");
+    const pe = criar("p", "tile-foot");
+    const situacao = criar("span", "status-word");
+    const normal = criar("span", "tile-normal");
+    pe.append(situacao, normal);
+    raiz.append(nome, valor, espera, pe);
+    raiz.partes = { nome, valor, numero, unidade, espera, situacao, normal };
+    atualizarNumero(raiz, medida);
+    return raiz;
+  }
+
+  function atualizarNumero(raiz, medida) {
+    const p = raiz.partes;
+    raiz.dataset.medida = medida.id;
+    raiz.dataset.nivel = nivelDe(medida);
+    trocar(p.nome, medida.nome);
+    const temValor = medida.valor != null;
+    p.valor.hidden = !temValor;
+    trocar(p.numero, temValor ? medida.valor : "");
+    trocar(p.unidade, temValor ? medida.unidade : "");
+    p.espera.hidden = temValor;
+    trocar(p.espera, temValor ? "" : medida.espera_curta || medida.espera || "");
+    p.situacao.dataset.nivel = nivelDe(medida);
+    trocar(p.situacao, medida.situacao);
+    p.normal.hidden = !medida.seu_normal;
+    trocar(p.normal, medida.seu_normal || "");
+  }
+
+  function criarLinha(medida) {
+    const raiz = criar("div", "line");
+    const nome = criar("span", "line-name");
+    const valor = criar("span", "line-value");
+    const situacao = criar("span", "status-word");
+    raiz.append(nome, valor, situacao);
+    raiz.partes = { nome, valor, situacao };
+    atualizarLinha(raiz, medida);
+    return raiz;
+  }
+
+  function atualizarLinha(raiz, medida) {
+    const p = raiz.partes;
+    raiz.dataset.medida = medida.id;
+    raiz.dataset.nivel = nivelDe(medida);
+    trocar(p.nome, medida.nome);
+    const temValor = medida.valor != null;
+    raiz.classList.toggle("sem-valor", !temValor);
+    const unidade = temValor && medida.unidade ? ` ${medida.unidade}` : "";
+    trocar(p.valor, temValor ? `${medida.valor}${unidade}` : medida.espera_curta || medida.espera || "");
+    // Normal não ganha palavra nem cor na linha (o valor já diz, ISA-101); o resto diz a situação.
+    p.situacao.hidden = medida.nivel === 0;
+    p.situacao.dataset.nivel = nivelDe(medida);
+    trocar(p.situacao, medida.situacao);
+  }
+
+  function criarCoracao() {
+    const raiz = criar("div", "heart");
+    const leitura = criar("p", "heart-reading");
+    const numero = criar("span", "heart-number");
+    const unidade = criar("span", "heart-unit", "bpm");
+    const qualidade = criar("span", "status-word heart-quality");
+    leitura.append(numero, unidade, qualidade);
+
+    // Anel de andamento (CSS, conic-gradient): enche com o progresso; sem progresso conhecido, gira devagar.
+    const andamento = criar("div", "heart-progress");
+    const anel = criar("span", "ring");
+    anel.setAttribute("aria-hidden", "true");
+    const textos = criar("div", "heart-progress-text");
+    const titulo = criar("p", "heart-progress-title");
+    const ultimo = criar("p", "heart-last");
+    const motivo = criar("p", "heart-reason");
+    textos.append(titulo, ultimo, motivo);
+    andamento.append(anel, textos);
+
+    const aviso = criar("p", "heart-note");
+    const onda = criar("canvas", "chart chart-wave");
+    onda.setAttribute("aria-hidden", "true");
+    const confianca = criar("div", "heart-conf");
+    const barra = criar("span", "conf-bar");
+    const cheio = criar("span");
+    barra.append(cheio);
+    barra.setAttribute("aria-hidden", "true");
+    const confTexto = criar("span", "conf-text");
+    confianca.append(criar("span", "conf-label", "Confiança da leitura"), barra, confTexto);
+
+    raiz.append(leitura, andamento, aviso, onda, confianca);
+    raiz.partes = { leitura, numero, qualidade, andamento, anel, titulo, ultimo, motivo, aviso, onda, cheio, confTexto };
+    return raiz;
+  }
+
+  function atualizarCoracao(raiz, dado) {
+    const p = raiz.partes;
+    const pulso = dado.principal;
+    const medicao = dado.medicao || { ativa: false };
+    const conf = (dado.medidas || []).find((m) => m.id === "confianca");
+    const pronto = !medicao.ativa && pulso.valor != null;
+    raiz.dataset.estado = medicao.ativa ? "medindo" : pronto ? "pronto" : "parado";
+
+    p.leitura.hidden = !pronto;
+    if (pronto) {
+      trocar(p.numero, pulso.valor);
+      p.qualidade.dataset.nivel = "n";
+      trocar(p.qualidade, pulso.situacao);
+    }
+
+    p.andamento.hidden = !medicao.ativa;
+    if (medicao.ativa) {
+      const conhecido = medicao.progresso != null;
+      p.andamento.classList.toggle("girando", !conhecido);
+      const fracao = conhecido ? Math.max(0.04, Math.min(1, medicao.progresso)) : 0.25;
+      p.anel.style.setProperty("--p", fracao.toFixed(3));
+      trocar(p.titulo, medicao.texto);
+      p.ultimo.hidden = !medicao.ultimo;
+      trocar(p.ultimo, medicao.ultimo ? `último valor: ${medicao.ultimo} bpm` : "");
+      p.motivo.hidden = !medicao.motivo;
+      trocar(p.motivo, medicao.motivo || "");
+    }
+
+    // Sem medida em andamento e sem número (sem rosto, desligado, modo sem pontos): uma frase, nunca vazio.
+    const parado = !pronto && !medicao.ativa;
+    p.aviso.hidden = !parado;
+    const ultimoTexto = medicao.ultimo ? ` Último valor: ${medicao.ultimo} bpm.` : "";
+    trocar(p.aviso, parado ? `${pulso.espera_curta || pulso.espera || pulso.situacao}.${ultimoTexto}`.replace("..", ".") : "");
+
+    // A confiança vale para o número na tela: só aparece com ele (medindo, a barra fica vazia e diz que já vem).
+    const temConfianca = pronto && !!(conf && conf.valor != null);
+    const porcentagem = temConfianca ? Math.max(0, Math.min(100, Number(String(conf.valor).replace(",", ".")))) : 0;
+    p.cheio.style.setProperty("width", `${porcentagem}%`);
+    trocar(p.confTexto, temConfianca ? `${conf.valor}%` : medicao.ativa ? "vem com o número" : "sem leitura");
+  }
+
+  function criarCartao(dado) {
+    const cartao = criar("article", "card");
+    cartao.dataset.cartao = dado.id;
+    const cabeca = criar("header", "card-head");
+    const titulo = criar("h2", "card-title", dado.titulo);
+    titulo.id = `cartao-${dado.id}`;
+    cartao.setAttribute("aria-labelledby", titulo.id);
+    const situacao = criar("span", "status-word");
+    cabeca.append(titulo, situacao);
+    cartao.append(cabeca);
+    let corpo;
+    if (dado.id === "sono") corpo = criar("div", "tiles");
+    else if (dado.id === "coracao") corpo = criarCoracao();
+    else corpo = criar("div", "lines");
+    cartao.append(corpo);
+    cartao.partes = { situacao, corpo };
+    return cartao;
+  }
+
+  function atualizarItens(lugar, medidas, criarItem, atualizarItem) {
+    const existentes = new Map([...lugar.children].map((item) => [item.dataset.medida, item]));
+    const ordem = medidas.map((medida) => {
+      const item = existentes.get(medida.id);
+      if (!item) return criarItem(medida);
+      atualizarItem(item, medida);
+      return item;
+    });
+    const mudou = ordem.length !== lugar.children.length || ordem.some((item, i) => lugar.children[i] !== item);
+    if (mudou) lugar.replaceChildren(...ordem);
   }
 
   function desenharCartoes(painel, dados) {
@@ -635,41 +777,53 @@
         lugar.append(cartao);
       }
       cartao.dataset.nivel = String(dado.nivel);
-      cartao.partes.situacao.dataset.nivel = dado.id === "coracao" ? nivelDe(dado.principal) : String(dado.nivel);
+      // A palavra do bloco só aparece fora do normal; o coração não tem nível (é estimativa).
+      cartao.partes.situacao.hidden = dado.id === "coracao" || !dado.nivel;
+      cartao.partes.situacao.dataset.nivel = String(dado.nivel);
       trocar(cartao.partes.situacao, dado.situacao);
-      trocar(cartao.partes.resumo, dado.resumo);
-      atualizarMedida(cartao.partes.principal, dado.principal);
-      atualizarLista(cartao.partes.lista, dado.medidas);
-      if (dado.id === "sono") graficoAbertura(cartao.partes.grafico, dados.series ? dados.series.abertura : []);
-      if (dado.id === "coracao") {
+      const medidas = [dado.principal, ...dado.medidas];
+      if (dado.id === "sono") atualizarItens(cartao.partes.corpo, medidas, criarNumero, atualizarNumero);
+      else if (dado.id === "coracao") {
+        atualizarCoracao(cartao.partes.corpo, dado);
         const cardio = dados.rosto && dados.rosto.pontos_disponiveis === false ? { estado: "sem_pontos" } : dados.cardio || {};
-        graficoOnda(cartao.partes.grafico, cardio.onda || [], cardio.estado, cardio.confianca);
-      }
+        graficoOnda(cartao.partes.corpo.partes.onda, cardio.onda || [], cardio.estado);
+      } else atualizarItens(cartao.partes.corpo, medidas, criarLinha, atualizarLinha);
     }
   }
 
   function desenharDetalhes(painel, dados) {
     const lugar = $("detalhes-grupos");
     if (!painel) return;
-    for (const grupo of painel.detalhes) {
+    // Primeiro, os números de cima com a frase de "o que é" de cada um; depois o resto, por assunto.
+    const deCima = { id: "de-cima", titulo: "O que os números de cima querem dizer",
+      medidas: painel.cartoes.flatMap((cartao) => [cartao.principal, ...cartao.medidas]) };
+    for (const grupo of [deCima, ...painel.detalhes]) {
       let bloco = gruposDom.get(grupo.id);
       if (!bloco) {
         bloco = criar("section", "detail-group");
         const titulo = criar("h3", "detail-title", grupo.titulo);
         const lista = criar("ul", "measures");
         bloco.append(titulo, lista);
-        if (grupo.id === "coracao") {
+        if (grupo.id === "sono") {
+          const grafico = criarGrafico("Abertura do olho nos últimos 60 s", "Abaixo da linha tracejada, o olho conta como fechado.",
+            "chart-eyes");
+          bloco.append(grafico);
+          bloco.grafico = grafico.querySelector("canvas");
+          bloco.tipo = "olhos";
+        } else if (grupo.id === "coracao") {
           const grafico = criarGrafico("Pulso nos últimos 2 min", "Só leituras boas; a linha mostra se subiu ou desceu.",
             "chart-trend");
           bloco.append(grafico);
           bloco.grafico = grafico.querySelector("canvas");
+          bloco.tipo = "pulso";
         }
         bloco.lista = lista;
         gruposDom.set(grupo.id, bloco);
         lugar.append(bloco);
       }
       atualizarLista(bloco.lista, grupo.medidas);
-      if (bloco.grafico) graficoTendencia(bloco.grafico, (dados.cardio && dados.cardio.historico_bpm) || []);
+      if (bloco.tipo === "olhos") graficoAbertura(bloco.grafico, dados.series ? dados.series.abertura : []);
+      if (bloco.tipo === "pulso") graficoTendencia(bloco.grafico, (dados.cardio && dados.cardio.historico_bpm) || []);
     }
   }
 
@@ -753,27 +907,18 @@
     ctx.stroke();
   }
 
-  function graficoOnda(canvas, onda, estadoCardio, confianca) {
+  function graficoOnda(canvas, onda, estadoCardio) {
     if (!canvas) return;
     const area = prepararCanvas(canvas);
     if (!area) return;
     const { ctx, w, h } = area;
-    const alturaOnda = h - 10;
-    const meio = alturaOnda / 2;
+    const meio = h / 2;
     ctx.strokeStyle = cssVar("--fio");
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, meio);
     ctx.lineTo(w, meio);
     ctx.stroke();
-    // Confiança embaixo da onda, à moda dos oxímetros: barra fina cheia na proporção da confiança.
-    ctx.fillStyle = cssVar("--fio");
-    ctx.fillRect(0, h - 4, w, 3);
-    const temConfianca = confianca != null && !["desligado", "sem_pontos"].includes(estadoCardio);
-    if (temConfianca) {
-      ctx.fillStyle = cssVar("--grafite");
-      ctx.fillRect(0, h - 4, w * Math.max(0, Math.min(1, confianca)), 3);
-    }
     if (!onda.length || ["desligado", "sem_rosto", "sem_pontos"].includes(estadoCardio)) return;
     const pronto = estadoCardio === "pronto";
     const n = onda.length;
@@ -1141,6 +1286,7 @@
         return;
       }
     }
+    texto("compilacao-legal", textosLegais.compilacao || (estado && estado.compilacao) || "");
     const abas = $("legal-abas");
     abas.replaceChildren(...textosLegais.secoes.map((secao, indice) => {
       const botao = criar("button", "", secao.titulo);

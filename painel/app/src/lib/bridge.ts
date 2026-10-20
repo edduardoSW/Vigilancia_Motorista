@@ -65,6 +65,9 @@ export interface Estado {
   sessao: Usuario | null;
   bloqueado: boolean;
   versao: string;
+  /** Linha do versao.txt gravado pelo build ao lado do RotaGuardPainel.exe ("RotaGuard Painel 0.1.0 · compilação e94ca11 ·
+   * 20/10/2026 13:10"), para conferir se é o mesmo programa do site; null fora do pacote ou sem o arquivo. */
+  compilacao: string | null;
   bloqueio_min: number;
   /** Aparência de Configurações: vale para todas as pessoas deste computador, inclusive na tela de entrar. */
   texto_maior: boolean;
@@ -246,7 +249,7 @@ export interface CentralEstado {
 }
 
 export interface CodigoPareamento {
-  /** "ABCD-2345": digitado no RotaGuard Teste do outro computador (Conectar à empresa). */
+  /** "ABCD-2345": digitado no RotaGuard Script do outro computador (Conectar à empresa). */
   codigo: string;
   expira_em: string;
   validade_min: number;

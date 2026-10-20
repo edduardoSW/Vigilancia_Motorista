@@ -189,7 +189,7 @@ test("telas: menu, Configurações › Central, player e privacidade", () => {
   const central = ler("src", "components", "settings", "central-section.tsx");
   assert.match(central, /type="password"/);
   assert.match(central, /Gerar código para outro computador/);
-  assert.match(central, /abra o RotaGuard Teste › Conectar à empresa e digite este código/);
+  assert.match(central, /abra o RotaGuard Script › Conectar à empresa e digite este código/);
   assert.match(central, /Desconectar/);
   assert.match(central, /setSenha\(""\)/, "a senha sai da tela depois de conectar");
   for (const texto of [fontes, central]) assert.doesNotMatch(texto, /localStorage|sessionStorage|document\.cookie/, "nada no navegador");

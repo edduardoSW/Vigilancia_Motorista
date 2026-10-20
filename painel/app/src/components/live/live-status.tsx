@@ -5,7 +5,7 @@ import type { TiposDeEvento } from "./summary";
 
 export const TIPOS = tiposDeEvento as TiposDeEvento;
 
-export const FECHADO = "O script não está aberto. Abra o RotaGuard Teste neste computador e ele aparece aqui sozinho.";
+export const FECHADO = "O script não está aberto. Abra o RotaGuard Script neste computador e ele aparece aqui sozinho.";
 
 export function horaCurta(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });

@@ -1,5 +1,5 @@
 /*
- * RotaGuard Teste (spec 023). Mesma família do painel (painel/app/src/app/globals.css): verde #103e31, lima #d5f669,
+ * RotaGuard Script (specs 023 e 031). Mesma família do painel (painel/app/src/app/globals.css): verde #103e31, lima #d5f669,
  * papel #fafcf7 e o modo escuro em neutro esverdeado. Início claro; teste e resumo escuros, com o vídeo no centro.
  * Regras da pesquisa de 19/10 (scratchpad/pesquisa-referencias-visuais.md): normal não tem cor (ISA-101); lima é
  * medição (malha, onda, regiões do pulso), nunca estado; cada nível de risco também tem desenho (0 a 3 segmentos).
@@ -831,9 +831,9 @@ html[data-tema="escuro"] .fineprint {
   color: var(--grafite);
 }
 
-/* TESTE (spec 029): à esquerda, a frase do agora, o vídeo e a linha do tempo; à direita, as perguntas (Sono; Atenção
-   na estrada e Coração) e os Detalhes recolhidos. A altura limita o vídeo (4:3, inteiro); só a coluna da direita rola.
-   Anatomia única de medida: nome, valor com unidade, situação em palavra e a frase de "o que é". */
+/* TESTE (spec 029; painel lateral refeito em 20/10): à esquerda, o vídeo (o maior possível, 4:3 inteiro) e a linha do
+   tempo; à direita, numa coluna só, a frase do agora, os blocos Sono, Atenção na estrada e Coração e os detalhes
+   recolhidos. Só a coluna da direita rola, e no notebook de 1366 × 768 ela cabe sem rolar. */
 .test,
 .summary {
   --topo: 52px;
@@ -849,32 +849,36 @@ html[data-tema="escuro"] .fineprint {
 }
 
 .test-grid {
+  --lado: clamp(360px, 33vw, 520px);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) var(--lado);
+  gap: 16px;
   min-height: 0;
-  padding: 12px;
+  padding: 12px 16px 12px 12px;
 }
 
 .stage {
-  --agora: 70px;
   --linha: 140px;
-  --video-alto: calc(100vh - var(--topo) - 24px - 24px - var(--agora) - var(--linha));
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) var(--linha);
   gap: 12px;
-  width: min(calc(100vw - 24px - 12px - 560px), calc(var(--video-alto) * var(--arn, 1.3333)));
+  min-width: 0;
   min-height: 0;
+}
+
+/* O vídeo ocupa o maior 4:3 (ou a proporção da câmera) que cabe na área, sem cortar e sem passar por cima. */
+.video-area {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  container-type: size;
 }
 
 /* Agora: o único lugar do risco. Uma frase grande, a situação em palavra e, quando há, o recado ao motorista. */
 .now {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px 14px;
-  min-height: var(--agora);
-  padding: 9px 14px 10px;
+  gap: 6px;
+  padding: clamp(12px, 1.8vh, 18px) 18px;
   border: 1px solid var(--fio);
   border-left: 4px solid var(--fio-forte);
   border-radius: var(--raio);
@@ -897,12 +901,11 @@ html[data-tema="escuro"] .fineprint {
   background: color-mix(in srgb, var(--n3) 13%, var(--superficie));
 }
 
-.now-text {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  column-gap: 12px;
-  min-width: 0;
+.now-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .now-label {
@@ -911,15 +914,17 @@ html[data-tema="escuro"] .fineprint {
   font-weight: 600;
 }
 
+/* Normal não ganha selo: a frase já diz. O selo aparece de atenção para cima. */
+.now[data-nivel="0"] .status-large {
+  display: none;
+}
+
 .now-sentence {
-  overflow: hidden;
   font-family: var(--fonte-numero);
-  font-size: clamp(19px, 1.55vw, 25px);
+  font-size: clamp(21px, 1.75vw, 27px);
   font-weight: 650;
   line-height: 1.2;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .now[data-nivel="2"] .now-sentence {
@@ -931,18 +936,13 @@ html[data-tema="escuro"] .fineprint {
 }
 
 .now-detail {
-  grid-column: 2;
   color: var(--grafite);
   font-size: 13px;
-}
-
-.now-message,
-.now-note,
-.now-calibration {
-  grid-column: 1 / -1;
+  line-height: 1.4;
 }
 
 .now-message {
+  margin-top: 4px;
   padding: 6px 10px;
   border-radius: 6px;
   background: var(--elevada);
@@ -955,9 +955,25 @@ html[data-tema="escuro"] .fineprint {
   font-size: 12.5px;
 }
 
+/* Calibração numa linha só: nome, barra, quanto já foi e o tempo. */
 .now-calibration {
-  padding-top: 6px;
+  display: grid;
+  grid-template-columns: auto minmax(40px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 10px;
   border-top: 1px solid var(--fio);
+  font-size: 12.5px;
+}
+
+.now-calibration[hidden] {
+  display: none;
+}
+
+.now-calibration .calibration-note {
+  margin: 0;
+  white-space: nowrap;
 }
 
 /* Situação em palavra: normal e neutro sem cor; atenção com contorno; alto tingido; crítico cheio. Lê sem cor. */
@@ -1171,11 +1187,15 @@ html[data-tema="escuro"] .fineprint {
   font-size: 13px;
 }
 
-/* Coluna da direita: Sono ocupa a altura; Atenção na estrada e Coração ficam um sobre o outro ao lado. */
+/* Painel ao lado do vídeo (20/10, "tudo muito junto e confuso"): uma coluna só, com ar entre os blocos. No topo a
+   frase do agora; depois Sono (dois números), Atenção na estrada (uma linha por pergunta) e Coração (pulso, onda e
+   confiança). O resto fica em "Ver mais detalhes", recolhido. Normal sem cor; só o que sai do normal ganha palavra
+   colorida. */
 .readouts {
-  display: grid;
-  align-content: start;
-  gap: 12px;
+  --respiro: clamp(12px, 2vh, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--respiro);
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
@@ -1183,24 +1203,23 @@ html[data-tema="escuro"] .fineprint {
 }
 
 .cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--respiro);
 }
 
 .card {
   display: grid;
-  gap: 8px;
+  gap: clamp(8px, 1.4vh, 14px);
   min-width: 0;
-  padding: 12px 14px;
+  padding: clamp(12px, 1.8vh, 18px) 18px;
   border: 1px solid var(--fio);
   border-radius: var(--raio);
   background: var(--superficie);
 }
 
-.card[data-cartao="sono"] {
-  grid-row: span 2;
+.card[data-nivel="1"] {
+  border-color: color-mix(in srgb, var(--n1) 55%, var(--fio));
 }
 
 .card[data-nivel="2"] {
@@ -1212,7 +1231,6 @@ html[data-tema="escuro"] .fineprint {
 }
 
 .card-wait {
-  grid-column: 1 / -1;
   padding: 28px 16px;
   border: 1px dashed var(--fio-forte);
   border-radius: var(--raio);
@@ -1222,9 +1240,10 @@ html[data-tema="escuro"] .fineprint {
 
 .card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
+  min-height: 22px;
 }
 
 .card-title {
@@ -1234,16 +1253,284 @@ html[data-tema="escuro"] .fineprint {
   line-height: 1.2;
 }
 
-.card-question {
+/* Sono: dois números lado a lado, rótulo em cima, situação embaixo. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tile + .tile {
+  padding-left: 18px;
+  border-left: 1px solid var(--fio);
+}
+
+.tile-name {
+  color: var(--grafite);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.tile-value {
+  white-space: nowrap;
+}
+
+.tile-number {
+  font-family: var(--fonte-numero);
+  font-size: clamp(28px, 2.4vw, 38px);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.tile-unit {
+  margin-left: 4px;
   color: var(--grafite);
   font-size: 12.5px;
 }
 
-.card-summary {
-  font-size: 13px;
-  line-height: 1.4;
+.tile[data-nivel="2"] .tile-number {
+  color: var(--n2);
 }
 
+.tile[data-nivel="3"] .tile-number {
+  color: var(--n3);
+}
+
+.tile-wait {
+  color: var(--tinta);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.tile-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.tile-foot .status-word {
+  padding: 0;
+  border: 0;
+  height: auto;
+}
+
+.tile-foot .status-word[data-nivel="1"],
+.tile-foot .status-word[data-nivel="2"],
+.tile-foot .status-word[data-nivel="3"] {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid;
+}
+
+.tile-normal {
+  color: var(--apagado);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* Atenção na estrada: uma linha por pergunta, rótulo à esquerda e resposta à direita. */
+.lines {
+  display: grid;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 3px 0;
+  border-top: 1px solid var(--fio);
+}
+
+.line:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.line-name {
+  color: var(--grafite);
+  font-size: 13px;
+}
+
+.line-value {
+  color: var(--tinta);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.line.sem-valor .line-value {
+  color: var(--grafite);
+  font-weight: 500;
+}
+
+.line[data-nivel="2"] .line-value {
+  color: var(--n2);
+}
+
+.line[data-nivel="3"] .line-value {
+  color: var(--n3);
+}
+
+/* Coração: o número e a onda lado a lado; a confiança numa barra logo embaixo da onda (como nos oxímetros). Enquanto
+   mede, um anel enche com o tempo que falta e o último número bom fica esmaecido. */
+.heart {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(90px, 1fr);
+  grid-template-areas:
+    "leitura onda"
+    "conf conf";
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.heart-reading,
+.heart-progress,
+.heart-note {
+  grid-area: leitura;
+}
+
+.heart .chart-wave {
+  grid-area: onda;
+  height: 44px;
+}
+
+.heart-conf {
+  grid-area: conf;
+}
+
+.heart-reading {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  justify-content: start;
+  column-gap: 5px;
+  row-gap: 4px;
+}
+
+.heart-number {
+  font-family: var(--fonte-numero);
+  font-size: clamp(28px, 2.4vw, 38px);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.heart-unit {
+  color: var(--grafite);
+  font-size: 12.5px;
+}
+
+.heart-quality {
+  grid-column: 1 / -1;
+  justify-self: start;
+  height: auto;
+  padding: 0;
+}
+
+.heart-progress {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.heart-progress[hidden],
+.heart-reading[hidden],
+.heart-note[hidden] {
+  display: none;
+}
+
+/* Anel: o lima enche na proporção do que já foi medido (--p de 0 a 1); o furo é uma máscara. */
+.ring {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: conic-gradient(var(--lima) calc(var(--p, 0) * 1turn), var(--fio-forte) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+}
+
+.heart-progress.girando .ring {
+  animation: girar 1.4s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.heart-progress-title {
+  color: var(--tinta);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.heart-last {
+  color: var(--apagado);
+  font-size: 12.5px;
+}
+
+.heart-reason {
+  color: var(--n1);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.heart-note {
+  color: var(--grafite);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.heart-conf {
+  display: grid;
+  grid-template-columns: auto minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--grafite);
+  font-size: 12px;
+}
+
+.conf-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fio-forte);
+}
+
+.conf-bar span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--grafite);
+  transition: width 300ms linear;
+}
+
+.heart[data-estado="medindo"] .heart-conf,
+.heart[data-estado="parado"] .heart-conf {
+  opacity: 0.6;
+}
+
+.conf-text {
+  white-space: nowrap;
+}
+
+/* Medida com a frase de "o que é" (em Ver mais detalhes). */
 .measures {
   display: grid;
 }
@@ -1431,8 +1718,9 @@ html[data-tema="escuro"] .fineprint {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 10px;
-  padding: 11px 14px;
+  padding: 12px 18px;
   list-style: none;
+  cursor: pointer;
 }
 
 .details summary::-webkit-details-marker,
@@ -1471,8 +1759,8 @@ html[data-tema="escuro"] .fineprint {
 .details-body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-  gap: 0 20px;
-  padding: 0 14px 6px;
+  gap: 6px 20px;
+  padding: 0 18px 8px;
 }
 
 .detail-group {
@@ -1487,7 +1775,12 @@ html[data-tema="escuro"] .fineprint {
 }
 
 .details > .fineprint {
-  padding: 4px 14px 12px;
+  padding: 4px 18px 14px;
+}
+
+.build-line {
+  font-family: var(--fonte-mono);
+  font-size: 11.5px;
 }
 
 /* RELATÓRIO DO FIM (spec 029, decisão 6): claro, para ler e imprimir. A resposta primeiro, depois o que aconteceu e
@@ -1836,7 +2129,7 @@ html[data-tema="escuro"] .fineprint {
 .video-frame {
   --cor-nivel: var(--n0);
   position: relative;
-  width: 100%;
+  width: min(100cqw, calc(100cqh * var(--arn, 1.3333)));
   aspect-ratio: var(--ar, 4 / 3);
   overflow: hidden;
   border-radius: 12px;
@@ -2185,20 +2478,58 @@ html[data-tema="escuro"] .fineprint {
   }
 
   .stage {
-    --agora: 64px;
-    --linha: 118px;
+    --linha: 112px;
   }
 
   .chart-eyes {
     height: 40px;
   }
 
-  .chart-wave {
-    height: 50px;
+  .heart .chart-wave {
+    height: 38px;
   }
 
-  .primary .m-number {
+  .tile-number,
+  .heart-number {
     font-size: 28px;
+  }
+
+  .now-sentence {
+    font-size: 21px;
+  }
+}
+
+/* Notebook de 1366 × 768 com a barra de tarefas (janela de ~697 px): os mesmos blocos, um pouco mais justos. */
+@media (max-height: 720px) {
+  .readouts {
+    --respiro: 12px;
+  }
+
+  .card {
+    gap: 8px;
+    padding: 11px 16px;
+  }
+
+  .now {
+    gap: 4px;
+    padding: 11px 16px;
+  }
+
+  .now-calibration {
+    margin-top: 2px;
+    padding-top: 8px;
+  }
+
+  .tile {
+    gap: 3px;
+  }
+
+  .line {
+    min-height: 28px;
+  }
+
+  .heart {
+    row-gap: 8px;
   }
 }
 
@@ -2218,16 +2549,8 @@ html[data-tema="escuro"] .fineprint {
 }
 
 @media (max-width: 1120px) {
-  .cards {
-    grid-template-columns: 1fr;
-  }
-
-  .card[data-cartao="sono"] {
-    grid-row: auto;
-  }
-
-  .stage {
-    width: min(calc(100vw - 24px - 12px - 360px), calc(var(--video-alto) * var(--arn, 1.3333)));
+  .test-grid {
+    --lado: 340px;
   }
 }
 
@@ -2242,7 +2565,19 @@ html[data-tema="escuro"] .fineprint {
   }
 
   .stage {
+    grid-template-rows: auto auto;
+  }
+
+  .video-area {
+    container-type: normal;
+  }
+
+  .video-frame {
     width: 100%;
+  }
+
+  .readouts {
+    overflow: visible;
   }
 
   .report-table thead {

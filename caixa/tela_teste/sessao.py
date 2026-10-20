@@ -301,6 +301,24 @@ class Renderizador:
             self._thread.join(timeout=3)
 
 
+VERSAO_DEV = "versão de desenvolvimento"
+
+
+def linha_de_versao(congelado: bool | None = None, executavel: str | None = None) -> str:
+    """A linha que o build grava em versao.txt ao lado do executável ("RotaGuard Script 0.3.0 · compilação e94ca11 ·
+    20/10/2026 13:10"), para conferir se o .exe do site é o mesmo deste computador. Fora do pacote não há arquivo:
+    "versão de desenvolvimento". Arquivo ausente, ilegível ou vazio nunca quebra a tela."""
+    congelado = bool(getattr(sys, "frozen", False)) if congelado is None else congelado
+    if not congelado:
+        return VERSAO_DEV
+    try:
+        arquivo = Path(executavel or sys.executable).resolve().parent / "versao.txt"
+        linha = arquivo.read_text(encoding="utf-8-sig", errors="replace").strip().splitlines()[0].strip()
+    except (OSError, IndexError, ValueError):
+        return f"RotaGuard Script {__version__}"
+    return linha[:160] or f"RotaGuard Script {__version__}"
+
+
 class SessaoTeste:
     def __init__(self, pasta: Path, listar_cameras: Callable[[], list] = listar_cameras,
                  criar_monitoramento: Callable | None = None):
@@ -342,6 +360,7 @@ class SessaoTeste:
         self.escolher_arquivo: Callable[[], str | None] | None = None
         self.alternar_tela_cheia: Callable[[], None] | None = None
         self.ao_sair: Callable[[], None] | None = None
+        self.compilacao = linha_de_versao()
         self.procurar_cameras()
 
     # ------------------------------------------------------------------ estado
@@ -369,6 +388,7 @@ class SessaoTeste:
                 "som": self.som,
                 "pasta": str(self.pasta),
                 "versao": __version__,
+                "compilacao": self.compilacao,
                 "espelhar": not self.video_gravado,
                 "salvo": self.salvo,
                 "central": self.central.estado(),
@@ -766,7 +786,7 @@ class SessaoTeste:
     def _payload_sessao(self, encerrada_em: str | None = None, resumo: dict | None = None,
                         iniciada_em: str | None = None, camera: str | None = None) -> dict:
         return {"iniciada_em": iniciada_em or self.sessao_iniciada_em, "encerrada_em": encerrada_em,
-                "programa": f"RotaGuard Teste {__version__}", "camera": camera or self.camera_nome,
+                "programa": f"RotaGuard Script {__version__}", "camera": camera or self.camera_nome,
                 "resumo": resumo or {}}
 
     def _comecar_envio_da_sessao(self) -> None:

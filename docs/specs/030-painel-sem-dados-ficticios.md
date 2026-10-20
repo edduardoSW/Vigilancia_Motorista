@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | aprovada (pedido do Matheus em 19/10/2026) → em implementação |
+| Status | implementada em 19/10/2026 (SDF-01 a SDF-11; migração aplicada no painel do Matheus em 19/10 com cópia de segurança); capturas SDF-12 pendentes |
 | PRD | RF-20, RF-21, RF-26, RF-40, RF-66 |
 | Pedido | "no painel ainda tem muitos dados mockados a partir de agora remova esses dados mockados" (19/10/2026) |
 | Muda | RF-26 ("modo local de demonstração com PIN e dados fictícios"), spec 012 (prévia com dados fictícios), spec 014 (ativar em demonstração) |

@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | aprovada (pedido do Matheus em 19/10/2026) → em implementação |
+| Status | implementada em 19 e 20/10/2026 (site, pacote, instalador, app, painel e central; o painel reconhece os dois nomes de processo e as duas pastas) |
 | PRD | RF-27, RF-18 |
 | Pedido | "troque o nome não quero que seja rotaguard test coloque rotaguard script" (19/10/2026) |
 | Muda | specs 010, 018, 020, 023 e 026 (nome do app, do executável e do pacote) |

@@ -126,6 +126,12 @@ def video_sintetico(pasta: Path) -> Path:
 
 def teste_de_fumaca() -> None:
     """APT-10: o executável empacotado roda um vídeo sem janela e sem servidor, carrega os modelos e sai com 0."""
+    # Como no .zip baixado do site: Python.Runtime.dll com a marca "baixado da internet". O gancho
+    # rthook_desbloquear.py (o mesmo do painel) tem de tirar a marca na abertura (spec 031, qualquer computador).
+    dll = DIST / PASTA_APP / "_internal" / "pythonnet" / "runtime" / "Python.Runtime.dll"
+    marca = Path(f"{dll}:Zone.Identifier")
+    if sys.platform.startswith("win") and dll.exists():
+        marca.write_text("[ZoneTransfer]\nZoneId=3\n", encoding="ascii")
     with tempfile.TemporaryDirectory() as tmp:
         video = video_sintetico(Path(tmp))
         dados = Path(tmp) / "dados"
@@ -147,6 +153,8 @@ def teste_de_fumaca() -> None:
             falhas.append("o modelo do celular ou das mãos não carregou no pacote")
         if "Servidor inacess" in registro:
             falhas.append("tentou falar com servidor mesmo com --sem-servidor")
+        if sys.platform.startswith("win") and dll.exists() and marca.exists():
+            falhas.append("o Python.Runtime.dll continuou marcado como baixado da internet")
         print(f"Teste de fumaça: {duracao:.1f} s, {len(registro.splitlines())} linhas de registro.")
         if falhas:
             print("\n".join(registro.splitlines()[-40:]))
@@ -210,7 +218,9 @@ def teste_da_tela() -> None:
 
 def iscc() -> Path | None:
     candidatos = [os.environ.get("ISCC"), shutil.which("iscc"), r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-                  r"C:\Program Files\Inno Setup 6\ISCC.exe"]
+                  r"C:\Program Files\Inno Setup 6\ISCC.exe",
+                  # winget install JRSoftware.InnoSetup --scope user (sem administrador) instala aqui
+                  str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe")]
     for candidato in candidatos:
         if candidato and Path(candidato).exists():
             return Path(candidato)
@@ -252,6 +262,28 @@ def sha256(caminho: Path) -> str:
     return resumo.hexdigest()
 
 
+def carimbo(produto: str, numero: str) -> str:
+    """Identificação única do build (20/10/2026: "o executável que está no site eu não acho que está com a mesma versão
+    que está nesse computador"): versão, commit e hora. "+local" quando havia mudança sem commit no código empacotado."""
+    try:
+        commit = subprocess.run(["git", "-C", str(RAIZ), "rev-parse", "--short", "HEAD"], capture_output=True,
+                                text=True, check=False).stdout.strip()
+        mudancas = subprocess.run(["git", "-C", str(RAIZ), "status", "--porcelain", "--", "caixa", "painel",
+                                   "implantacao"], capture_output=True, text=True, check=False).stdout.strip()
+    except OSError:
+        commit, mudancas = "", ""
+    identificacao = (commit or "sem-git") + ("+local" if mudancas else "")
+    return f"{produto} {numero} · compilação {identificacao} · {time.strftime('%d/%m/%Y %H:%M')}"
+
+
+def gravar_carimbo(pasta: Path, produto: str, numero: str) -> str:
+    """versao.txt ao lado do executável: o app mostra a linha e o site publica a mesma, para comparar."""
+    texto = carimbo(produto, numero)
+    (Path(pasta) / "versao.txt").write_text(texto + "\n", encoding="utf-8")
+    print(f"Carimbo: {texto}")
+    return texto
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Monta o RotaGuard Script para download.")
     parser.add_argument("--sem-fumaca", action="store_true", help="não roda o teste de fumaça")
@@ -263,6 +295,7 @@ def main() -> int:
     print(f"RotaGuard Script {versao()} · {alvo()} · Python {platform.python_version()}")
     if not args.so_empacotar:
         rodar_pyinstaller()
+    gravar_carimbo(DIST / PASTA_APP, "RotaGuard Script", versao())
     if not args.sem_fumaca:
         teste_de_fumaca()
         teste_sem_camera()

@@ -28,6 +28,7 @@ export function DownloadArea() {
   const router=useRouter();
   const active=useSyncExternalStore(subscribe,snapshot,serverSnapshot);
   const [situacao,setSituacao]=useState<Record<string,Situacao>>({});
+  const [versoes,setVersoes]=useState<Partial<Record<App,string>>>({});
   useEffect(()=>{if(active===false) router.replace("/entrar");},[active,router]);
   useEffect(()=>{
     if(active!==true) return;
@@ -41,6 +42,11 @@ export function DownloadArea() {
         // Outro domínio sem CORS (release do GitHub, por exemplo): não dá para conferir, então o botão continua.
         .catch(()=>{if(!controle.signal.aborted) setSituacao(atual=>({...atual,[url]:{disponivel:null,bytes:null}}));});
     }
+    // VER-01: a linha de compilação gravada no versao.txt de cada pacote, publicada junto com os arquivos.
+    fetch("/downloads/versoes.json",{cache:"no-store",signal:controle.signal})
+      .then(resposta=>resposta.ok?resposta.json():null)
+      .then(dados=>{if(dados&&typeof dados==="object") setVersoes(dados as Partial<Record<App,string>>);})
+      .catch(()=>{});
     return ()=>controle.abort();
   },[active]);
   if(active!==true) return <section className="inner-page shell"><p role="status">{t("carregando")}</p></section>;
@@ -63,6 +69,7 @@ export function DownloadArea() {
         </li>;
       })}</ul>
       <p className="download-note">{t(textos[app].instrucoes)}</p>
+      {versoes[app]&&<p className="download-note">{t("compilacao")}: {versoes[app]}</p>}
     </section>)}
     <div className="mt-10 grid max-w-3xl gap-3 text-[13px] leading-relaxed text-grafite"><p>{t("aviso")}</p><p>{t("depois")}</p></div>
   </section>;

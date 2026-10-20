@@ -3,7 +3,7 @@
 // nenhum quadro, ponto ou número sai daqui. A tela importa este arquivo só quando a pessoa liga a câmera.
 import type { FaceLandmarker, FaceLandmarkerResult, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { coresDoTema, type CoresDoTema } from "./camera-cores";
-import { DesenhoDaMalha, type ConexoesDoRosto } from "./camera-malha";
+import { DesenhoDaMalha } from "./camera-malha";
 import { caminhosDoMediapipe, type ModoDaMalha } from "./camera-regras";
 import { LeitorDeRoi } from "./camera-roi";
 import { MonitorDoPulso, ROIS, regioesUsaveis, type LeituraDoPulso, type Ponto as PontoDoPulso } from "./camera-rppg";
@@ -27,7 +27,7 @@ export type Processador = "placa de vídeo" | "processador";
 
 export type Carga = { etapa: "baixando" | "preparando"; baixado: number; total: number };
 
-export type Motor = { landmarker: FaceLandmarker; conexoes: ConexoesDoRosto; processador: Processador; fechar(): void };
+export type Motor = { landmarker: FaceLandmarker; processador: Processador; fechar(): void };
 
 /** Só para a barra de progresso quando o servidor comprime e não diz o tamanho (WASM com SIMD + modelo, versão 1.1.1). */
 const TAMANHO_ESPERADO = 13_520_000 + 3_760_000;
@@ -127,20 +127,6 @@ export async function prepararMotor(aoCarregar: (carga: Carga) => void, sinal: A
       landmarker = await criar("CPU");
       processador = "processador";
     }
-    const conexoes: ConexoesDoRosto = {
-      tesselacao: FaceLandmarker.FACE_LANDMARKS_TESSELATION,
-      contornos: [
-        ...FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
-        ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW,
-        ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW,
-        ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-        ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-        ...FaceLandmarker.FACE_LANDMARKS_LIPS,
-      ],
-      olhos: [...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE],
-      iris: [...FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS],
-      boca: FaceLandmarker.FACE_LANDMARKS_LIPS,
-    };
     const fechar = () => {
       try {
         landmarker.close();
@@ -152,7 +138,7 @@ export async function prepararMotor(aoCarregar: (carga: Carga) => void, sinal: A
       fechar();
       throw erroNomeado("AbortError", "cancelado");
     }
-    return { landmarker, conexoes, processador, fechar };
+    return { landmarker, processador, fechar };
   } catch (erro) {
     soltar();
     if (erro instanceof Error && erro.name !== "modelo" && erro.name !== "AbortError" && !sinal.aborted) {
@@ -198,7 +184,7 @@ const dentroDaImagem = (pontos: NormalizedLandmark[], indices: readonly number[]
 export class SessaoDaCamera {
   readonly stream: MediaStream;
   readonly processador: Processador;
-  private modo: ModoDaMalha = "completa";
+  private modo: ModoDaMalha = "discreta";
   private readonly motor: Motor;
   private readonly sono = new MonitorDeSono();
   private readonly modeloDeAbertura = new ModeloDeAbertura();
@@ -227,7 +213,7 @@ export class SessaoDaCamera {
     return this.sono.versao;
   }
 
-  /** Completa, pontos, essencial (celular) ou desligada: vale a partir do próximo quadro. */
+  /** Discreta (padrão), completa ou desligada ("Só o rosto"): vale a partir do próximo quadro. */
   definirModo(modo: ModoDaMalha): void {
     this.modo = modo;
   }
@@ -251,7 +237,7 @@ export class SessaoDaCamera {
   /** Começa o laço por quadro novo do vídeo (requestVideoFrameCallback; requestAnimationFrame como reserva). */
   ligar(video: HTMLVideoElement, canvas: HTMLCanvasElement, aoQuadro: (instantaneo: Instantaneo) => void, aoFalhar: (erro: unknown) => void): () => void {
     this.desligarAtual?.();
-    const desenho = new DesenhoDaMalha(canvas, this.motor.conexoes);
+    const desenho = new DesenhoDaMalha(canvas);
     const roi = new LeitorDeRoi();
     const observador = new ResizeObserver(() => desenho.ajustar());
     observador.observe(canvas);

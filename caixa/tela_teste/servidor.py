@@ -50,7 +50,7 @@ ROTA_TRECHO = re.compile(r"^/trecho/([0-9a-f]{32})(?:/(indice|quadro/(\d{1,6})))
 
 class Manipulador(BaseHTTPRequestHandler):
     tela: "ServidorTela"
-    server_version = "RotaGuardTeste"
+    server_version = "RotaGuardScript"
     sys_version = ""
 
     def log_message(self, formato, *args):  # noqa: D401 - sem linha por pedido no registro
@@ -251,7 +251,7 @@ class ServidorTela:
 
     def textos_legais(self) -> dict:
         secoes = textos_legais.secoes(self.sessao.pasta, app_teste.avisos_de_terceiros())
-        return {"versao": textos_legais.VERSAO_TEXTOS,
+        return {"versao": textos_legais.VERSAO_TEXTOS, "compilacao": getattr(self.sessao, "compilacao", None),
                 "secoes": [{"titulo": titulo, "texto": texto} for titulo, texto in secoes]}
 
     def iniciar(self) -> None:

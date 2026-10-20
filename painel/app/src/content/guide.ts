@@ -383,9 +383,9 @@ export const CAPITULOS: Capitulo[] = [
         id: "video-apagado",
         titulo: "Vídeo apagado pelo prazo",
         passos: [
-          "Depois do prazo escolhido em Configurações, o painel apaga o vídeo sozinho.",
-          "O relatório da viagem continua e mostra quando o vídeo foi apagado.",
-          "Para guardar por mais tempo, aumente o prazo antes de o vídeo vencer.",
+          "O prazo escolhido em Configurações é o combinado para guardar; a limpeza automática ainda não está pronta.",
+          "Por enquanto, o painel não apaga vídeo sozinho.",
+          "Se um vídeo aparecer como apagado, o relatório da viagem continua e mostra quando ele foi apagado.",
         ],
       },
       {
@@ -436,6 +436,7 @@ export const CAPITULOS: Capitulo[] = [
           "Vídeos: 30 dias, se ninguém mudar em Configurações.",
           "Viagens e decisões: 5 anos.",
           "Dados de motorista desligado: 5 anos depois de sair.",
+          "São prazos combinados: a limpeza automática ainda não está pronta.",
         ],
       },
       {
@@ -444,7 +445,7 @@ export const CAPITULOS: Capitulo[] = [
         passos: [
           "Administrador e Supervisor veem os vídeos.",
           "Consulta vê as viagens, sem vídeo.",
-          "Os dados ficam guardados neste computador. Nada vai para a internet nesta versão.",
+          "Os dados ficam neste computador. Só conectado à central, o painel busca nela os testes de outros computadores.",
         ],
       },
       {
