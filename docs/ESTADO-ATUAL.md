@@ -67,7 +67,9 @@ Dois pedidos do Matheus estavam sendo feitos quando este arquivo foi escrito (co
    Atenção, Cabeça e boca, Coração, Câmera e desempenho), um assunto por vez, cartões em grade com explicação curta;
    nenhum texto "fique parado"; com movimento, só "Em movimento: leitura menos precisa".
 
-Se o commit desses dois não estiver no `git log`, eles ficaram pela metade: rode os testes e termine.
+**Atualização 15:10:** os dois ficaram prontos no Script (`tests/test_cardio.py` 29, `tests/test_tela_teste.py` 54) e foram
+publicados. **Falta só** copiar a regra do movimento do pulso para a câmera do painel (`camera-rppg.ts`): as 5 linhas do
+algoritmo estão na revisão de 20/10 da `docs/specs/022-cardio-pela-face.md` e no código de `caixa/vision/cardio.py`.
 
 ## 6. Como publicar (o Matheus exige site e computador com a **mesma versão**)
 

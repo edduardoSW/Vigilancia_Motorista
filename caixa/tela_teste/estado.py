@@ -151,6 +151,8 @@ def cardio_json(leitura) -> dict:
         "motivo": getattr(leitura, "motivo", None) or None,
         "fps": numero(getattr(leitura, "fps", None), 1),
         "segundos_para_medida": numero(getattr(leitura, "segundos_para_medida", None), 1),
+        # 20/10: o movimento não pausa mais a leitura; o cardio só avisa que a pessoa está se mexendo (sem ele, False).
+        "em_movimento": bool(getattr(leitura, "em_movimento", False)),
         "onda": [numero(v, 3) or 0.0 for v in list(onda)[-240:]],
         "historico_bpm": [numero(v, 1) for v in list(historico)[-120:] if numero(v) is not None],
         "canal": getattr(leitura, "canal", None),
@@ -501,9 +503,10 @@ def _sono_mais(d: dict) -> list:
     por_min, razao = olhos.get("piscadas_por_min"), comparacao.get("razao_frequencia_piscadas")
     o_que_e = "Média dos últimos 5 min. O comum é de 10 a 20 por minuto; sozinha não muda o risco."
     if por_min is None:
+        contando = _plural(olhos.get('piscadas_ultimo_min') or 0, 'piscada', 'piscadas')
         piscadas = _medida("piscadas_min", "Piscadas por minuto", o_que_e, situacao="Medindo", nivel=None,
-                           espera=f"Contando: {_plural(olhos.get('piscadas_ultimo_min') or 0, 'piscada', 'piscadas')} "
-                                  "no último minuto. A média sai com 1 min de olho medido.")
+                           espera=f"Contando: {contando} no último minuto. A média sai com 1 min de olho medido.",
+                           espera_curta=f"Contando: {contando} no último min")
     else:
         normal = f"seu normal: {_br(por_min / razao)} por minuto" if razao else None
         piscadas = _medida("piscadas_min", "Piscadas por minuto", o_que_e, _br(por_min), "por minuto",
@@ -515,13 +518,15 @@ def _sono_mais(d: dict) -> list:
     if duracao is None:
         if fps is not None and fps < 24:
             espera = (f"Não dá para medir agora: a câmera está em {_br(fps)} quadros por segundo e precisa de 24.")
+            curta = f"Câmera lenta: {_br(fps)} de 24 quadros/s"
             situacao = "Indisponível"
         else:
             faltam = max(1, 15 - int(olhos.get("piscadas_5min") or 0))
             espera = f"Ainda medindo: {'falta' if faltam == 1 else 'faltam'} {_plural(faltam, 'piscada', 'piscadas')}."
+            curta = f"{'Falta' if faltam == 1 else 'Faltam'} {_plural(faltam, 'piscada', 'piscadas')}"
             situacao = "Medindo"
         duracao_piscada = _medida("duracao_piscada", "Duração da piscada", o_que_e, situacao=situacao, nivel=None,
-                                  seu_normal=seu_normal, espera=espera)
+                                  seu_normal=seu_normal, espera=espera, espera_curta=curta)
     else:
         situacao, nivel = _situacao_por_razao(comparacao.get("razao_duracao"))
         duracao_piscada = _medida("duracao_piscada", "Duração da piscada", o_que_e, str(duracao), "ms", situacao,
@@ -574,7 +579,8 @@ def _tempo_fora(d: dict) -> dict:
     fora = (d.get("distracao") or {}).get("olhar_fora_s")
     if fora is None:
         return _medida("tempo_fora", "Tempo olhando fora", o_que_e, situacao="Indisponível", nivel=None,
-                       espera="Aparece quando a frente do motorista estiver aprendida.")
+                       espera="Aparece quando a frente do motorista estiver aprendida.",
+                       espera_curta="Aprendendo a sua frente")
     situacao, nivel = ("Alto", 2) if fora >= 3 else ("Atenção", 1) if fora >= 2 else ("Normal", 0)
     return _medida("tempo_fora", "Tempo olhando fora", o_que_e, _br(fora, 1), "s", situacao, nivel)
 
@@ -634,7 +640,9 @@ def _cartao_atencao(d: dict) -> dict:
 
 
 # Por que o pulso não sai: só quando o vision/cardio.py diz o motivo. Nunca falar de luz sem ele dizer que é a luz.
-MOTIVOS_CARDIO = {"mexendo": "Fique parado por alguns segundos", "pouca_luz": "Pouca luz no rosto",
+# Pedido de 20/10 (2ª rodada): a tela nunca pede para a pessoa parar de se mexer; no máximo informa que o movimento
+# atrasa a medida.
+MOTIVOS_CARDIO = {"mexendo": "Em movimento: a medida demora um pouco mais", "pouca_luz": "Pouca luz no rosto",
                   "luz_estourada": "Luz forte demais no rosto", "sinal_fraco": "Sinal do pulso ainda fraco"}
 AQUECIMENTO_CARDIO_S = 15.0  # vision/cardio.py AQUECIMENTO_S: o progresso vai de 0 a 1 nesse tempo de sinal bom
 
@@ -662,7 +670,7 @@ def _medicao_cardio(cardio: dict, estado: str | None) -> dict:
         restam = max(1, int(math.ceil(faltam)))
         return {"ativa": True, "progresso": progresso, "faltam_s": restam,
                 "texto": f"Medindo seu pulso, faltam ~{restam} s", "motivo": motivo, "ultimo": ultimo_txt}
-    if estado in ("sinal_fraco", "movimento"):
+    if estado == "sinal_fraco":
         # Perdeu o sinal e mede de novo. Com o tempo que falta, o anel enche; sem ele, o anel gira sem número.
         restam = max(1, int(math.ceil(faltam))) if faltam is not None else None
         andamento = None
@@ -678,6 +686,9 @@ def _medicao_cardio(cardio: dict, estado: str | None) -> dict:
 def _cartao_coracao(d: dict) -> dict:
     cardio = d["cardio"]
     estado = cardio.get("estado")
+    if estado == "movimento":
+        # Compatibilidade com o cardio antigo: movimento não pausa mais; a tela trata como medindo (anel e quanto falta).
+        estado = "medindo"
     if d["rosto"].get("pontos_disponiveis") is False:
         estado = "sem_pontos"
     o_que_e = ("Estimativa pela cor da pele da testa e das bochechas; não é medida médica. Em repouso, o comum é de 60 "
@@ -692,7 +703,7 @@ def _cartao_coracao(d: dict) -> dict:
     elif estado == "medindo":
         principal = _medida("pulso", "Pulso", o_que_e, situacao="Medindo", nivel=None, espera=andamento,
                             espera_curta=medicao["texto"])
-    elif estado in ("sinal_fraco", "movimento"):
+    elif estado == "sinal_fraco":
         principal = _medida("pulso", "Pulso", o_que_e, str(ultimo) if ultimo is not None else None,
                             "bpm (último valor)", "Medindo", None, espera=andamento, espera_curta=medicao["texto"])
     elif estado == "sem_rosto":
@@ -713,9 +724,12 @@ def _cartao_coracao(d: dict) -> dict:
         situacao = "Leitura boa" if confianca >= 0.7 else "Leitura fraca" if confianca >= 0.4 else "Sinal fraco"
         conf = _medida("confianca", "Confiança da leitura", o_que_e, _br(confianca * 100), "%", situacao, None,
                        tecnico=f"sinal-ruído {_br(cardio['snr_db'], 1)} dB" if cardio.get("snr_db") is not None else None)
+    # Com número e a pessoa se mexendo: só uma nota pequena, sem cor de alerta. O número continua na tela.
+    nota = ("Em movimento: leitura menos precisa" if principal["valor"] is not None and estado == "pronto"
+            and cardio.get("em_movimento") else None)
     return {"id": "coracao", "titulo": "Coração (estimativa)", "pergunta": "Como está o pulso?", "nivel": 0,
             "situacao": principal["situacao"], "resumo": "Estimativa pela câmera, não é medida médica.",
-            "principal": principal, "medidas": [conf], "medicao": medicao}
+            "principal": principal, "medidas": [conf], "medicao": medicao, "nota": nota}
 
 
 def _detalhes(d: dict) -> list:
@@ -748,7 +762,7 @@ def _detalhes(d: dict) -> list:
         _tempo_fora(d),
         (_medida("soma_fora", "Olhares fora em 30 s", "Soma dos olhares fora da estrada nos últimos 30 s. Com 10 s "
                  "vira alerta.", situacao="Indisponível", nivel=None, espera="Aparece quando a frente do motorista "
-                 "estiver aprendida.") if soma is None else
+                 "estiver aprendida.", espera_curta="Aprendendo a sua frente") if soma is None else
          _medida("soma_fora", "Olhares fora em 30 s", "Soma dos olhares fora da estrada nos últimos 30 s. Com 10 s "
                  "vira alerta.", _br(soma, 1), "s", "Alto" if soma >= 10 else "Normal", 2 if soma >= 10 else 0)),
         _medida("maos", "Mãos na imagem", "Quantas mãos a câmera vê agora. Serve para achar o celular e a mão no rosto.",
@@ -787,7 +801,9 @@ def _detalhes(d: dict) -> list:
         _medida("pupila", "Pupila em relação à íris", "Tamanho da pupila comparado com a íris. Só é medida com câmera "
                 "infravermelha.", _br(pupila["razao"] * 100) if pupila.get("razao") is not None else None, "%",
                 "Experimental", None, espera=None if pupila.get("razao") is not None else
-                f"{pupila.get('qualidade') or 'Sem medida'}."),
+                f"{pupila.get('qualidade') or 'Sem medida'}.",
+                espera_curta="Câmera comum: não mede" if pupila.get("razao") is None and "infravermelha" in str(
+                    pupila.get("qualidade")) else None),
         _medida("ativacao", "Padrão dos olhos fora do habitual", "Sinais compatíveis com ativação atípica, pelas "
                 "piscadas e pelo olhar. Não é diagnóstico.", (ativacao or {}).get("texto") or None, "", "Experimental",
                 None, espera=None if (ativacao or {}).get("texto") else "Precisa da linha de base da calibração."),
@@ -837,7 +853,91 @@ def _detalhes(d: dict) -> list:
     ]
 
 
+# "Ver mais detalhes" por assunto (pedido de 20/10, 2ª rodada: "os mais detalhes continuou tudo junto"). Cada medida
+# vira um cartão pequeno com uma linha curta (até 70 caracteres) no lugar do parágrafo de "o que é".
+CURTAS = {
+    "olho_aberto": "100% é o seu olho aberto; abaixo de 20% conta como fechado.",
+    "olho_fechado_3min": "Parte dos últimos 3 min com o olho quase fechado. Alerta: 12%.",
+    "duracao_piscada": "Quanto dura cada piscada. Mais longa que o seu normal: sono.",
+    "piscadas_min": "Média de 5 min. O comum é de 10 a 20 por minuto.",
+    "fechamentos_longos": "Olho fechado de meio a 1 s. Três em 5 min é sinal forte.",
+    "horario": "Na madrugada e no começo da tarde o sono pesa mais.",
+    "para_onde_olha": "Para onde o rosto e os olhos apontam agora.",
+    "tempo_fora": "Olhar seguido fora da estrada. 3 s ou mais vira alerta.",
+    "soma_fora": "Soma dos olhares fora nos últimos 30 s. Com 10 s vira alerta.",
+    "celular": "Celular na mão, no ouvido ou no olhar. Alerta depois de 2 a 3 s.",
+    "celular_confianca": "Certeza do detector de que é um celular, e não a mão.",
+    "olhos_esfregados": "Mão esfregando os olhos. Três em 10 min: sinal leve de sono.",
+    "mao_no_rosto": "Mão no rosto por mais de 1 s. É contada, mas não pesa no risco.",
+    "maos": "Mãos que a câmera vê agora; servem para achar o celular.",
+    "inclinacao": "Cabeça para baixo ou para cima. Queda rápida de 15° é cabeceio.",
+    "giro": "Quanto a cabeça está virada. Acima de 25° sai da estrada.",
+    "cabeceios": "A cabeça cai e volta, como quem cochila. Dois em 10 min: atenção.",
+    "boca": "Quanto a boca está aberta. Por 2 s ou mais conta como bocejo.",
+    "bocejos": "Boca bem aberta por 2 s ou mais. Dois em 10 min: atenção.",
+    "pulso": "Estimativa pela cor da pele, não é medida médica. Comum: 60 a 100.",
+    "confianca": "Quanto dá para confiar no número, pela força do sinal na pele.",
+    "respiracao": "Estimada pelo mesmo sinal da pele. Experimental.",
+    "variabilidade": "Diferença entre batimentos seguidos. Experimental.",
+    "fps": "Imagens analisadas por segundo. Abaixo de 24, a piscada não vale.",
+    "latencia": "Tempo para analisar cada imagem: média e pior caso de 20.",
+    "malha_ms": "Tempo para desenhar a malha em cada imagem.",
+    "tempo_rosto": "Tempo seguido com o rosto na imagem neste teste.",
+    "sono_estimado": "Faixa de sono compatível com os sinais. Não é diagnóstico.",
+    "palpebra": "Tempo para a pálpebra fechar. Mais lenta que o normal: sono leve.",
+    "pupila": "Pupila comparada com a íris. Só com câmera infravermelha.",
+    "ativacao": "Piscadas e olhar fora do seu padrão. Não é diagnóstico.",
+}
+ASSUNTOS = (
+    ("sono", "Sono", "Os olhos dizem se o sono está chegando: abertura, piscadas e fechamentos.",
+     ("olho_aberto", "olho_fechado_3min", "duracao_piscada", "piscadas_min", "fechamentos_longos", "horario"),
+     "abertura", None),
+    ("atencao", "Atenção", "Se olha para a estrada, usa o celular ou leva a mão ao rosto.",
+     ("para_onde_olha", "tempo_fora", "soma_fora", "celular", "celular_confianca", "olhos_esfregados",
+      "mao_no_rosto", "maos"), None, None),
+    ("cabeca", "Cabeça e boca", "Posição da cabeça e da boca. Cabeceios e bocejos também são sinais de sono.",
+     ("inclinacao", "giro", "cabeceios", "boca", "bocejos"), None, None),
+    ("coracao", "Coração", "Estimativa pela câmera, não é medida médica. Fica só neste computador.",
+     ("pulso", "confianca", "respiracao", "variabilidade"), "pulso", None),
+    ("camera", "Câmera e desempenho", "Se a câmera e o computador dão conta de medir bem.",
+     ("fps", "latencia", "malha_ms", "tempo_rosto"), None, None),
+    ("experimental", "Experimentais", "Sinais em avaliação no protótipo, calculados só neste computador.",
+     ("sono_estimado", "palpebra", "pupila", "ativacao"), None,
+     "Nunca são enviados. Servem para avaliar o protótipo: sinais compatíveis, não é diagnóstico."),
+)
+
+
+def _curta(medida: dict) -> str:
+    """A linha curta do cartão: a da tabela ou, sem ela, a primeira frase de "o que é" (até 70 caracteres)."""
+    texto = CURTAS.get(medida["id"])
+    if texto:
+        return texto
+    frase = medida["o_que_e"].split(". ")[0].rstrip(".")
+    return (frase if len(frase) <= 69 else frase[:66].rsplit(" ", 1)[0] + "...").rstrip(".") + "."
+
+
+def _assuntos(cartoes: list, detalhes: list) -> list:
+    """Os detalhes por assunto, um por vez na tela. Toda medida da tela entra em um assunto só; uma medida que ainda não
+    tiver assunto vai para o último, para nunca sumir."""
+    por_id = {}
+    for medida in [m for c in cartoes for m in (c["principal"], *c["medidas"])] + [m for g in detalhes
+                                                                                   for m in g["medidas"]]:
+        medida["curta"] = _curta(medida)
+        por_id.setdefault(medida["id"], medida)
+    usados, saida = set(), []
+    for id_, titulo, descricao, ids, grafico, nota in ASSUNTOS:
+        medidas = [por_id[i] for i in ids if i in por_id]
+        usados.update(m["id"] for m in medidas)
+        saida.append({"id": id_, "titulo": titulo, "descricao": descricao, "medidas": medidas, "grafico": grafico,
+                      "nota": nota})
+    saida[-1]["medidas"] += [m for i, m in por_id.items() if i not in usados]
+    for assunto in saida:
+        assunto["nivel"] = max([m["nivel"] for m in assunto["medidas"] if m["nivel"] is not None] or [0])
+    return saida
+
+
 def montar_painel(d: dict) -> dict:
-    """A tela do teste por pergunta: frase do topo, os cartões Sono, Atenção na estrada e Coração, e os Detalhes."""
-    return {"agora": _agora(d), "cartoes": [_cartao_sono(d), _cartao_atencao(d), _cartao_coracao(d)],
-            "detalhes": _detalhes(d)}
+    """A tela do teste por pergunta: frase do topo, os cartões Sono, Atenção na estrada e Coração, e os Detalhes, que a
+    tela mostra por assunto (assuntos)."""
+    cartoes, detalhes = [_cartao_sono(d), _cartao_atencao(d), _cartao_coracao(d)], _detalhes(d)
+    return {"agora": _agora(d), "cartoes": cartoes, "detalhes": detalhes, "assuntos": _assuntos(cartoes, detalhes)}

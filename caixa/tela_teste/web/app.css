@@ -1485,9 +1485,24 @@ html[data-tema="escuro"] .fineprint {
 }
 
 .heart-reason {
-  color: var(--n1);
+  color: var(--grafite);
   font-size: 12.5px;
-  font-weight: 600;
+}
+
+/* Em movimento com número: uma nota pequena, sem cor de alerta (pedido de 20/10: nunca pedir para ficar parado). */
+.heart.com-nota {
+  grid-template-areas:
+    "leitura onda"
+    "nota nota"
+    "conf conf";
+}
+
+.heart-move {
+  grid-area: nota;
+  margin-top: -4px;
+  color: var(--grafite);
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .heart-note {
@@ -1522,7 +1537,7 @@ html[data-tema="escuro"] .fineprint {
 }
 
 .heart[data-estado="medindo"] .heart-conf,
-.heart[data-estado="parado"] .heart-conf {
+.heart[data-estado="sem_leitura"] .heart-conf {
   opacity: 0.6;
 }
 
@@ -1706,44 +1721,53 @@ html[data-tema="escuro"] .fineprint {
   height: 44px;
 }
 
-/* Detalhes: tudo o que existe e não ajuda a decidir agora, recolhido por padrão. */
-.details {
-  border: 1px solid var(--fio);
-  border-radius: var(--raio);
-  background: var(--superficie);
-}
-
-.details summary {
+/* MAIS DETALHES (20/10, 2ª rodada: "os mais detalhes continuou tudo junto"). O botão fica no fim do painel ao lado;
+   aberto, os detalhes viram uma camada larga sobre o palco, com o vídeo pequeno no canto e as abas dos assuntos
+   embaixo dele. Um assunto por vez, cada medida num cartão pequeno em grade. */
+.details-open {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 10px;
+  width: 100%;
   padding: 12px 18px;
-  list-style: none;
+  border: 1px solid var(--fio);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: var(--tinta);
+  font: inherit;
+  text-align: left;
   cursor: pointer;
+  transition: border-color 160ms var(--ease), background-color 160ms var(--ease);
 }
 
-.details summary::-webkit-details-marker,
-.tech summary::-webkit-details-marker {
-  display: none;
-}
-
-.details summary::before,
-.tech summary::before {
+.details-open::before {
   content: "";
   flex: none;
+  align-self: center;
   width: 7px;
   height: 7px;
   margin-right: 2px;
   border-right: 1.5px solid var(--grafite);
   border-bottom: 1.5px solid var(--grafite);
-  transform: translateY(-2px) rotate(-45deg);
-  transition: transform 160ms var(--ease);
+  transform: rotate(-45deg);
 }
 
-.details[open] summary::before,
-.tech[open] summary::before {
-  transform: translateY(-3px) rotate(45deg);
+.details-open:hover {
+  border-color: var(--fio-forte);
+  background: var(--elevada);
+}
+
+.details-open[aria-expanded="true"] {
+  border-color: var(--verde);
+}
+
+.details-open[aria-expanded="true"]::before {
+  transform: rotate(135deg);
+}
+
+.details-open[aria-expanded="true"] .details-sub {
+  display: none;
 }
 
 .details-title {
@@ -1756,26 +1780,265 @@ html[data-tema="escuro"] .fineprint {
   font-size: 12px;
 }
 
-.details-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-  gap: 6px 20px;
-  padding: 0 18px 8px;
+.com-detalhes .stage {
+  --mini: clamp(200px, 17vw, 330px);
+  grid-template-columns: var(--mini) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "video painel"
+    "abas painel";
+  gap: 14px 16px;
 }
 
-.detail-group {
-  min-width: 0;
+.com-detalhes .video-area {
+  grid-area: video;
+  height: calc(var(--mini) / var(--arn, 1.3333));
 }
 
-.detail-title {
-  margin: 10px 0 2px;
+.com-detalhes .timeline {
+  display: none;
+}
+
+.details-nav {
+  grid-area: abas;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.details-nav-title {
+  padding: 0 4px;
   color: var(--grafite);
   font-size: 12.5px;
   font-weight: 650;
 }
 
-.details > .fineprint {
-  padding: 4px 18px 14px;
+.details-tabs {
+  display: grid;
+  gap: 4px;
+}
+
+.details-tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 10px 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--raio-pequeno);
+  background: none;
+  color: var(--grafite);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.details-tab:hover {
+  background: var(--elevada);
+  color: var(--tinta);
+}
+
+.details-tab[aria-selected="true"] {
+  border-color: var(--fio-forte);
+  background: var(--elevada);
+  box-shadow: inset 3px 0 0 var(--verde);
+  color: var(--tinta);
+}
+
+.details-close {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.details-layer {
+  grid-area: painel;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 22px 22px;
+  border: 1px solid var(--fio);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  scrollbar-width: thin;
+}
+
+.details-layer:focus-visible {
+  outline: 2px solid var(--verde);
+  outline-offset: 2px;
+}
+
+.subject-head {
+  display: grid;
+  gap: 4px;
+}
+
+.subject-title {
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.subject-sub {
+  color: var(--grafite);
+  font-size: 13.5px;
+}
+
+/* Grade: 2 colunas na largura de um notebook, até 3 em tela grande, 1 em tela estreita. */
+.detail-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(max(230px, calc((100% - 28px) / 3)), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--fio);
+  border-radius: var(--raio-pequeno);
+  background: var(--elevada);
+}
+
+.detail-card[data-nivel="1"] {
+  border-color: color-mix(in srgb, var(--n1) 55%, var(--fio));
+}
+
+.detail-card[data-nivel="2"] {
+  border-color: color-mix(in srgb, var(--n2) 70%, var(--fio));
+}
+
+.detail-card[data-nivel="3"] {
+  border-color: var(--n3);
+}
+
+.dc-name {
+  color: var(--grafite);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Valor e situação na mesma linha: o número à esquerda, a palavra à direita. */
+.dc-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+}
+
+.dc-main .status-word {
+  margin-left: auto;
+}
+
+.dc-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
+}
+
+.detail-card.valor-texto .dc-number {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.dc-number {
+  font-family: var(--fonte-numero);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.dc-unit {
+  color: var(--grafite);
+  font-size: 12.5px;
+}
+
+.detail-card[data-nivel="2"] .dc-number {
+  color: var(--n2);
+}
+
+.detail-card[data-nivel="3"] .dc-number {
+  color: var(--n3);
+}
+
+.detail-card.esmaecido .dc-number {
+  opacity: 0.45;
+}
+
+.dc-wait {
+  min-width: 0;
+  color: var(--tinta);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.dc-main .status-word {
+  height: auto;
+  padding: 0;
+  border: 0;
+}
+
+.dc-main .status-word[data-nivel="1"],
+.dc-main .status-word[data-nivel="2"],
+.dc-main .status-word[data-nivel="3"] {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid;
+}
+
+.dc-normal {
+  color: var(--apagado);
+  font-size: 12px;
+}
+
+.dc-line {
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--fio);
+  color: var(--grafite);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.tab-level {
+  height: 18px;
+  font-size: 11px;
+}
+
+.subject-chart {
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.chart-subject {
+  height: 110px;
+}
+
+.subject-chart[data-tipo="pulso"] .chart-subject {
+  height: 80px;
+}
+
+.subject-note {
+  margin-top: -6px;
 }
 
 .build-line {
@@ -2531,6 +2794,44 @@ html[data-tema="escuro"] .fineprint {
   .heart {
     row-gap: 8px;
   }
+
+  .details-layer {
+    gap: 12px;
+    padding: 14px 18px;
+  }
+
+  .subject-title {
+    font-size: 18px;
+  }
+
+  .detail-cards {
+    gap: 10px 12px;
+  }
+
+  .detail-card {
+    gap: 4px;
+    padding: 10px 14px;
+  }
+
+  .dc-number {
+    font-size: 22px;
+  }
+
+  .dc-line {
+    padding-top: 4px;
+  }
+
+  .details-tab {
+    min-height: 36px;
+  }
+
+  .subject-chart {
+    padding-top: 0;
+  }
+
+  .chart-subject {
+    height: 84px;
+  }
 }
 
 @media (max-width: 1280px) {
@@ -2578,6 +2879,40 @@ html[data-tema="escuro"] .fineprint {
 
   .readouts {
     overflow: visible;
+  }
+
+  .com-detalhes .test-grid {
+    grid-auto-rows: max-content;
+  }
+
+  .com-detalhes .stage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "video"
+      "abas"
+      "painel";
+  }
+
+  .com-detalhes .video-area {
+    height: auto;
+  }
+
+  .com-detalhes .video-frame {
+    width: min(100%, 280px);
+  }
+
+  .details-tabs {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .details-layer {
+    overflow: visible;
+  }
+
+  .detail-cards {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .report-table thead {

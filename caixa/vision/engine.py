@@ -211,8 +211,9 @@ class DriverStateEngine:
         if self.cardio is None or frame is None:
             return None
         try:
+            # pose: pitch, yaw e roll do rosto entram na remoção do movimento do pulso (spec 022, 20/10/2026).
             return self.cardio.update(frame, getattr(metrics, "landmarks", None), metrics.timestamp,
-                                      infrared=bool(getattr(metrics, "infrared", False)))
+                                      infrared=bool(getattr(metrics, "infrared", False)), pose=metrics)
         except Exception:
             if not self._cardio_falhou:
                 logger.exception("Falha no cardio (spec 022); a detecção de sono continua.")

@@ -236,6 +236,31 @@
           <p class="empty-events" id="eventos-vazio">Nenhum alerta ainda. Para ver um, feche os olhos por 2 segundos
             ou pegue o celular.</p>
         </section>
+
+        <!-- Mais detalhes (20/10, 2ª rodada): numa camada larga sobre o palco, com o vídeo pequeno no canto. Um assunto
+             por vez, escolhido nas abas embaixo do vídeo; cada medida é um cartão pequeno em grade. -->
+        <nav class="details-nav" id="detalhes-nav" aria-label="Assuntos dos detalhes" hidden>
+          <p class="details-nav-title" id="detalhes-titulo">Mais detalhes</p>
+          <div class="details-tabs" role="tablist" aria-labelledby="detalhes-titulo" aria-orientation="vertical"
+               id="detalhes-abas"></div>
+          <button type="button" class="btn btn-small btn-dark details-close" id="detalhes-fechar">Fechar detalhes<kbd>Esc</kbd></button>
+        </nav>
+        <section class="details-layer" id="detalhes" role="tabpanel" tabindex="0" hidden>
+          <header class="subject-head">
+            <h2 class="subject-title" id="assunto-titulo"></h2>
+            <p class="subject-sub" id="assunto-descricao"></p>
+          </header>
+          <ul class="detail-cards" id="assunto-medidas"></ul>
+          <figure class="chart-box subject-chart" id="assunto-grafico" hidden>
+            <figcaption class="chart-caption">
+              <span class="chart-title" id="assunto-grafico-titulo"></span>
+              <span class="chart-note" id="assunto-grafico-nota"></span>
+            </figcaption>
+            <canvas class="chart chart-subject" id="assunto-grafico-tela" aria-hidden="true"></canvas>
+          </figure>
+          <p class="fineprint subject-note" id="assunto-nota" hidden>Nunca são enviados. Servem para avaliar o
+            protótipo: sinais compatíveis, não é diagnóstico.</p>
+        </section>
       </section>
 
       <aside class="readouts" id="leituras" aria-label="Medidas ao vivo">
@@ -256,13 +281,10 @@
           </div>
         </section>
         <div class="cards" id="cartoes"></div>
-        <details class="details" id="detalhes">
-          <summary><span class="details-title">Ver mais detalhes</span>
-            <span class="details-sub">explicações e outras medidas</span></summary>
-          <div class="details-body" id="detalhes-grupos"></div>
-          <p class="fineprint">Os sinais experimentais são calculados só neste computador e nunca enviados. Servem para
-            avaliar o protótipo: sinais compatíveis, não é diagnóstico.</p>
-        </details>
+        <button type="button" class="details-open" id="detalhes-botao" aria-expanded="false" aria-controls="detalhes">
+          <span class="details-title" id="detalhes-botao-texto">Ver mais detalhes</span>
+          <span class="details-sub">um assunto por vez: sono, atenção, cabeça, coração e câmera</span>
+        </button>
       </aside>
     </main>
   </div>

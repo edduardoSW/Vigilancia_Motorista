@@ -1,5 +1,9 @@
 """Spec 022 · frequência cardíaca pela face (rPPG): critérios CAR-01 a CAR-14 e, do pedido de 20/10/2026 (webcam de
-notebook: "não estão pegando muito", "para de funcionar", "indicativo que está em andamento"), CAR-15 a CAR-21.
+notebook: "não estão pegando muito", "para de funcionar", "indicativo que está em andamento"), CAR-15 a CAR-22; do
+pedido do dono de 20/10/2026 ("o batimento cardíaco pede para ficar parada, se não não funciona, isso não tem lógica
+pois deve captar em qualquer movimento"), CAR-23 a CAR-27 com rosto sintético andando, mudando de escala e girando,
+sombra que muda com a posição e o pulso por baixo. CAR-07 e a parte "mexendo" do CAR-16 mudaram junto: o movimento
+não pausa mais a medida.
 
 O número só aparece depois do aquecimento (AQUECIMENTO_S, 15 s de dados bons: ~3 janelas de 10 s seguidas, pedido da
 coordenação a partir da pesquisa rPPG de 19/10/2026); por isso as séries têm 16,5 s. A janela do espectro continua 10 s
@@ -276,16 +280,21 @@ for t, imagem in serie(72, segundos=22.0, tamanho=(96, 128), semente=6):
         estados.setdefault("parado", []).append(leitura.estado)
     elif 17.3 <= t < 18.0:
         estados.setdefault("andando", []).append(leitura)
-    if leitura.estado == "pronto" and t < 17.3:
-        bom = leitura.bpm  # último número mostrado antes de virar "movimento"
-assert set(estados["parado"]) == {"pronto"}, ("CAR-07 tremor de ±0,3 px não é movimento", set(estados["parado"]))
-assert all(r.estado == "movimento" and r.bpm is None and r.ultimo_bpm is not None for r in estados["andando"]), \
-    ("CAR-07", [(r.estado, r.bpm) for r in estados["andando"]])
-assert abs(estados["andando"][-1].ultimo_bpm - bom) < 1e-9, "CAR-07 último bpm bom guardado"
-assert leitura.estado == "pronto" and abs(leitura.bpm - 72.0) <= 3.0, \
-    ("CAR-07 volta a medir", leitura.estado, leitura.bpm)
+    if 16.5 <= t < 17.0:
+        estados.setdefault("parado_flag", []).append(leitura.em_movimento)
+# Revisto em 20/10/2026 (pedido do dono: "deve captar em qualquer movimento"): antes este teste exigia estado
+# "movimento" sem número (a medida pausava e a tela pedia para ficar parado). Agora: em_movimento marcado e o número
+# continua; o estado nunca vira "movimento".
+assert set(estados["parado"]) == {"pronto"} and not any(estados["parado_flag"]), \
+    ("CAR-07 tremor de ±0,3 px não é movimento", set(estados["parado"]))
+assert all(r.em_movimento and r.estado == "pronto" and abs(r.bpm - 72.0) <= 3.0 and r.motivo is None
+           for r in estados["andando"]), \
+    ("CAR-07 andando: continua medindo", [(r.estado, r.bpm, r.em_movimento) for r in estados["andando"]][:5])
+assert leitura.estado == "pronto" and abs(leitura.bpm - 72.0) <= 3.0 and not leitura.em_movimento, \
+    ("CAR-07 parado de novo", leitura.estado, leitura.bpm)
 ok(f"CAR-07 rosto andando {40.0 / distancia_olhos:.2f} distâncias entre os olhos por segundo (limiar "
-   f"{LIMIAR_MOVIMENTO} em 0,5 s): movimento com o último bpm guardado; parado de novo, volta a {leitura.bpm:.1f} bpm")
+   f"{LIMIAR_MOVIMENTO} em 0,5 s): em_movimento marcado e o número continua ({estados['andando'][-1].bpm:.1f} bpm); "
+   f"tremor de ±0,3 px não marca")
 
 
 # CAR-08 · quadro monocromático (três canais iguais): canal "ir" e ainda acha 72 bpm com SNR moderado.
@@ -625,14 +634,21 @@ bom = medir(serie(72, segundos=20.0, semente=44))[1]
 assert bom[-1].estado == "pronto" and bom[-1].motivo is None, ("CAR-16 tudo bem", bom[-1].motivo)
 assert all(r.motivo is None for r in bom[:200]), ("CAR-16 medindo com luz boa: sem motivo", {r.motivo for r in bom})
 assert abs(bom[-1].fps - 30.0) < 1.0, ("CAR-16 fps medido", bom[-1].fps)
-monitor = CardioMonitor()
+# "mexendo" (revisto em 20/10/2026): só SEM número e com movimento forte (informação; a medida continua). Com pulso e
+# movimento há número e nenhum motivo.
 base_mov = rosto((32, 24, 64, 48))
-for t, imagem in serie(72, segundos=17.6, tamanho=(96, 128), semente=45):
-    pontos = base_mov
-    if t >= 17.0:
-        pontos = base_mov + np.float32([60.0 * (t - 17.0), 0.0])
-    mexendo = monitor.update(imagem, pontos, t)
-assert mexendo.estado == "movimento" and mexendo.motivo == "mexendo", ("CAR-16 mexendo", mexendo.estado, mexendo.motivo)
+for bpm_mov in (None, 72):
+    monitor = CardioMonitor()
+    for t, imagem in serie(bpm_mov, segundos=17.6, tamanho=(96, 128), semente=45):
+        pontos = base_mov
+        if t >= 17.0:
+            pontos = base_mov + np.float32([60.0 * (t - 17.0), 0.0])
+        mexendo = monitor.update(imagem, pontos, t)
+    assert mexendo.em_movimento and mexendo.estado != "movimento", ("CAR-16 mexendo", bpm_mov, mexendo.estado)
+    if bpm_mov is None:
+        assert mexendo.estado == "sinal_fraco" and mexendo.motivo == "mexendo", ("CAR-16 mexendo", mexendo.motivo)
+    else:
+        assert mexendo.estado == "pronto" and mexendo.motivo is None, ("CAR-16 com número", mexendo.motivo)
 lenta = medir(serie(72, segundos=24.0, fps=8.0, semente=46))[1]
 assert lenta[-1].motivo == "camera_lenta" and abs(lenta[-1].fps - 8.0) < 0.5 and lenta[-1].bpm is None, \
     ("CAR-16 câmera lenta", lenta[-1].estado, lenta[-1].motivo, lenta[-1].fps)
@@ -808,6 +824,161 @@ assert all(r.bpm is None or r.confianca >= CONFIANCA_MINIMA for r in todas), "CA
 ok(f"CAR-22 vazamento abaixo da banda: pico em {60 * f0_v:.1f} bpm (o máximo da banda era a borda, 42); ruído rosa + "
    f"deriva de cor e de luz em 6 séries: nenhum número abaixo de {60 * (0.7 + BORDA_HZ):.0f} bpm (menor: "
    f"{min(numeros):.1f}), nenhum com confiança < {CONFIANCA_MINIMA}")
+
+# ===================================================================================================================
+# Pedido do dono de 20/10/2026: "o batimento cardíaco pede para ficar parada, se não não funciona, isso não tem lógica
+# pois deve captar em qualquer movimento". CAR-23 a CAR-27.
+# ===================================================================================================================
+SOMBRA_BGR = np.array([0.20, 0.26, 0.30])  # luz quente de lado: a sombra muda com a posição e pesa mais no vermelho
+GIRO_BGR = np.array([0.10, 0.13, 0.16])  # girar o rosto para a luz clareia mais o vermelho que o azul
+
+
+def rosto_andando(bpm, movimento, segundos=40.0, fps=30.0, amp=0.003, semente=0, quadro=(200, 280), face=(112, 84)):
+    """(t, quadro BGR, pontos, pose): textura de pele (variação lenta de ±3% e grão) com o pulso, levada para a posição,
+    escala e giro do `movimento(t)` -> (dx, dy em larguras do rosto, escala, pitch, yaw, roll em graus), sobre um fundo
+    fixo, com luz que cai de um lado da imagem (a sombra no rosto muda com a posição) e pontos com tremor de ±0,3 px."""
+    rng = np.random.default_rng(semente)
+    altura_q, largura_q = quadro
+    fw, fh = face
+    lenta = cv2.GaussianBlur(rng.normal(0, 1, (fh, fw)), (0, 0), 6)
+    textura = (PELE_BGR * (1 + 0.03 * (lenta / lenta.std())[..., None]) + rng.normal(0, 2.0, (fh, fw, 3)))
+    textura = textura.astype(np.float32)
+    fundo = np.empty((altura_q, largura_q, 3), np.float32)
+    fundo[:] = (60, 70, 80)
+    xs = (np.arange(largura_q) - largura_q / 2) / largura_q
+    luz = (1.0 + xs[:, None] * SOMBRA_BGR[None, :]).astype(np.float32)[None, :, :]
+    ruidos = rng.normal(0, 1.5, (12, altura_q, largura_q, 3)).astype(np.float32)
+    fase = rng.uniform(0, 2 * math.pi)
+    for k in range(int(round(segundos * fps))):
+        t = k / fps
+        dx, dy, escala, pitch, yaw, roll = movimento(t)
+        pulso = 0.0
+        if bpm is not None:
+            angulo = 2 * math.pi * bpm / 60.0 * t + fase
+            pulso = math.sin(angulo) + 0.3 * math.sin(2 * angulo + 0.5)
+        pele = textura * (1.0 - amp * pulso * PULSO_BGR).astype(np.float32)
+        w = fw * escala * math.cos(math.radians(yaw))
+        h = fh * escala * math.cos(math.radians(pitch))
+        x0, y0 = largura_q / 2 + dx * fw - w / 2, altura_q / 2 + dy * fw - h / 2
+        imagem = cv2.warpAffine(pele, np.float32([[w / fw, 0, x0], [0, h / fh, y0]]), (largura_q, altura_q),
+                                dst=fundo.copy(), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
+        imagem *= luz * (1.0 + GIRO_BGR * math.sin(math.radians(yaw))).astype(np.float32)
+        imagem += ruidos[rng.integers(len(ruidos))] + rng.normal(0, 0.08, 3).astype(np.float32)
+        pontos = rosto((x0, y0, w, h)) + rng.normal(0, 0.3, (478, 2)).astype(np.float32)
+        yield t, np.clip(np.rint(imagem), 0, 255).astype(np.uint8), pontos, (pitch, yaw, roll)
+
+
+def balanco(t):  # 0,3 Hz, 15% da largura do rosto
+    a = 2 * math.pi * 0.3 * t
+    return 0.15 * math.sin(a), 0.02 * math.sin(a + 1), 1 + 0.02 * math.sin(a + 2), 0.0, 0.0, 0.0
+
+
+def sacudidas(semente):
+    """Saltos de posição (8% da largura) e de escala (4%) em 0,12 s, a cada ~1,7 s."""
+    rng_s = np.random.default_rng(semente)
+    tempos, alvos = [0.0], [(0.0, 0.0, 1.0)]
+    while tempos[-1] < 60.0:
+        tempos.append(tempos[-1] + rng_s.exponential(1.5) + 0.2)
+        alvos.append((rng_s.normal(0, 0.08), rng_s.normal(0, 0.05), 1 + rng_s.normal(0, 0.04)))
+    tempos = np.array(tempos)
+
+    def mover(t):
+        i = int(np.searchsorted(tempos, t, side="right")) - 1
+        a, b = np.array(alvos[max(i - 1, 0)]), np.array(alvos[i])
+        x = min(1.0, (t - tempos[i]) / 0.12)
+        v = a + (b - a) * 0.5 * (1 - math.cos(math.pi * x))
+        return v[0], v[1], v[2], 0.0, 0.0, 0.0
+    return mover
+
+
+def motorista(semente):
+    """Giros pequenos (yaw ±15°, pitch ±4°, roll ±3°), olhada no retrovisor (+20° por 1 s a cada 6-10 s) e vibração da
+    estrada (1,5-5 Hz, 0,8% da largura)."""
+    rng_m = np.random.default_rng(semente)
+    n = 60 * 30 + 30
+    vib = np.fft.rfft(rng_m.normal(size=n))
+    fr = np.fft.rfftfreq(n, 1 / 30)
+    vib[(fr < 1.5) | (fr > 5.0)] = 0
+    vib = np.fft.irfft(vib, n)
+    vib /= vib.std()
+    olhadas = np.cumsum(rng_m.uniform(6, 10, 20))
+
+    def mover(t):
+        yaw = 10 * math.sin(2 * math.pi * 0.12 * t) + 5 * math.sin(2 * math.pi * 0.31 * t + 1)
+        yaw += sum(20 * math.sin(math.pi * (t - o)) for o in olhadas if o <= t < o + 1.0)
+        pitch = 4 * math.sin(2 * math.pi * 0.2 * t + 2)
+        roll = 3 * math.sin(2 * math.pi * 0.17 * t)
+        return 0.004 * yaw, 0.008 * vib[int(t * 30)] + 0.003 * pitch, 1.0, pitch, yaw, roll
+    return mover
+
+
+def periodico(freq, amp=0.05):
+    def mover(t):
+        a = 2 * math.pi * freq * t
+        return amp * math.sin(a), 0.5 * amp * math.sin(a + 0.7), 1.0, 0.0, 0.0, 0.0
+    return mover
+
+
+def medir_andando(bpm, movimento, semente, com_pose=True, segundos=40.0):
+    monitor = CardioMonitor()
+    leituras = []
+    for t, imagem, pontos, pose in rosto_andando(bpm, movimento, segundos=segundos, semente=semente):
+        leituras.append((t, monitor.update(imagem, pontos, t, pose=pose) if com_pose else
+                         monitor.update(imagem, pontos, t)))
+    return leituras
+
+
+def resumo_andando(leituras, bpm_real=72.0, depois=AQUECIMENTO_S + 1.0):
+    """(fração do tempo com número depois do aquecimento, fração das leituras com número a até 5 bpm, mediana da
+    confiança, fração do tempo com em_movimento)."""
+    d = [r for t, r in leituras if t >= depois]
+    com = [r for r in d if r.estado == "pronto"]
+    assert not any(r.estado == "movimento" for _, r in leituras), "nunca pausa por movimento"
+    perto = float(np.mean([abs(r.bpm - bpm_real) <= 5.0 for r in com])) if com else 0.0
+    confianca = float(np.median([r.confianca for r in com])) if com else 0.0
+    return len(com) / len(d), perto, confianca, float(np.mean([r.em_movimento for _, r in leituras]))
+
+
+# CAR-23 · nunca pausa por movimento; em_movimento informa; "mexendo" só sem número e com movimento forte.
+# CAR-24 · balanço lento (0,3 Hz, 15% da largura do rosto) com sombra que muda com a posição, pulso de 72 por baixo:
+# número em >= 90% do tempo depois do aquecimento e >= 95% das leituras a até 5 bpm.
+balancando = medir_andando(72, balanco, 3)
+fracao_b, perto_b, conf_b, mov_b = resumo_andando(balancando)
+assert mov_b > 0.8 and fracao_b >= 0.9 and perto_b >= 0.95, ("CAR-24 balanço", fracao_b, perto_b, mov_b)
+assert all(r.motivo is None for _, r in balancando if r.estado == "pronto"), "CAR-23 com número, sem motivo"
+parado_ref = medir_andando(72, lambda t: (0.0, 0.0, 1.0, 0.0, 0.0, 0.0), 3)
+fracao_p, perto_p, conf_p, mov_p = resumo_andando(parado_ref)
+erro_parado = max(abs(r.bpm - 72.0) for t, r in parado_ref if t >= AQUECIMENTO_S + 1.0 and r.bpm is not None)
+assert fracao_p == 1.0 and erro_parado <= 2.0 and mov_p == 0.0, ("CAR-01 no rosto texturizado parado", erro_parado)
+# Confiança cai com o movimento, sem sumir (continua >= CONFIANCA_MINIMA quando há número).
+assert CONFIANCA_MINIMA <= conf_b < conf_p, ("CAR-23 confiança com movimento", conf_b, conf_p)
+sem_pulso_mexendo = medir_andando(None, balanco, 4, segundos=24.0)
+assert not any(r.estado == "pronto" for _, r in sem_pulso_mexendo), "CAR-23 sem pulso, sem número"
+assert sem_pulso_mexendo[-1][1].motivo == "mexendo" and sem_pulso_mexendo[-1][1].em_movimento, \
+    ("CAR-23 motivo mexendo", sem_pulso_mexendo[-1][1].motivo)
+ok(f"CAR-23/24 balanço de 0,3 Hz e 15% do rosto com sombra: número em {100 * fracao_b:.0f}% do tempo, "
+   f"{100 * perto_b:.0f}% a até 5 bpm, sem pausa (em_movimento {100 * mov_b:.0f}% do tempo); confiança "
+   f"{conf_b:.2f} contra {conf_p:.2f} parado (erro parado <= {erro_parado:.1f} bpm); sem pulso: motivo 'mexendo'")
+
+# CAR-25 · sacudidas aleatórias e CAR-26 · movimento de motorista (giros com pose, olhadas, vibração): número em >= 80%
+# do tempo e >= 90% das leituras a até 5 bpm.
+for nome_mov, mover, com_pose in (("sacudidas", sacudidas(1), False), ("motorista", motorista(2), True)):
+    fracao_m, perto_m, conf_m, mov_m = resumo_andando(medir_andando(72, mover, 3, com_pose=com_pose))
+    assert fracao_m >= 0.8 and perto_m >= 0.9, (f"CAR-25/26 {nome_mov}", fracao_m, perto_m)
+    ok(f"CAR-{25 if nome_mov == 'sacudidas' else 26} {nome_mov}: número em {100 * fracao_m:.0f}% do tempo, "
+       f"{100 * perto_m:.0f}% a até 5 bpm, confiança {conf_m:.2f}, em_movimento {100 * mov_m:.0f}% do tempo"
+       + (" (pose passada)" if com_pose else ""))
+
+# CAR-27 · só movimento periódico (balanço da cabeça a 1,0, 1,2 e 1,5 Hz, 5% e 12% da largura), SEM pulso: nunca número
+# com confiança >= 0,40. Sem a remoção do movimento (regressão e notch desligados) o mesmo caso dava 60, 72 e 90 bpm
+# com confiança 0,56 (medido em 20/10/2026).
+for freq in (1.0, 1.2, 1.5):
+    for amplitude in (0.05, 0.12):
+        leituras = medir_andando(None, periodico(freq, amplitude), 5, segundos=30.0)
+        assert not any(r.estado == "pronto" and r.confianca >= CONFIANCA_MINIMA for _, r in leituras), \
+            ("CAR-27 balanço periódico virou número", freq, amplitude,
+             sorted({r.bpm for _, r in leituras if r.bpm is not None}))
+ok("CAR-27 só balanço periódico a 1,0, 1,2 e 1,5 Hz (5% e 12% do rosto), sem pulso: nunca número")
 
 if pulados:
     print(f"\n{len(pulados)} critério(s) PULADO(S): " + "; ".join(pulados))

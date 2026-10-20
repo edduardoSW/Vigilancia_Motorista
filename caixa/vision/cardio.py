@@ -22,6 +22,23 @@ Referências (implementação própria em numpy, sem código de pyVHR (GPL) nem 
   redetectar os pontos a cada quadro piora o sinal, por isso os vértices das ROIs são suavizados.
 - ROIs e combinação por SNR: Kim, Lee & Sohn, Sensors 2021 (malar, glabela e testa medial são as melhores regiões).
 
+Movimento (pedido de 20/10/2026: "o batimento cardíaco pede para ficar parada, se não não funciona"): a medida NUNCA
+pausa por movimento; o movimento sai do sinal. Técnicas conhecidas, implementação própria:
+- ROI que segue os pontos com vértices suavizados (Nowara 2018, §4.3.1) e máscara com precisão de 1/16 de pixel (a
+  ROI anda junto com o rosto, sem degrau de 1 px); média só dos pixels válidos, em cor relativa (C/média - 1): a sombra
+  que só muda a intensidade some na projeção do POS (Wang 2017; melhor média geral da Tabela I, que inclui vídeos com
+  movimento; conferido em tests/test_cardio.py, "POS anula variação só de intensidade").
+- Regressão linear dos traços contra o movimento medido: traço = pulso + B·[centro x/y, escala, atraso da máscara,
+  yaw/pitch/roll, quadrados] e fica o resíduo. É a regressão dos parâmetros de movimento do fMRI (Friston et al.,
+  Magn. Reson. Med. 35(3), 1996), com o movimento medido no lugar do sinal de referência do filtro adaptativo de Li,
+  Chen, Zhao & Pietikäinen (CVPR 2014; lá a referência é o fundo, para a luz). Duas vezes: nos canais R, G, B (banda
+  inteira) e no pulso já na banda 0,7-6,2 Hz (o que sobrou depois do POS).
+- Pico que coincide com o pico do movimento periódico (e com o 2º harmônico dele) sai do espectro (notch), como o
+  TROIKA descarta os picos que coincidem com o espectro do acelerômetro (Zhang, Pi & Liu, IEEE TBME 62(2), 2015).
+- Quadro com salto brusco é interpolado (não zera nem quebra a janela; degrau de luz com o rosto parado ainda quebra)
+  e o número mostrado anda no máximo VARIACAO_MAX_BPM_S por segundo (continuidade, como o rastreamento de pico do
+  TROIKA). Hipótese até gravar com oxímetro: só o sintético (tests/test_cardio.py, CAR-23 a CAR-30) mediu isso.
+
 Passa-faixa sem scipy: o pico só é procurado em 0,7-3,0 Hz (equivale a um passa-faixa ideal para a estimativa); para a
 onda desenhada e para a variabilidade, a banda é aplicada zerando a FFT fora de 0,7-3,0 Hz (filtro ideal, sem fase).
 """
@@ -137,9 +154,34 @@ MONO_TOLERANCIA = 1.0  # canais com médias a até 1 nível um do outro = quadro
 # --- Movimento e falta de rosto -----------------------------------------------------------------------------------
 # Deslocamento médio dos pontos em 0,5 s, em distâncias entre os cantos externos dos olhos. 0,10 ≈ 9 mm em 0,5 s.
 # Hipótese a calibrar com gravações: o tremor do MediaPipe fica perto de 0,01 e olhar o retrovisor passa de 0,3.
+# Desde 20/10/2026 (pedido do dono) o movimento NÃO pausa a medida: só marca `em_movimento` (informativo), baixa a
+# confiança e, sem número ainda, vira o motivo "mexendo".
 LIMIAR_MOVIMENTO = 0.10
 JANELA_MOVIMENTO_S = 0.5
-SEGURA_MOVIMENTO_S = 0.5  # depois que para de mexer, espera mais 0,5 s antes de voltar a medir
+SEGURA_MOVIMENTO_S = 0.5  # `em_movimento` continua True por mais 0,5 s depois que para de mexer
+# Regressão do movimento. Um regressor só entra com desvio (em distâncias entre os olhos) acima de MOV_REG_MIN na banda
+# inteira ou de MOV_BANDA_MIN na banda do pulso: parado, o tremor do MediaPipe dá ~0,0025 na banda (medido no
+# motorista.avi, olhos de 76 px, 20/10/2026) e fica fora, então a conta é a mesma de antes com a pessoa parada.
+MOV_REG_MIN = 0.005
+MOV_BANDA_MIN = 0.005
+POSE_REG_MIN_GRAUS = 0.5  # yaw/pitch/roll com desvio menor que isso não entram
+# Notch do movimento periódico: com o movimento na banda do pulso (0,7-3 Hz) acima de NOTCH_MOV_MIN (RMS, distâncias
+# entre os olhos; 4x o tremor parado), o pico do movimento que é máximo local, tem pelo menos NOTCH_FRACAO_MIN da
+# potência da banda em ±NOTCH_MEIA_HZ e fica NOTCH_PROEMINENCIA vezes acima dos flancos (0,3-0,6 Hz para cada lado)
+# é periódico: o espectro do pulso perde f e 2f dele. Sacudida (degrau de posição) tem espectro 1/f², sem pico
+# saliente, e não tira nada (medido em 20/10/2026: com o critério só de fração, o 2f do degrau caía em 72 bpm e o
+# número sumia 30% do tempo). ±0,15 Hz = 1,5x a resolução de 10 s: pulso a menos de 9 bpm do balanço some junto (sem
+# número é melhor que o número do balanço: CAR-27). Com ±0,2 Hz (o lóbulo do Hann inteiro), balanço a 60 bpm apagava
+# um pulso de 72 que a regressão sozinha já achava (medido em 20/10/2026).
+NOTCH_MOV_MIN = 0.01
+NOTCH_FRACAO_MIN = 0.3
+NOTCH_PROEMINENCIA = 4.0
+NOTCH_MEIA_HZ = 0.15
+NOTCH_FLANCOS_HZ = (0.3, 0.6)
+# O número mostrado anda no máximo isso por segundo (o pulso de quem está sentado não muda 38 bpm num balanço de cabeça).
+VARIACAO_MAX_BPM_S = 3.0
+# Confiança vezes (1 - PENALIDADE_MOVIMENTO x fração da janela com `em_movimento`): cai com o movimento sem sumir.
+PENALIDADE_MOVIMENTO = 0.3
 SEM_ROSTO_S = 2.0  # sem rosto por mais que isso: "sem_rosto" e janelas zeradas (CAR-10)
 BURACO_MAX_S = 0.5  # buraco maior entre quadros: não interpola por cima; emenda os trechos (POS por trecho)
 IDADE_MAX_S = 2 * JANELA_S  # amostra de pulso mais velha que isso não entra, mesmo com pouca coisa boa depois
@@ -174,6 +216,13 @@ _NOMES = tuple(ROIS)
 _INDICES_ROI = sorted(set(ROI_TESTA + ROI_BOCHECHA_ESQ + ROI_BOCHECHA_DIR))
 _INDICES_MOVIMENTO = sorted(set(_INDICES_ROI) | set(CANTOS_OLHOS + PONTE_NARIZ + (1,)))
 _COL_INTENSIDADE, _COL_NARIZ = 3 * len(ROIS), 3 * len(ROIS) + 1  # colunas do buffer depois das R, G, B por ROI
+# Regressores do movimento, depois da intensidade e do nariz: centro x/y das ROIs como a máscara viu (suavizado),
+# distância entre os olhos (escala), atraso da máscara (centro cru - suavizado), yaw, pitch, roll (NaN sem pose) e
+# 1 se o quadro estava `em_movimento`. Posições em pixels; ângulos em graus.
+_REGRESSORES = ("cx", "cy", "escala", "atraso_x", "atraso_y", "yaw", "pitch", "roll")
+_COL_REG = _COL_NARIZ + 1
+_COL_MOV = _COL_REG + len(_REGRESSORES)
+_COLUNAS = _COL_MOV + 1
 
 
 MOTIVOS = ("pouca_luz", "luz_estourada", "mexendo", "camera_lenta", "sinal_fraco")
@@ -181,7 +230,9 @@ MOTIVOS = ("pouca_luz", "luz_estourada", "mexendo", "camera_lenta", "sinal_fraco
 
 @dataclass
 class CardioReading:
-    estado: str  # "sem_rosto" | "medindo" | "pronto" | "sinal_fraco" | "movimento"
+    # "sem_rosto" | "medindo" | "pronto" | "sinal_fraco". "movimento" não sai mais desde 20/10/2026 (a medida não pausa
+    # com o rosto mexendo; ver `em_movimento`); a tela ainda aceita o nome por compatibilidade.
+    estado: str
     bpm: float | None = None
     confianca: float = 0.0  # 0..1
     snr_db: float | None = None
@@ -197,16 +248,20 @@ class CardioReading:
     ultimo_bpm: float | None = None  # último bpm bom, para mostrar esmaecido em movimento/sinal fraco
     # --- 20/10/2026 (só acréscimos; os campos acima não mudam) ---
     # Por que não há número, MEDIDO: "pouca_luz" (luminância < LUZ_MINIMA), "luz_estourada" (fração estourada >
-    # FRACAO_ESTOURADA_MAX), "mexendo" (movimento agora ou há pouco), "camera_lenta" (fps < FPS_MINIMO), "sinal_fraco"
-    # (nada disso, só o SNR baixo) ou None (tudo bem: "pronto", "sem_rosto", ou "medindo" sem problema medido).
+    # FRACAO_ESTOURADA_MAX), "camera_lenta" (fps < FPS_MINIMO), "mexendo" (SEM número e com movimento forte agora ou há
+    # pouco: informação, a medida continua), "sinal_fraco" (nada disso, só o SNR baixo) ou None (tudo bem: "pronto",
+    # "sem_rosto", ou "medindo" sem problema medido).
     motivo: str | None = None
     fps: float | None = None  # quadros por segundo com rosto, medidos nos últimos ~2 s
-    # Estimativa de quanto falta para o número (s): 0 em "pronto"; None em "movimento", "sem_rosto" e com
-    # motivo "camera_lenta" (não dá para estimar).
+    # Estimativa de quanto falta para o número (s): 0 em "pronto"; None em "sem_rosto" e com motivo "camera_lenta"
+    # (não dá para estimar).
     segundos_para_medida: float | None = None
     luminancia: float | None = None  # Y médio dos pixels das ROIs (0-255)
     fracao_saturada: float | None = None  # 0..1 dos pixels das ROIs com algum canal >= PIXEL_SATURADO
     metodo: str | None = None  # "pos" | "chrom" | "green" | "ir": o que ganhou a última janela
+    # --- 20/10/2026, movimento (só acréscimo) ---
+    # Rosto mexendo acima de LIMIAR_MOVIMENTO agora (ou há menos de SEGURA_MOVIMENTO_S). Só informa: a medida continua.
+    em_movimento: bool = False
 
 
 # ===================================================================================================================
@@ -395,8 +450,10 @@ def _parabolico(f, p, i: int) -> float:
     return float(f[i])
 
 
-def _snr_db(f, p, f0: float, meia: float, faixa) -> float:
+def _snr_db(f, p, f0: float, meia: float, faixa, excluir=None) -> float:
     dentro = (f >= faixa[0]) & (f <= faixa[1])
+    if excluir is not None:
+        dentro &= ~excluir  # frequências do movimento (notch): nem sinal nem ruído
     alvo = (np.abs(f - f0) <= meia) | (np.abs(f - 2.0 * f0) <= meia)
     sinal = float(p[dentro & alvo].sum())
     ruido = float(p[dentro & ~alvo].sum())
@@ -407,14 +464,23 @@ def _snr_db(f, p, f0: float, meia: float, faixa) -> float:
     return float(np.clip(10.0 * math.log10(sinal / ruido), -60.0, 60.0))
 
 
-def pico_e_snr(f, p, banda=BANDA_HZ):
+def pico_e_snr(f, p, banda=BANDA_HZ, excluir=None):
     """(frequência do pulso em Hz, SNR em dB) a partir do espectro, ou (None, None) se não houver pico na banda.
     Pico = o maior MÁXIMO LOCAL do espectro inteiro (não só da banda) entre banda[0] + BORDA_HZ e banda[1] - BORDA_HZ,
     com interpolação parabólica; se houver pico em f/2 com >= 50% da potência, fica f/2.
     Antes era o maior valor dentro da banda: com tendência ou ruído de baixa frequência vazando, o maior valor era a
-    própria borda (0,70 Hz = 42 bpm, visto na tela em 20/10/2026), que não é pico nenhum (CAR-22)."""
+    própria borda (0,70 Hz = 42 bpm, visto na tela em 20/10/2026), que não é pico nenhum (CAR-22).
+    excluir: máscara booleana das frequências do movimento periódico (notch): zeradas, nunca viram pico (nem o bin
+    vizinho, que seria um falso máximo local na beirada) e ficam fora do SNR."""
+    if excluir is not None and excluir.any():
+        p = np.where(excluir, 0.0, p)
+        perto = excluir | np.concatenate(([False], excluir[:-1])) | np.concatenate((excluir[1:], [False]))
+    else:
+        excluir, perto = None, None
     dentro = np.flatnonzero((f >= banda[0] + BORDA_HZ) & (f <= banda[1] - BORDA_HZ))
     dentro = dentro[(dentro > 0) & (dentro < len(p) - 1)]
+    if perto is not None:
+        dentro = dentro[~perto[dentro]]
     indices = dentro[(p[dentro] >= p[dentro - 1]) & (p[dentro] >= p[dentro + 1])] if len(dentro) else dentro
     if len(indices) == 0:
         return None, None
@@ -429,7 +495,7 @@ def pico_e_snr(f, p, banda=BANDA_HZ):
             if p[j] >= METADE_RAZAO * p[i] and 0 < j < len(p) - 1 and p[j] >= p[j - 1] and p[j] >= p[j + 1]:
                 i = j
     f0 = _parabolico(f, p, i)
-    return f0, _snr_db(f, p, f0, MEIA_BANDA_SNR_HZ, BANDA_SNR_HZ)
+    return f0, _snr_db(f, p, f0, MEIA_BANDA_SNR_HZ, BANDA_SNR_HZ, excluir)
 
 
 def estimar_bpm(sinal, fs: float):
@@ -452,20 +518,47 @@ def _pontos(landmarks) -> np.ndarray | None:
     return pontos[:, :2]
 
 
+def _ler_pose(pose) -> tuple[float, float, float]:
+    """(pitch, yaw, roll) em graus, ou NaN no que faltar. Aceita sequência (pitch, yaw, roll), dict com essas chaves
+    ou objeto com esses atributos (ex.: FaceMetrics)."""
+    if pose is None:
+        return math.nan, math.nan, math.nan
+    if isinstance(pose, dict):
+        valores = (pose.get("pitch"), pose.get("yaw"), pose.get("roll"))
+    elif hasattr(pose, "yaw"):
+        valores = (getattr(pose, "pitch", None), getattr(pose, "yaw", None), getattr(pose, "roll", None))
+    else:
+        try:
+            valores = tuple(pose)[:3]
+        except TypeError:
+            return math.nan, math.nan, math.nan
+    saida = []
+    for valor in tuple(valores) + (None,) * (3 - len(valores)):
+        try:
+            numero = float(valor)
+        except (TypeError, ValueError):
+            numero = math.nan
+        saida.append(numero if math.isfinite(numero) else math.nan)
+    return saida[0], saida[1], saida[2]
+
+
 def _media_roi(quadro: np.ndarray, poligono: np.ndarray, medir_luz: bool = True):
     """(R, G, B) médios dentro do polígono, sem pixels escuros nem estourados (ou None), pixels usados e, com
     medir_luz, a luz no polígono inteiro: (pixels do polígono, pixels estourados, soma da luminância Y); sem medir_luz,
     None."""
     altura, largura = quadro.shape[:2]
-    x0 = max(int(poligono[:, 0].min()), 0)
-    y0 = max(int(poligono[:, 1].min()), 0)
-    x1 = min(int(poligono[:, 0].max()) + 1, largura)
-    y1 = min(int(poligono[:, 1].max()) + 1, altura)
+    x0 = max(int(math.floor(poligono[:, 0].min())), 0)
+    y0 = max(int(math.floor(poligono[:, 1].min())), 0)
+    x1 = min(int(math.ceil(poligono[:, 0].max())) + 1, largura)
+    y1 = min(int(math.ceil(poligono[:, 1].max())) + 1, altura)
     if x1 - x0 < 2 or y1 - y0 < 2:
         return None, 0, None
     recorte = quadro[y0:y1, x0:x1]
     poligono_m = np.zeros((y1 - y0, x1 - x0), np.uint8)
-    cv2.fillPoly(poligono_m, [poligono - np.array([x0, y0], np.int32)], 255)
+    # Vértices com 4 bits de fração (1/16 px): a máscara acompanha o rosto andando aos poucos, sem o degrau de 1 px do
+    # arredondamento (que vira ruído no pulso quando a cabeça mexe).
+    fracao = np.rint((np.asarray(poligono, np.float64) - (x0, y0)) * 16.0).astype(np.int32)
+    cv2.fillPoly(poligono_m, [fracao], 255, cv2.LINE_8, 4)
     luz = None
     if medir_luz:
         total = cv2.countNonZero(poligono_m)
@@ -487,16 +580,17 @@ def _medias_rois(quadro: np.ndarray, pontos: np.ndarray, medir_luz: bool = True)
     estourada nos polígonos, ou None). Bochecha com menos da metade da área da outra (rosto virado) sai."""
     if quadro.ndim == 2:
         quadro = cv2.cvtColor(quadro, cv2.COLOR_GRAY2BGR)
-    poligonos = {nome: np.rint(pontos[list(indices)]).astype(np.int32) for nome, indices in ROIS.items()}
+    reais = {nome: pontos[list(indices)].astype(np.float64) for nome, indices in ROIS.items()}
+    poligonos = {nome: np.rint(p).astype(np.int32) for nome, p in reais.items()}  # para desenhar e para a área
     areas = {nome: abs(cv2.contourArea(poligonos[nome])) for nome in ("bochecha_esq", "bochecha_dir")}
     maior = max(areas.values())
     medias, pixels = {}, {}
     total = estourados = soma_y = 0.0
-    for nome, poligono in poligonos.items():
+    for nome in poligonos:
         if nome in areas and (maior <= 0 or areas[nome] < RAZAO_BOCHECHAS_MIN * maior):
             medias[nome], pixels[nome] = None, 0
             continue
-        medias[nome], pixels[nome], luz = _media_roi(quadro, poligono, medir_luz)
+        medias[nome], pixels[nome], luz = _media_roi(quadro, reais[nome], medir_luz)
         if luz is not None:
             total, estourados, soma_y = total + luz[0], estourados + luz[1], soma_y + luz[2]
     usados = {nome: [(int(x), int(y)) for x, y in poligonos[nome]] for nome in ROIS if medias[nome] is not None}
@@ -521,6 +615,109 @@ def media_das_rois(frame_bgr: np.ndarray, landmarks):
 def _monocromatico(medias: dict) -> bool:
     validas = [m for m in medias.values() if m is not None]
     return bool(validas) and all(max(abs(r - g), abs(g - b), abs(r - b)) <= MONO_TOLERANCIA for r, g, b in validas)
+
+
+# ===================================================================================================================
+# Remoção do movimento (pedido de 20/10/2026; ver docstring do módulo)
+# ===================================================================================================================
+
+_BANDA_LIMPEZA = (BANDA_HZ[0], BANDA_SNR_HZ[1])  # 0,7-6,2 Hz: a banda do pulso e do SNR (inclui o 2º harmônico)
+_ANGULOS = ("yaw", "pitch", "roll")
+
+
+def _matriz_movimento(regressores, banda: bool):
+    """Regressores do movimento de um trecho uniforme (N × len(_REGRESSORES), na ordem de _REGRESSORES): posições na
+    escala da distância entre os olhos, ângulos em graus, sem a reta (média e tendência), mais os quadrados do centro
+    e do yaw (a sombra não é linear com a posição). Com banda=True, filtrados em 0,7-6,2 Hz. Só entram os que mexem
+    acima de MOV_REG_MIN / MOV_BANDA_MIN / POSE_REG_MIN_GRAUS; parado, nenhum entra e devolve None (o pulso sai igual
+    ao de antes desta mudança)."""
+    regressores = np.asarray(regressores, dtype=float)
+    if regressores.ndim != 2 or len(regressores) < _TRECHO_MIN or regressores.shape[1] < len(_REGRESSORES):
+        return None
+    olhos = float(np.mean(regressores[:, 2]))
+    if not math.isfinite(olhos) or olhos <= 1.0:
+        return None
+    colunas = []
+    for k, nome in enumerate(_REGRESSORES):
+        x = regressores[:, k]
+        if not np.all(np.isfinite(x)):
+            continue  # pose ausente em parte do trecho: fica fora
+        angulo = nome in _ANGULOS
+        x = _sem_reta(x if angulo else x / olhos)
+        usado = passa_faixa(x, FS, _BANDA_LIMPEZA) if banda else x
+        if usado.std() < (POSE_REG_MIN_GRAUS if angulo else MOV_BANDA_MIN if banda else MOV_REG_MIN):
+            continue
+        colunas.append(usado)
+        if nome in ("cx", "cy", "yaw"):
+            quadrado = _sem_reta(x * x)
+            colunas.append(passa_faixa(quadrado, FS, _BANDA_LIMPEZA) if banda else quadrado)
+    return np.column_stack(colunas) if colunas else None
+
+
+def tirar_movimento_rgb(rgb, regressores):
+    """1ª etapa: cor relativa (C/média - 1) de cada canal menos a regressão linear (com constante e reta) contra o
+    movimento do trecho, banda inteira. Devolve R, G, B na escala original. Sem movimento, devolve igual."""
+    rgb = np.asarray(rgb, dtype=float)
+    matriz = _matriz_movimento(regressores, banda=False)
+    media = rgb.mean(axis=0) if len(rgb) else None
+    if matriz is None or media is None or np.any(media <= 0):
+        return rgb
+    relativa = rgb / media - 1.0
+    base = np.column_stack((np.ones(len(rgb)), np.linspace(-1.0, 1.0, len(rgb)), matriz))
+    beta = np.linalg.lstsq(base, relativa, rcond=None)[0]
+    return media * (1.0 + relativa - matriz @ beta[2:])
+
+
+def tirar_movimento_banda(pulso, regressores):
+    """2ª etapa: pulso (saída do POS, CHROM, GREEN ou canal único) na banda 0,7-6,2 Hz menos a regressão contra o
+    movimento filtrado na mesma banda (o que a 1ª etapa não tirou, como a parte não linear que passa pelo POS).
+    Sem movimento na banda, devolve igual."""
+    matriz = _matriz_movimento(regressores, banda=True)
+    if matriz is None:
+        return pulso
+    na_banda = passa_faixa(pulso, FS, _BANDA_LIMPEZA)
+    beta = np.linalg.lstsq(matriz, na_banda, rcond=None)[0]
+    return na_banda - matriz @ beta
+
+
+def mascara_movimento(ts, regressores, f):
+    """Notch: máscara booleana sobre a grade `f` com f e 2f do movimento periódico (até 2 picos), ou None.
+    Só com movimento na banda do pulso acima de NOTCH_MOV_MIN e com pico saliente (ver NOTCH_PROEMINENCIA): sacudida
+    aleatória e degrau de posição espalham a potência e não tiram nada."""
+    ts = np.asarray(ts, dtype=float)
+    if len(ts) < 10:
+        return None
+    _, uniforme = reamostrar(ts, np.asarray(regressores, dtype=float)[:, :3], FS)
+    if len(uniforme) < _TRECHO_MIN or not np.all(np.isfinite(uniforme)):
+        return None
+    olhos = float(uniforme[:, 2].mean())
+    if olhos <= 1.0:
+        return None
+    potencia, energia = None, 0.0
+    for k in range(3):
+        x = uniforme[:, k] / olhos
+        energia += float(np.mean(passa_faixa(x, FS, BANDA_HZ) ** 2))
+        p = espectro(passa_faixa(x, FS, (BANDA_HZ[0] - NOTCH_FLANCOS_HZ[1], BANDA_HZ[1] + NOTCH_FLANCOS_HZ[1])), FS,
+                     2 * (len(f) - 1))[1]
+        potencia = p if potencia is None else potencia + p
+    if len(potencia) != len(f) or math.sqrt(energia) < NOTCH_MOV_MIN:
+        return None
+    banda = (f >= BANDA_HZ[0]) & (f <= BANDA_HZ[1])
+    total = float(potencia[banda].sum())
+    indices = np.flatnonzero(banda)
+    indices = indices[(indices > 0) & (indices < len(f) - 1)]
+    picos = indices[(potencia[indices] >= potencia[indices - 1]) & (potencia[indices] >= potencia[indices + 1])]
+    mascara = np.zeros(len(f), bool)
+    for i in picos[np.argsort(-potencia[picos])][:2]:
+        fm = float(f[i])
+        distancia = np.abs(f - fm)
+        perto = distancia <= NOTCH_MEIA_HZ
+        flancos = (distancia >= NOTCH_FLANCOS_HZ[0]) & (distancia <= NOTCH_FLANCOS_HZ[1])
+        saliente = potencia[perto].mean() >= NOTCH_PROEMINENCIA * max(potencia[flancos].mean(), 1e-300)
+        if total <= 0.0 or potencia[perto & banda].sum() < NOTCH_FRACAO_MIN * total or not saliente:
+            break
+        mascara |= perto | (np.abs(f - 2.0 * fm) <= NOTCH_MEIA_HZ)
+    return mascara if mascara.any() else None
 
 
 # ===================================================================================================================
@@ -568,10 +765,16 @@ def _trechos_uniformes(ts, valores, segmentos, duracao: float):
 
 def _aplicar(trechos, metodo: str):
     """Pulso emendado: cada trecho com seu método (emendar depois do POS evita o degrau de cor entre trechos, pele um
-    pouco diferente depois de mexer). Devolve (pulso, pulso do trecho mais novo) ou (None, None)."""
+    pouco diferente depois de mexer). Devolve (pulso, pulso do trecho mais novo) ou (None, None).
+    Com as colunas do movimento depois de R, G, B (_REGRESSORES), cada trecho passa pelas duas etapas da remoção do
+    movimento: antes do método (tirar_movimento_rgb) e depois (tirar_movimento_banda)."""
     partes, ultimo = [], None
     for uniforme, manter in trechos:
-        h = _METODOS[metodo](uniforme)
+        movimento = uniforme[:, 3:] if uniforme.shape[1] > 3 else None
+        rgb = uniforme[:, :3] if movimento is None else tirar_movimento_rgb(uniforme[:, :3], movimento)
+        h = _METODOS[metodo](rgb)
+        if movimento is not None:
+            h = tirar_movimento_banda(h, movimento)
         if ultimo is None:
             ultimo = h
         partes.append(h[len(h) - manter:])
@@ -705,6 +908,8 @@ class CardioMonitor:
 
     Nunca para (pedido de 20/10/2026): quando o sinal piora, as janelas continuam deslizando, o último número bom fica
     em `ultimo_bpm` e vale como voto por MEMORIA_S, então o número volta com 2 janelas boas, sem outro aquecimento.
+    Também não pausa com o rosto mexendo (pedido de 20/10/2026, "deve captar em qualquer movimento"): o movimento sai
+    do sinal por regressão e notch (ver docstring do módulo) e só baixa a confiança.
     Só zera tudo com SEM_ROSTO_S sem rosto (CAR-10)."""
 
     def __init__(self, janela_s: float = JANELA_S, minimo_s: float = MINIMO_S, passo_s: float = PASSO_S,
@@ -731,32 +936,40 @@ class CardioMonitor:
         self._t_ultimo_bom = -math.inf
         self._visto = None
 
-    def update(self, frame_bgr, landmarks, timestamp: float, infrared: bool = False) -> CardioReading:
+    def update(self, frame_bgr, landmarks, timestamp: float, infrared: bool = False, pose=None) -> CardioReading:
+        """Um quadro. pose (opcional): (pitch, yaw, roll) em graus, a mesma ordem do vision/face.py
+        (rotation_to_euler da matriz facial); entra como regressor do movimento. Sem pose, só a posição e a escala."""
         t = float(timestamp)
         self._t = t
         pontos = _pontos(landmarks)
         if pontos is None or frame_bgr is None:
+            self._em_movimento = False
             return self._sem_rosto(t)
         if self._visto is not None and t - self._visto > BURACO_MAX_S:
             self._quebrar = True
         self._visto = t
         self._marcar_taxa(t)
-        movendo = self._movimento(t, pontos)
+        # Movimento NÃO pausa mais (pedido de 20/10/2026): só informa, baixa a confiança e entra como regressor.
+        self._em_movimento = self._movimento(t, pontos)
         self._quadros += 1
         medir_luz = self._luz is None or self._quadros % LUZ_A_CADA == 0
-        medias, _, poligonos, luz = _medias_rois(frame_bgr, self._suavizar(t, pontos), medir_luz)
+        suaves = self._suavizar(t, pontos)
+        medias, _, poligonos, luz = _medias_rois(frame_bgr, suaves, medir_luz)
         if medir_luz:
             self._medir_luz(t, luz)
         canal = "ir" if infrared or _monocromatico(medias) else "rgb"
         if canal != self._canal:
             self._limpar_janelas()  # trocar de câmera/canal no meio da janela misturaria sinais diferentes
             self._canal = canal
-        if movendo:
-            self._quebrar = True
-            self._intensidades = None
-            return self._leitura("movimento", poligonos)
-        aceito = any(m is not None for m in medias.values()) and self._acrescentar(t, medias, pontos)
-        if not aceito:
+        resultado = "vazio"
+        if any(m is not None for m in medias.values()):
+            resultado = self._acrescentar(t, medias, pontos, suaves, pose)
+        aceito = resultado == "ok"
+        if resultado in ("vazio", "repetido") or (resultado == "salto" and not self._em_movimento):
+            # Com o rosto mexendo, o quadro com salto não quebra o trecho: a reamostragem interpola por cima dele e a
+            # regressão tira o degrau que veio do movimento. Parado, o salto é luz (piscada, exposição) e quebra, como
+            # antes (CAR-15: com interpolação também parado, 4 s de ruído forte entravam na janela e o número voltava
+            # errado, medido em 20/10/2026).
             self._quebrar = True
         # O relógio da estimativa anda mesmo com o quadro jogado fora: sem dado novo, a janela registra "nada" e o
         # número sai depois de 2 s (antes ficava "pronto" parado no último valor).
@@ -769,7 +982,11 @@ class CardioMonitor:
 
     # --- estado interno ----------------------------------------------------------------------------------------
     def _limpar_janelas(self) -> None:
-        self._buffer = _Buffer(3 * len(ROIS) + 2)  # R, G, B por ROI + intensidade da testa + altura do nariz
+        # R, G, B por ROI + intensidade da testa + altura do nariz + regressores do movimento + em_movimento
+        self._buffer = _Buffer(_COLUNAS)
+        self._em_movimento = False
+        self._fracao_movimento = 0.0
+        self._pulados = 0  # quadros seguidos jogados fora por salto
         self._segmento = 0
         self._inicio_segmento = None
         self._quebrar = True
@@ -889,12 +1106,16 @@ class CardioMonitor:
         escala = self._escala_salto
         return escala is not None and salto > max(SALTO_K * escala, SALTO_MIN)
 
-    def _acrescentar(self, t: float, medias: dict, pontos: np.ndarray) -> bool:
+    def _acrescentar(self, t: float, medias: dict, pontos: np.ndarray, suaves: np.ndarray, pose=None) -> str:
+        """"ok", "repetido" (horário repetido ou voltando) ou "salto" (quadro fora; com o rosto mexendo, a
+        reamostragem interpola por cima dele; parado, o update quebra o trecho)."""
         anterior = self._buffer.ultimo_t
         if anterior is not None and t <= anterior:
-            return False  # horário repetido ou voltando: ignora o quadro
+            return "repetido"
         if self._salto(medias):
-            return False
+            self._pulados += 1
+            return "salto"
+        self._pulados = 0
         if self._quebrar or anterior is None or t - anterior > BURACO_MAX_S:
             self._segmento += 1
             self._inicio_segmento = t
@@ -908,9 +1129,16 @@ class CardioMonitor:
         olhos = float(np.linalg.norm(pontos[CANTOS_OLHOS[0]] - pontos[CANTOS_OLHOS[1]]))
         linha.append(sum(testa) / 3.0 if testa is not None else math.nan)
         linha.append(float(pontos[list(PONTE_NARIZ), 1].mean()) / olhos if olhos > 1.0 else math.nan)
+        # Regressores do movimento: centro das ROIs como a máscara viu, escala, atraso da máscara e a pose.
+        centro_suave = suaves[_INDICES_ROI].mean(axis=0)
+        centro_cru = pontos[_INDICES_ROI].mean(axis=0)
+        pitch, yaw, roll = _ler_pose(pose)
+        linha.extend((float(centro_suave[0]), float(centro_suave[1]), olhos,
+                      float(centro_cru[0] - centro_suave[0]), float(centro_cru[1] - centro_suave[1]), yaw, pitch, roll,
+                      1.0 if self._em_movimento else 0.0))
         self._buffer.acrescentar(t, self._segmento, linha)
         self._buffer.cortar_antes(t - max(IDADE_MAX_S, RESP_JANELA_S))
-        return True
+        return "ok"
 
     def _fps(self, ts: np.ndarray, segs: np.ndarray) -> float:
         dt = np.diff(ts)
@@ -926,17 +1154,33 @@ class CardioMonitor:
         por_roi: dict[str, tuple] = {}
         trechos_roi: dict[str, list] = {}
         f = None
+        movimento = valores[:, _COL_REG:_COL_REG + len(_REGRESSORES)]
+        recentes = ts >= t - janela
+        self._fracao_movimento = float(valores[recentes, _COL_MOV].mean()) if recentes.any() else 0.0
+        notch: dict = {}
+
+        def tirar(f_, p_):
+            """Notch das frequências do movimento periódico (calculado uma vez por grade de frequências)."""
+            if len(f_) not in notch:
+                notch[len(f_)] = mascara_movimento(ts[recentes], movimento[recentes], f_)
+            return notch[len(f_)]
+
         for k, nome in enumerate(_NOMES):
             cor = valores[:, 3 * k:3 * k + 3]
             ok = np.isfinite(cor[:, 0])
             if ok.sum() < 3:
                 continue
-            trechos, duracao, fim_novo = _trechos_uniformes(ts[ok], cor[ok], segs[ok], janela)
+            # R, G, B e, nas colunas seguintes, os regressores do movimento (a reamostragem leva os dois juntos)
+            trechos, duracao, fim_novo = _trechos_uniformes(ts[ok], np.hstack((cor[ok], movimento[ok])), segs[ok],
+                                                            janela)
             if not trechos or duracao < 0.8 * self.minimo_s or t - fim_novo > FRESCO_S:
                 continue  # pouco dado, ou só dado velho (o trecho bom mais novo acabou há mais de FRESCO_S)
             pulso, ultimo = _aplicar(trechos, metodos[0])
             f, p = espectro(remover_tendencia(pulso), FS)
-            f0, snr = pico_e_snr(f, p)
+            excluir = tirar(f, p)
+            if excluir is not None:
+                p = np.where(excluir, 0.0, p)
+            f0, snr = pico_e_snr(f, p, excluir=excluir)
             if f0 is not None:
                 por_roi[nome] = (f0, snr, p, ultimo)
                 trechos_roi[nome] = trechos
@@ -946,7 +1190,7 @@ class CardioMonitor:
             # rPPG, §2.3).
             faixa = (f >= BANDA_SNR_HZ[0]) & (f <= BANDA_SNR_HZ[1])
             combinado = sum(10.0 ** (snr / 10.0) * p / max(p[faixa].sum(), 1e-300) for _, snr, p, _ in por_roi.values())
-            f0, snr = pico_e_snr(f, combinado)
+            f0, snr = pico_e_snr(f, combinado, excluir=tirar(f, combinado))
             if f0 is not None:
                 resultados[metodos[0]] = (f0, snr, por_roi)
         # CHROM e GREEN rodam só na ROI em que o POS foi melhor (custo: CAR-14) e só quando o POS não está folgado
@@ -958,7 +1202,10 @@ class CardioMonitor:
                 pulso, ultimo = _aplicar(trechos_roi[melhor], metodo)
                 # O CHROM já sai filtrado na banda (sem tendência); o GREEN passa pelo Tarvainen.
                 f, p = espectro(pulso if metodo == "chrom" else remover_tendencia(pulso), FS)
-                f0, snr = pico_e_snr(f, p)
+                excluir = tirar(f, p)
+                if excluir is not None:
+                    p = np.where(excluir, 0.0, p)
+                f0, snr = pico_e_snr(f, p, excluir=excluir)
                 if f0 is not None:
                     # Escolher o melhor de 3 sobe o SNR do ruído puro (máximo de -1,1 dB contra -2,8 dB do POS, 408
                     # janelas, 20/10/2026): o SNR do método alternativo entra descontado da margem, o que deixa o
@@ -1035,14 +1282,22 @@ class CardioMonitor:
         # O último número mostrado entra na mediana quando vota: logo depois de perder o sinal, a janela emenda o
         # trecho novo com o de antes (fase quebrada) e o pico escorrega ~3 bpm por alguns segundos (CAR-15).
         bpm_mostrado = round(float(np.median(perto + ([memoria] if memoria_vota else []))), 1)
+        # Continuidade: o número anda no máximo VARIACAO_MAX_BPM_S por segundo desde o último mostrado (um balanço de
+        # cabeça não faz 72 virar 110; CAR-28). Depois de MEMORIA_S sem número, vale o que a janela disser.
+        if self._ultimo_bpm is not None and self._t - self._t_ultimo_bom <= MEMORIA_S:
+            limite = VARIACAO_MAX_BPM_S * max(self.passo_s, self._t - self._t_ultimo_bom)
+            bpm_mostrado = round(min(max(bpm_mostrado, self._ultimo_bpm - limite), self._ultimo_bpm + limite), 1)
         # Confiança: SNR (de LIMIAR_SNR_CONSISTENTE_DB a LIMIAR + FAIXA_CONFIANCA_DB) e votos de janelas que concordam
-        # (até MEDIANA_N + o último número), vezes a taxa de quadros (0,7 a 10 quadros/s até 1 a 20) e 0,8 se só uma
-        # ROI apoia o pico. Abaixo de CONFIANCA_MINIMA, nada de número.
+        # (até MEDIANA_N + o último número), vezes a taxa de quadros (0,7 a 10 quadros/s até 1 a 20), 0,8 se só uma
+        # ROI apoia o pico e (1 - PENALIDADE_MOVIMENTO x fração da janela com o rosto mexendo): com movimento a
+        # confiança cai, mas não some. Abaixo de CONFIANCA_MINIMA, nada de número.
         faixa_snr = LIMIAR_SNR_DB + FAIXA_CONFIANCA_DB - LIMIAR_SNR_CONSISTENTE_DB
         pelo_snr = min(1.0, max(0.0, (snr - LIMIAR_SNR_CONSISTENTE_DB) / faixa_snr)) if snr is not None else 0.0
         pelos_votos = min(1.0, votos / (MEDIANA_N + 1.0))
         pelo_fps = 0.7 + 0.3 * min(1.0, max(0.0, (fps - FPS_MINIMO) / 10.0)) if fps else 1.0
-        confianca = round((0.2 + 0.4 * pelo_snr + 0.4 * pelos_votos) * (1.0 if concordam >= 2 else 0.8) * pelo_fps, 3)
+        pelo_movimento = 1.0 - PENALIDADE_MOVIMENTO * min(1.0, max(0.0, self._fracao_movimento))
+        confianca = round((0.2 + 0.4 * pelo_snr + 0.4 * pelos_votos) * (1.0 if concordam >= 2 else 0.8) * pelo_fps
+                          * pelo_movimento, 3)
         if confianca < CONFIANCA_MINIMA:
             self._estado, self._bpm, self._confianca = "sinal_fraco", None, 0.0
             return
@@ -1058,7 +1313,8 @@ class CardioMonitor:
         ok = np.isfinite(cor[:, 0])
         if ok.sum() < 3:
             return
-        pulso, _, _ = _pulso_emendado(ts[ok], cor[ok], segs[ok], ONDA_S, self._canal == "ir")
+        movimento = valores[ok, _COL_REG:_COL_REG + len(_REGRESSORES)]  # a onda também sai sem o movimento
+        pulso, _, _ = _pulso_emendado(ts[ok], np.hstack((cor[ok], movimento)), segs[ok], ONDA_S, self._canal == "ir")
         if pulso is None or len(pulso) < 8:
             return
         onda = -passa_faixa(pulso, FS)  # sístole para cima (hipótese pelo modelo de pele de Wang 2017)
@@ -1089,16 +1345,18 @@ class CardioMonitor:
         """Por que não há número, só pelo que foi medido (ordem: o que a pessoa pode resolver primeiro)."""
         if estado in ("pronto", "sem_rosto"):
             return None
-        if estado == "movimento":
-            return "mexendo"
         if self._luz is not None and self._luz < LUZ_MINIMA:
             return "pouca_luz"
         if self._estourado is not None and self._estourado > FRACAO_ESTOURADA_MAX:
             return "luz_estourada"
         if fps is not None and fps < FPS_MINIMO:
             return "camera_lenta"
+        # "mexendo" só sem número e com movimento forte agora (ou, sem sinal, há menos de meia janela): informação,
+        # não pedido; a medida continua com o rosto mexendo (pedido de 20/10/2026, CAR-23).
+        if self._em_movimento or (estado == "sinal_fraco" and self._t - self._ultimo_mov <= self.janela_s / 2.0):
+            return "mexendo"
         if estado == "sinal_fraco":
-            return "mexendo" if self._t - self._ultimo_mov <= self.janela_s / 2.0 else "sinal_fraco"
+            return "sinal_fraco"
         return None
 
     def _leitura(self, estado: str, poligonos: dict) -> CardioReading:
@@ -1113,8 +1371,8 @@ class CardioMonitor:
         fps = self._fps_camera()
         progresso, faltam = self._andamento(estado)
         motivo = self._motivo(estado, fps)
-        if estado == "movimento" or motivo == "camera_lenta":
-            faltam = None  # parado esperando a pessoa ficar quieta ou a câmera acelerar: não dá para estimar
+        if motivo == "camera_lenta":
+            faltam = None  # esperando a câmera acelerar: não dá para estimar
         return CardioReading(
             estado=estado,
             bpm=self._bpm if pronto else None,
@@ -1134,4 +1392,5 @@ class CardioMonitor:
             luminancia=None if self._luz is None else round(self._luz, 1),
             fracao_saturada=None if self._estourado is None else round(self._estourado, 3),
             metodo=self._metodo,
+            em_movimento=bool(self._em_movimento),
         )

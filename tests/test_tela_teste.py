@@ -609,8 +609,8 @@ indice_web = (PASTA_WEB / "index.html").read_text(encoding="utf-8")
 detalhes_resumo = re.search(r"<details[^>]*id=\"r-detalhes\"[^>]*>", indice_web)
 assert detalhes_resumo and " open" not in detalhes_resumo.group(0), "detalhes técnicos recolhidos por padrão"
 assert re.search(r'id="r-detalhes"[^>]*>\s*<summary[^>]*>(?:<[^>]+>)*Detalhes técnicos', indice_web)
-assert re.search(r"<details[^>]*id=\"detalhes\"[^>]*>", indice_web) and not re.search(
-    r"<details[^>]*id=\"detalhes\"[^>]*\sopen", indice_web), "na tela do teste, Detalhes também começa recolhido"
+assert re.search(r"<section[^>]*id=\"detalhes\"[^>]*\shidden", indice_web) and re.search(
+    r"id=\"detalhes-botao\"[^>]*aria-expanded=\"false\"", indice_web), "na tela do teste, Detalhes também começa fechado"
 ok("TEL-23 detalhes técnicos do resumo (e da tela do teste) começam recolhidos")
 
 
@@ -839,12 +839,12 @@ ok("PAI-01 blocos de cima enxutos: Sono com 2 números, Atenção com 3 linhas, 
 
 assert 'id="detalhes"' in indice_web and "Ver mais detalhes" in indice_web
 pos_agora, pos_cartoes = indice_web.index('id="agora"'), indice_web.index('id="cartoes"')
-assert indice_web.index('id="leituras"') < pos_agora < pos_cartoes < indice_web.index('id="detalhes"'), \
-    "a frase do agora é o topo do painel ao lado do vídeo, antes dos blocos e dos detalhes"
-assert "O que os números de cima querem dizer" in script_web and "espera_curta" in script_web
+assert indice_web.index('id="leituras"') < pos_agora < pos_cartoes < indice_web.index('id="detalhes-botao"'), \
+    "a frase do agora é o topo do painel ao lado do vídeo, antes dos blocos e do botão dos detalhes"
+assert "painel.assuntos" in script_web and "espera_curta" in script_web
 assert "status-word" in script_web and "medida.nivel === 0" in script_web, "linha normal sem palavra colorida (ISA-101)"
-ok("PAI-02 painel ao lado do vídeo: frase do agora no topo, depois os 3 blocos e Ver mais detalhes recolhido, que "
-   "começa explicando cada número de cima")
+ok("PAI-02 painel ao lado do vídeo: frase do agora no topo, depois os 3 blocos e o botão Ver mais detalhes, que "
+   "abre os detalhes por assunto")
 
 
 def coracao_de(**campos):
@@ -866,15 +866,16 @@ assert "luz" not in texto_cartao.lower(), "sem motivo do cardio, nada de falar d
 cartao, _ = coracao_de(estado="medindo", progresso=0.4, segundos_para_medida=4.2)
 assert cartao["medicao"]["texto"] == "Medindo seu pulso, faltam ~5 s", cartao["medicao"]
 # Perdeu o sinal: medindo de novo, último valor bom esmaecido e o motivo só quando o cardio diz.
-cartao, texto_cartao = coracao_de(estado="movimento", ultimo_bpm=72.4, progresso=1.0)
+cartao, texto_cartao = coracao_de(estado="sinal_fraco", ultimo_bpm=72.4, progresso=1.0)
 medicao = cartao["medicao"]
 assert medicao["ativa"] and medicao["ultimo"] == "72" and medicao["texto"] == "Medindo de novo", medicao
-assert medicao["motivo"] == "Fique parado por alguns segundos" and "luz" not in texto_cartao.lower(), medicao
+assert medicao["motivo"] is None and "luz" not in texto_cartao.lower(), medicao
 assert cartao["principal"]["valor"] == "72" and "último valor" in cartao["principal"]["unidade"], cartao["principal"]
 cartao, texto_cartao = coracao_de(estado="sinal_fraco", ultimo_bpm=70.0, segundos_para_medida=6.0, progresso=0.5)
 assert cartao["medicao"]["texto"] == "Medindo de novo, faltam ~6 s" and cartao["medicao"]["progresso"] == 0.5
 assert cartao["medicao"]["motivo"] is None and "luz" not in texto_cartao.lower(), cartao["medicao"]
-for motivo, esperado in (("mexendo", "Fique parado por alguns segundos"), ("pouca_luz", "Pouca luz no rosto"),
+for motivo, esperado in (("mexendo", "Em movimento: a medida demora um pouco mais"),
+                         ("pouca_luz", "Pouca luz no rosto"),
                          ("luz_estourada", "Luz forte demais no rosto")):
     cartao, _ = coracao_de(estado="sinal_fraco", motivo=motivo, ultimo_bpm=70.0)
     assert cartao["medicao"]["motivo"] == esperado, (motivo, cartao["medicao"])
@@ -886,6 +887,92 @@ assert estado_mod.cardio_json(SimpleNamespace(estado="medindo"))["motivo"] is No
 assert "heart-progress" in script_web and "último valor" in script_web and "girando" in script_web
 ok("PAI-03 coração com andamento: anel e 'faltam ~N s' no aquecimento e ao medir de novo, último valor esmaecido, "
    "motivo só quando o cardio diz (luz nunca sem ele)")
+
+
+# ---------------------------------------------------------------- 20/10 (2ª rodada) · detalhes por assunto (DET-01 a 03)
+# Pedido do Matheus: "os mais detalhes continuou tudo junto e não foi isso que eu pedi". Um assunto por vez, cada medida
+# num cartão pequeno com nome, valor, situação e uma linha curta; nada de lista longa com parágrafo em todo item.
+ASSUNTOS = ["sono", "atencao", "cabeca", "coracao", "camera", "experimental"]
+assert [a["id"] for a in painel["assuntos"]] == ASSUNTOS, [a["id"] for a in painel["assuntos"]]
+assert [a["titulo"] for a in painel["assuntos"]] == ["Sono", "Atenção", "Cabeça e boca", "Coração",
+                                                     "Câmera e desempenho", "Experimentais"]
+ids_tela = [m["id"] for _, m in todas_as_medidas(painel)]
+ids_assuntos = [m["id"] for a in painel["assuntos"] for m in a["medidas"]]
+assert sorted(ids_assuntos) == sorted(set(ids_tela)) and len(ids_assuntos) == len(set(ids_assuntos)), \
+    (sorted(ids_assuntos), sorted(set(ids_tela)))
+por_assunto = {a["id"]: [m["id"] for m in a["medidas"]] for a in painel["assuntos"]}
+assert por_assunto["sono"][:2] == ["olho_aberto", "olho_fechado_3min"], por_assunto["sono"]
+assert por_assunto["atencao"][0] == "para_onde_olha" and "celular" in por_assunto["atencao"], por_assunto
+assert {"inclinacao", "giro", "boca", "bocejos", "cabeceios"} == set(por_assunto["cabeca"]), por_assunto["cabeca"]
+assert por_assunto["coracao"][:2] == ["pulso", "confianca"] and "fps" in por_assunto["camera"], por_assunto
+assert {"sono_estimado", "pupila", "ativacao", "palpebra"} == set(por_assunto["experimental"]), por_assunto
+for assunto in painel["assuntos"]:
+    assert 2 <= len(assunto["medidas"]) <= 8, (assunto["id"], len(assunto["medidas"]))
+    assert assunto["descricao"].endswith(".") and len(assunto["descricao"]) <= 90, assunto["descricao"]
+    assert assunto["nivel"] in (0, 1, 2, 3), assunto
+assert {a["id"]: a.get("grafico") for a in painel["assuntos"]} == {
+    "sono": "abertura", "atencao": None, "cabeca": None, "coracao": "pulso", "camera": None, "experimental": None}
+assert "não é diagnóstico" in next(a for a in painel["assuntos"] if a["id"] == "experimental")["nota"]
+ok("DET-01 Ver mais detalhes por assunto (Sono, Atenção, Cabeça e boca, Coração, Câmera e desempenho, Experimentais), "
+   "cada medida da tela em um assunto só, de 2 a 8 por assunto, e o gráfico do olho no Sono")
+
+for _, medida in todas_as_medidas(painel):
+    assert medida["curta"] and len(medida["curta"]) <= 70 and medida["curta"].endswith("."), (medida["id"], medida["curta"])
+    assert not TECNICOS.search(medida["curta"]), medida["curta"]
+alerta = estado_mod.medidas(estado_tela(celular="celular_na_mao", celular_s=4.2, nivel=2, risco_distracao=2))["painel"]
+assert next(a for a in alerta["assuntos"] if a["id"] == "atencao")["nivel"] == 2, "a aba mostra que tem coisa fora do normal"
+assert next(a for a in alerta["assuntos"] if a["id"] == "cabeca")["nivel"] == 0
+ok("DET-02 cada cartão dos detalhes tem uma linha curta (até 70 caracteres) no lugar do parágrafo, e a aba do assunto "
+   "diz o nível mais alto dentro dele")
+
+estilo_web = (PASTA_WEB / "app.css").read_text(encoding="utf-8")
+assert 'role="tablist"' in indice_web and 'id="detalhes-abas"' in indice_web and 'role="tabpanel"' in indice_web
+assert 'id="detalhes-botao"' in indice_web and 'aria-controls="detalhes"' in indice_web
+assert 'id="assunto-medidas"' in indice_web and "O que os números de cima querem dizer" not in script_web
+assert "com-detalhes" in script_web and "com-detalhes" in estilo_web, "detalhes numa camada larga, vídeo pequeno ao lado"
+assert "medida.curta" in script_web and "aria-selected" in script_web and "ArrowDown" in script_web
+assert re.search(r"\.detail-cards\s*\{[^}]*grid-template-columns", estilo_web), "cartões em grade"
+assert "<details" not in indice_web.split('id="tela-teste"')[1].split('id="tela-resumo"')[0], \
+    "a tela do teste não tem mais a lista recolhida que abria tudo junto"
+ok("DET-03 tela: botão Ver mais detalhes abre uma camada com abas por assunto (setas trocam, Esc fecha) e cartões em "
+   "grade; a lista longa recolhida saiu")
+
+
+# ---------------------------------------------------------------- 20/10 (2ª rodada) · coração sem pedir para ficar parado
+# Pedido do Matheus: "o batimento cardíaco pede para ficar parada". A tela nunca pede para ficar parado.
+PEDE_PARADO = re.compile(r"(fi(que|car|ca)|permane(ça|cer))\s+(parad|im[óo]vel|quiet)|n[ãa]o\s+se\s+mex|"
+                         r"pare\s+de\s+se\s+mex", re.I)
+for arquivo in (PASTA_WEB / "index.html", PASTA_WEB / "app.js", RAIZ / "caixa" / "tela_teste" / "estado.py"):
+    achado = PEDE_PARADO.search(arquivo.read_text(encoding="utf-8"))
+    assert not achado, (arquivo.name, achado and achado.group(0))
+for motivo in ("mexendo", None):
+    for estado_c in ("medindo", "sinal_fraco", "movimento", "pronto"):
+        _, texto_cartao = coracao_de(estado=estado_c, motivo=motivo, bpm=70.0 if estado_c == "pronto" else None,
+                                     ultimo_bpm=70.0, em_movimento=True)
+        assert not PEDE_PARADO.search(texto_cartao), (estado_c, texto_cartao)
+ok("COR-01 nenhum 'fique parado' (nem 'não se mexa') no HTML, no JS nem nos textos do coração")
+
+assert estado_mod.cardio_json(SimpleNamespace(estado="pronto"))["em_movimento"] is False, "sem o campo novo, False"
+assert estado_mod.cardio_json(SimpleNamespace(estado="pronto", em_movimento=True))["em_movimento"] is True
+cartao, _ = coracao_de(estado="pronto", bpm=74.2, confianca=0.6, progresso=1.0, ultimo_bpm=74.2, em_movimento=True)
+assert cartao["principal"]["valor"] == "74" and not cartao["medicao"]["ativa"], cartao
+assert cartao["nota"] == "Em movimento: leitura menos precisa", cartao
+assert cartao["principal"]["situacao"] in ("Leitura boa", "Leitura fraca") and cartao["nivel"] == 0, cartao
+cartao, _ = coracao_de(estado="pronto", bpm=74.2, confianca=0.6, progresso=1.0, ultimo_bpm=74.2)
+assert cartao["nota"] is None, "parado ou sem o campo novo: sem nota"
+cartao, _ = coracao_de(estado="medindo", progresso=0.5, segundos_para_medida=7.0, motivo="mexendo", em_movimento=True)
+assert cartao["medicao"]["texto"] == "Medindo seu pulso, faltam ~7 s" and cartao["nota"] is None, cartao
+assert cartao["medicao"]["motivo"] == "Em movimento: a medida demora um pouco mais", cartao["medicao"]
+# Compatibilidade: o estado antigo "movimento" é tratado como "medindo" (anel e quanto falta), nunca como pausa.
+cartao, _ = coracao_de(estado="movimento", progresso=0.4, ultimo_bpm=72.4)
+assert cartao["medicao"]["ativa"] and cartao["medicao"]["texto"] == "Medindo seu pulso, faltam ~9 s", cartao["medicao"]
+assert cartao["principal"]["situacao"] == "Medindo" and cartao["principal"]["valor"] is None, cartao["principal"]
+assert cartao["medicao"]["ultimo"] == "72", cartao["medicao"]
+assert "dado.nota" in script_web and "heart-move" in script_web and "heart-move" in estilo_web
+assert re.search(r"\.heart-move\s*\{[^}]*color:\s*var\(--grafite\)", estilo_web), "nota sem cor de alerta"
+assert re.search(r"\.heart-reason\s*\{[^}]*color:\s*var\(--grafite\)", estilo_web), "motivo sem cor de alerta"
+ok("COR-02 em movimento com número: só a nota pequena 'Em movimento: leitura menos precisa', sem cor de alerta; sem "
+   "número, 'Medindo seu pulso, faltam ~N s' com o anel; estado antigo 'movimento' vira 'medindo'")
 
 
 # ---------------------------------------------------------------- spec 031 · nome visível e linha da versão (NOM-01)

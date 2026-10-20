@@ -117,3 +117,16 @@ tempo em "sinal fraco") e a tela pedia luz sem medir luz.
 Resultado no vídeo de teste (pulso sintético de 72 bpm): a 12 quadros/s, de 0% para 100% do tempo com número, erro médio
 de 0,05 bpm; a 8 quadros/s, sem número e com o motivo `camera_lenta` medido. Ferramenta:
 `ferramentas/diagnosticar_cardio.py <vídeo> --bpm-real 72`. Os limiares de luz (50 e 25%) são hipótese até a webcam real.
+
+## Revisão de 20/10/2026, tarde ("o batimento cardíaco pede para ficar parada se não não funciona ... deve captar em qualquer movimento")
+
+- O estado "movimento" não pausa mais: campo `em_movimento` (informativo); `motivo = "mexendo"` só sem número.
+- Remoção do movimento: regressão do sinal de cor contra deslocamento, escala e pose do rosto (o motor passa
+  `pose=metrics`), notch nos picos do movimento periódico, quadro com tranco interpolado, número limitado a ±3 bpm/s,
+  confiança × (1 − 0,3 × fração da janela em movimento).
+- CAR-23 a CAR-27 (`tests/test_cardio.py`, 29 verificações): balanço de 0,3 Hz com número 100% do tempo e erro ≤ 5 bpm;
+  sacudidas e giros de motorista ≥ 80% com número; **só balanço a 1,0, 1,2 e 1,5 Hz sem pulso nunca vira número** (sem a
+  remoção dava 60, 72 e 90 bpm falsos). CAR-07 e CAR-16 mudaram a pedido do Matheus.
+- Vídeo de teste: balanço de 0% para 100% do tempo com número; sacudidas de 14% para 91%. Webcam real com movimento real
+  ainda não medida. Pendente: a mesma regra em `painel/app/src/components/live/camera-rppg.ts`.
+

@@ -40,7 +40,9 @@
   let trechoTocando = null;
   let animacaoTrecho = null;
   const cartoesDom = new Map();
-  const gruposDom = new Map();
+  let detalhesAbertos = false;
+  let assuntoAtual = "sono";
+  let chaveAbas = "";
 
   const opcoes = { camera: "auto", celular: true, som: true, calibracao_rapida: true, camera_ir: "auto", cardio: true };
   let cameraEscolhida = "auto";
@@ -206,6 +208,14 @@
     $("tela-teste").hidden = tela !== "teste";
     $("tela-resumo").hidden = tela !== "resumo";
     const video = $("video");
+    if (tela !== "teste" && detalhesAbertos) {
+      detalhesAbertos = false;
+      $("tela-teste").classList.remove("com-detalhes");
+      $("detalhes").hidden = true;
+      $("detalhes-nav").hidden = true;
+      $("detalhes-botao").setAttribute("aria-expanded", "false");
+      textoLivre("detalhes-botao-texto", "Ver mais detalhes");
+    }
     if (tela === "teste") {
       chaveEventos = "";
       semRostoDesde = null;
@@ -456,7 +466,7 @@
 
     desenharAgora(painel, dados.calibracao, dados);
     desenharCartoes(painel, dados);
-    if ($("detalhes").open) desenharDetalhes(painel, dados);
+    if (detalhesAbertos) desenharDetalhes(painel, dados);
     desenharLinhaDoTempo(dados);
     desenharEnvioDoTeste(dados);
   }
@@ -521,70 +531,47 @@
     }
   }
 
-  // ------------------------------------------------------------------ medidas: a mesma anatomia em todo lugar
-  function criarMedida(principal) {
-    const raiz = criar(principal ? "div" : "li", principal ? "measure primary" : "measure");
-    const linha = criar("div", "m-row");
-    const nome = criar("span", "m-name");
-    const valor = criar("span", "m-value");
-    const numero = criar("span", "m-number");
-    const unidade = criar("span", "m-unit");
+  // ------------------------------------------------------------------ detalhes: um assunto por vez, cartões em grade
+  // Pedido de 20/10, 2ª rodada ("os mais detalhes continuou tudo junto"): cada medida é um cartão pequeno com nome
+  // curto, valor grande com unidade, a situação em palavra e UMA linha curta (medida.curta) no lugar do parágrafo.
+  function criarCartaoDetalhe(medida) {
+    const raiz = criar("li", "detail-card");
+    const nome = criar("p", "dc-name");
+    const valor = criar("p", "dc-value");
+    const numero = criar("span", "dc-number");
+    const unidade = criar("span", "dc-unit");
     valor.append(numero, unidade);
+    const espera = criar("p", "dc-wait");
     const situacao = criar("span", "status-word");
-    linha.append(nome, valor, situacao);
-    const espera = criar("p", "m-wait");
-    const oQue = criar("p", "m-what");
-    const explicacao = criar("span", "m-what-text");
-    const normal = criar("span", "m-normal");
-    const tecnico = criar("span", "m-tech");
-    oQue.append(explicacao, normal, tecnico);
-    raiz.append(linha, espera, oQue);
-    raiz.partes = { nome, valor, numero, unidade, situacao, espera, explicacao, normal, tecnico };
+    const principal = criar("div", "dc-main");
+    principal.append(valor, espera, situacao);
+    const normal = criar("p", "dc-normal");
+    const linha = criar("p", "dc-line");
+    raiz.append(nome, principal, normal, linha);
+    raiz.partes = { nome, valor, numero, unidade, espera, situacao, normal, linha };
+    atualizarCartaoDetalhe(raiz, medida);
     return raiz;
   }
 
-  function atualizarMedida(elemento, medida) {
-    const p = elemento.partes;
-    elemento.dataset.medida = medida.id;
-    elemento.dataset.nivel = nivelDe(medida);
+  function atualizarCartaoDetalhe(raiz, medida) {
+    const p = raiz.partes;
+    raiz.dataset.medida = medida.id;
+    raiz.dataset.nivel = nivelDe(medida);
     trocar(p.nome, medida.nome);
     const temValor = medida.valor != null;
     p.valor.hidden = !temValor;
-    elemento.classList.toggle("sem-valor", !temValor);
-    elemento.classList.toggle("esmaecido", temValor && !!medida.espera);
+    raiz.classList.toggle("esmaecido", temValor && !!medida.espera);
+    // Resposta em palavras longa ("Início da tarde: horário de mais sono") fica menor que um número.
+    raiz.classList.toggle("valor-texto", temValor && /[A-Za-zÀ-ú]/.test(medida.valor) && String(medida.valor).length > 14);
     trocar(p.numero, temValor ? medida.valor : "");
     trocar(p.unidade, temValor ? medida.unidade : "");
+    p.espera.hidden = temValor;
+    trocar(p.espera, temValor ? "" : medida.espera_curta || medida.espera || "");
     p.situacao.dataset.nivel = nivelDe(medida);
     trocar(p.situacao, medida.situacao);
-    p.espera.hidden = !medida.espera;
-    trocar(p.espera, medida.espera || "");
-    trocar(p.explicacao, medida.o_que_e);
     p.normal.hidden = !medida.seu_normal;
     trocar(p.normal, medida.seu_normal || "");
-    p.tecnico.hidden = !medida.tecnico;
-    trocar(p.tecnico, medida.tecnico || "");
-  }
-
-  function atualizarLista(lista, medidas) {
-    const existentes = new Map([...lista.children].map((item) => [item.dataset.medida, item]));
-    const ordem = medidas.map((medida) => {
-      let item = existentes.get(medida.id);
-      if (!item) item = criarMedida(false);
-      atualizarMedida(item, medida);
-      return item;
-    });
-    const mudou = ordem.length !== lista.children.length || ordem.some((item, i) => lista.children[i] !== item);
-    if (mudou) lista.replaceChildren(...ordem);
-  }
-
-  function criarGrafico(titulo, nota, classe) {
-    const figura = criar("figure", "chart-box");
-    const legenda = criar("figcaption", "chart-caption");
-    legenda.append(criar("span", "chart-title", titulo), criar("span", "chart-note", nota));
-    const tela = criar("canvas", `chart ${classe}`);
-    tela.setAttribute("aria-hidden", "true");
-    figura.append(legenda, tela);
-    return figura;
+    trocar(p.linha, medida.curta || medida.o_que_e);
   }
 
   // Painel ao lado do vídeo (pedido de 20/10: "tudo muito junto e confuso"): três blocos com pouca coisa cada.
@@ -658,6 +645,7 @@
     const unidade = criar("span", "heart-unit", "bpm");
     const qualidade = criar("span", "status-word heart-quality");
     leitura.append(numero, unidade, qualidade);
+    const movimento = criar("p", "heart-move");
 
     // Anel de andamento (CSS, conic-gradient): enche com o progresso; sem progresso conhecido, gira devagar.
     const andamento = criar("div", "heart-progress");
@@ -681,8 +669,9 @@
     const confTexto = criar("span", "conf-text");
     confianca.append(criar("span", "conf-label", "Confiança da leitura"), barra, confTexto);
 
-    raiz.append(leitura, andamento, aviso, onda, confianca);
-    raiz.partes = { leitura, numero, qualidade, andamento, anel, titulo, ultimo, motivo, aviso, onda, cheio, confTexto };
+    raiz.append(leitura, andamento, aviso, onda, movimento, confianca);
+    raiz.partes = { leitura, numero, qualidade, movimento, andamento, anel, titulo, ultimo, motivo, aviso, onda, cheio,
+      confTexto };
     return raiz;
   }
 
@@ -692,7 +681,7 @@
     const medicao = dado.medicao || { ativa: false };
     const conf = (dado.medidas || []).find((m) => m.id === "confianca");
     const pronto = !medicao.ativa && pulso.valor != null;
-    raiz.dataset.estado = medicao.ativa ? "medindo" : pronto ? "pronto" : "parado";
+    raiz.dataset.estado = medicao.ativa ? "medindo" : pronto ? "pronto" : "sem_leitura";
 
     p.leitura.hidden = !pronto;
     if (pronto) {
@@ -700,6 +689,11 @@
       p.qualidade.dataset.nivel = "n";
       trocar(p.qualidade, pulso.situacao);
     }
+    // Com número e a pessoa se mexendo: o número continua e só uma nota pequena avisa (nunca pede para parar).
+    const comNota = !!(pronto && dado.nota);
+    raiz.classList.toggle("com-nota", comNota);
+    p.movimento.hidden = !comNota;
+    trocar(p.movimento, comNota ? dado.nota : "");
 
     p.andamento.hidden = !medicao.ativa;
     if (medicao.ativa) {
@@ -715,10 +709,11 @@
     }
 
     // Sem medida em andamento e sem número (sem rosto, desligado, modo sem pontos): uma frase, nunca vazio.
-    const parado = !pronto && !medicao.ativa;
-    p.aviso.hidden = !parado;
+    const semLeitura = !pronto && !medicao.ativa;
+    p.aviso.hidden = !semLeitura;
     const ultimoTexto = medicao.ultimo ? ` Último valor: ${medicao.ultimo} bpm.` : "";
-    trocar(p.aviso, parado ? `${pulso.espera_curta || pulso.espera || pulso.situacao}.${ultimoTexto}`.replace("..", ".") : "");
+    trocar(p.aviso, semLeitura ? `${pulso.espera_curta || pulso.espera || pulso.situacao}.${ultimoTexto}`.replace("..", ".") :
+      "");
 
     // A confiança vale para o número na tela: só aparece com ele (medindo, a barra fica vazia e diz que já vem).
     const temConfianca = pronto && !!(conf && conf.valor != null);
@@ -791,39 +786,89 @@
     }
   }
 
-  function desenharDetalhes(painel, dados) {
-    const lugar = $("detalhes-grupos");
-    if (!painel) return;
-    // Primeiro, os números de cima com a frase de "o que é" de cada um; depois o resto, por assunto.
-    const deCima = { id: "de-cima", titulo: "O que os números de cima querem dizer",
-      medidas: painel.cartoes.flatMap((cartao) => [cartao.principal, ...cartao.medidas]) };
-    for (const grupo of [deCima, ...painel.detalhes]) {
-      let bloco = gruposDom.get(grupo.id);
-      if (!bloco) {
-        bloco = criar("section", "detail-group");
-        const titulo = criar("h3", "detail-title", grupo.titulo);
-        const lista = criar("ul", "measures");
-        bloco.append(titulo, lista);
-        if (grupo.id === "sono") {
-          const grafico = criarGrafico("Abertura do olho nos últimos 60 s", "Abaixo da linha tracejada, o olho conta como fechado.",
-            "chart-eyes");
-          bloco.append(grafico);
-          bloco.grafico = grafico.querySelector("canvas");
-          bloco.tipo = "olhos";
-        } else if (grupo.id === "coracao") {
-          const grafico = criarGrafico("Pulso nos últimos 2 min", "Só leituras boas; a linha mostra se subiu ou desceu.",
-            "chart-trend");
-          bloco.append(grafico);
-          bloco.grafico = grafico.querySelector("canvas");
-          bloco.tipo = "pulso";
+  const NOMES_NIVEL = { 1: "atenção", 2: "alto", 3: "crítico" };
+
+  function desenharAbas(assuntos) {
+    const abas = $("detalhes-abas");
+    const chave = assuntos.map((a) => `${a.id}:${a.nivel}`).join(",");
+    if (chave !== chaveAbas) {
+      chaveAbas = chave;
+      abas.replaceChildren(...assuntos.map((assunto) => {
+        const aba = criar("button", "details-tab");
+        aba.type = "button";
+        aba.id = `aba-${assunto.id}`;
+        aba.dataset.assunto = assunto.id;
+        aba.setAttribute("role", "tab");
+        aba.setAttribute("aria-controls", "detalhes");
+        aba.append(criar("span", "tab-name", assunto.titulo));
+        // Assunto com algo fora do normal ganha a palavra do nível, para achar rápido onde olhar.
+        if (assunto.nivel > 0) {
+          const marca = criar("span", "status-word tab-level", NOMES_NIVEL[assunto.nivel]);
+          marca.dataset.nivel = String(assunto.nivel);
+          aba.append(marca);
         }
-        bloco.lista = lista;
-        gruposDom.set(grupo.id, bloco);
-        lugar.append(bloco);
-      }
-      atualizarLista(bloco.lista, grupo.medidas);
-      if (bloco.tipo === "olhos") graficoAbertura(bloco.grafico, dados.series ? dados.series.abertura : []);
-      if (bloco.tipo === "pulso") graficoTendencia(bloco.grafico, (dados.cardio && dados.cardio.historico_bpm) || []);
+        return aba;
+      }));
+    }
+    for (const aba of abas.children) {
+      const escolhida = aba.dataset.assunto === assuntoAtual;
+      aba.setAttribute("aria-selected", String(escolhida));
+      aba.tabIndex = escolhida ? 0 : -1;
+    }
+  }
+
+  function desenharDetalhes(painel, dados) {
+    if (!painel || !painel.assuntos) return;
+    const assuntos = painel.assuntos;
+    if (!assuntos.some((a) => a.id === assuntoAtual)) assuntoAtual = assuntos[0].id;
+    desenharAbas(assuntos);
+    const assunto = assuntos.find((a) => a.id === assuntoAtual);
+    $("detalhes").setAttribute("aria-labelledby", `aba-${assunto.id}`);
+    textoLivre("assunto-titulo", assunto.titulo);
+    textoLivre("assunto-descricao", assunto.descricao);
+    atualizarItens($("assunto-medidas"), assunto.medidas, criarCartaoDetalhe, atualizarCartaoDetalhe);
+    const figura = $("assunto-grafico");
+    figura.hidden = !assunto.grafico;
+    figura.dataset.tipo = assunto.grafico || "";
+    if (assunto.grafico === "abertura") {
+      textoLivre("assunto-grafico-titulo", "Abertura do olho nos últimos 60 s");
+      textoLivre("assunto-grafico-nota", "Abaixo da linha tracejada (20%), o olho conta como fechado.");
+      graficoAbertura($("assunto-grafico-tela"), dados.series ? dados.series.abertura : [], true);
+    } else if (assunto.grafico === "pulso") {
+      textoLivre("assunto-grafico-titulo", "Pulso nos últimos 2 min");
+      textoLivre("assunto-grafico-nota", "Só leituras boas; a linha mostra se subiu ou desceu.");
+      graficoTendencia($("assunto-grafico-tela"), (dados.cardio && dados.cardio.historico_bpm) || []);
+    }
+    $("assunto-nota").hidden = !assunto.nota;
+    if (assunto.nota) textoLivre("assunto-nota", assunto.nota);
+  }
+
+  function escolherAssunto(id, focar) {
+    assuntoAtual = id;
+    $("detalhes").scrollTop = 0;
+    if (estado && estado.painel) desenharDetalhes(estado.painel, estado);
+    if (focar) {
+      const aba = $(`aba-${id}`);
+      if (aba) aba.focus();
+    }
+  }
+
+  // Abre e fecha os detalhes: a camada cobre o palco e o vídeo fica pequeno no canto (a frase do agora e os blocos
+  // continuam ao lado). Esc fecha os detalhes antes de encerrar o teste.
+  function abrirDetalhes(abrir) {
+    detalhesAbertos = abrir;
+    $("tela-teste").classList.toggle("com-detalhes", abrir);
+    $("detalhes").hidden = !abrir;
+    $("detalhes-nav").hidden = !abrir;
+    const botao = $("detalhes-botao");
+    botao.setAttribute("aria-expanded", String(abrir));
+    textoLivre("detalhes-botao-texto", abrir ? "Fechar detalhes" : "Ver mais detalhes");
+    if (estado && telaAtual === "teste") desenharTeste(estado);
+    if (abrir) {
+      const aba = $(`aba-${assuntoAtual}`);
+      if (aba) aba.focus();
+    } else if (document.activeElement === document.body || !document.activeElement) {
+      botao.focus();
     }
   }
 
@@ -864,20 +909,41 @@
   }
 
   // ------------------------------------------------------------------ gráficos (todos com título dizendo o que mostram)
-  function graficoAbertura(canvas, valores) {
+  function graficoAbertura(canvas, valores, comEscala) {
     if (!canvas) return;
     const area = prepararCanvas(canvas);
     if (!area) return;
     const { ctx, w, h } = area;
-    const topo = 4;
-    const base = h - 4;
+    const topo = comEscala ? 7 : 4;
+    const base = comEscala ? h - 20 : h - 4;
     const yDe = (v) => base - Math.min(Math.max(v, 0), 1) * (base - topo);
     ctx.fillStyle = cssVar("--apagado");
-    ctx.font = "10.5px " + cssVar("--fonte");
+    ctx.font = "11px " + cssVar("--fonte");
     ctx.textBaseline = "middle";
-    ctx.fillText("aberto", 0, yDe(1) + 5);
-    ctx.fillText("fechado", 0, yDe(0.2) + 7);
-    const esquerda = 50;
+    const esquerda = comEscala ? 82 : 50;
+    if (comEscala) {
+      ctx.fillText("100% aberto", 0, yDe(1));
+      ctx.fillText("20% fechado", 0, yDe(0.2));
+      if (yDe(0) - yDe(0.2) >= 15) ctx.fillText("0%", 0, yDe(0));
+      ctx.strokeStyle = cssVar("--fio");
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(esquerda, yDe(1));
+      ctx.lineTo(w, yDe(1));
+      ctx.moveTo(esquerda, yDe(0));
+      ctx.lineTo(w, yDe(0));
+      ctx.stroke();
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("60 s atrás", esquerda, h - 3);
+      ctx.textAlign = "center";
+      ctx.fillText("30 s", esquerda + (w - esquerda) / 2, h - 3);
+      ctx.textAlign = "right";
+      ctx.fillText("agora", w, h - 3);
+      ctx.textAlign = "left";
+    } else {
+      ctx.fillText("aberto", 0, yDe(1) + 5);
+      ctx.fillText("fechado", 0, yDe(0.2) + 7);
+    }
     ctx.strokeStyle = cssVar("--fio-forte");
     ctx.setLineDash([3, 4]);
     ctx.lineWidth = 1;
@@ -1408,6 +1474,12 @@
     } else if (alvo.id === "central-desconectar") {
       agir("desconectar").then((resposta) => resposta &&
         avisar("Desconectado. O que já foi enviado continua com a empresa."));
+    } else if (alvo.id === "detalhes-botao") {
+      abrirDetalhes(!detalhesAbertos);
+    } else if (alvo.id === "detalhes-fechar") {
+      abrirDetalhes(false);
+    } else if (alvo.dataset.assunto) {
+      escolherAssunto(alvo.dataset.assunto, true);
     } else if (alvo.id === "r-player-fechar") {
       fecharTrecho();
     } else if (alvo.dataset.trecho) {
@@ -1434,8 +1506,20 @@
     if (evento.target === $("legal")) fecharLegal();
   });
 
-  $("detalhes").addEventListener("toggle", () => {
-    if (estado && telaAtual === "teste" && $("detalhes").open) desenharDetalhes(estado.painel, estado);
+  // Abas dos detalhes: setas trocam de assunto (em cima/embaixo e esquerda/direita), Home e End vão às pontas.
+  $("detalhes-abas").addEventListener("keydown", (evento) => {
+    if (!estado || !estado.painel || !estado.painel.assuntos) return;
+    const ids = estado.painel.assuntos.map((a) => a.id);
+    const atual = Math.max(0, ids.indexOf(assuntoAtual));
+    const passos = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+    let proximo = null;
+    if (evento.key in passos) proximo = (atual + passos[evento.key] + ids.length) % ids.length;
+    else if (evento.key === "Home") proximo = 0;
+    else if (evento.key === "End") proximo = ids.length - 1;
+    if (proximo == null) return;
+    evento.preventDefault();
+    evento.stopPropagation();
+    escolherAssunto(ids[proximo], true);
   });
 
   $("legal-abas").addEventListener("keydown", (evento) => {
@@ -1454,6 +1538,11 @@
       return;
     }
     if (telaAtual !== "teste") return;
+    if (evento.key === "Escape" && detalhesAbertos) {
+      abrirDetalhes(false);
+      evento.preventDefault();
+      return;
+    }
     const tecla = evento.key.toLowerCase();
     if (tecla === "q" || tecla === "escape") acaoDoBotao("parar");
     else if (tecla === "c") acaoDoBotao("recalibrar");
