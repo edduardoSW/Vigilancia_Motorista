@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import os
 import socket
 import socketserver
@@ -27,6 +28,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from central import servir_trecho  # spec 026: trechos baixados da central, servidos só com o segredo da abertura
+from dados import pasta_dados  # noqa: E402
 from ponte import Ponte  # js_api: login, cadastros e decisões passam pela ponte, não por rota HTTP (spec 014)
 
 AQUI = Path(__file__).resolve().parent
@@ -330,6 +332,73 @@ def _verificar_e_fechar(janela, estado: dict, inicio: float) -> None:
         janela.destroy()
 
 
+# Primeiro uso dentro do pacote (--verificar-uso, ATV-04, 20/10/2026)
+# ---------------------------------------------------------------------------------------------------------------------
+# Um painel baixado em outro computador mostrou "Algo deu errado" ao ativar, e o --verificar só conferia se a tela abria.
+# Este modo faz o caminho de quem acabou de baixar, pela ponte de verdade (JavaScript → pywebview → Python), dentro do
+# executável. Só roda numa pasta de dados vazia: nunca toca nos dados de quem usa o painel.
+USUARIO_VERIFICACAO = "verificacao"
+SENHA_VERIFICACAO = "Pacote-" + secrets.token_urlsafe(12)  # nova a cada execução; não pode conter o usuário
+SCRIPT_USO = """
+(() => {
+  window.__rgUso = null;
+  const api = window.pywebview && window.pywebview.api;
+  const passos = [];
+  const passo = async (nome, chamada) => {
+    try { const r = await chamada(); passos.push({passo: nome, ok: !!(r && r.ok), erro: r && r.ok ? null : (r && r.erro) || 'sem resposta'}); }
+    catch (e) { passos.push({passo: nome, ok: false, erro: String(e)}); }
+  };
+  (async () => {
+    await passo('estado', () => api.estado());
+    await passo('ativar_local', () => api.ativar_local("Verificação RotaGuard", {nome: "Verificação", usuario: "%(usuario)s", senha: "%(senha)s"}));
+    await passo('sair', () => api.sair());
+    await passo('entrar', () => api.entrar("%(usuario)s", "%(senha)s"));
+    await passo('inicio_resumo', () => api.inicio_resumo());
+    await passo('sair_de_novo', () => api.sair());
+    window.__rgUso = JSON.stringify(passos);
+  })();
+  return true;
+})()
+""" % {"usuario": USUARIO_VERIFICACAO, "senha": SENHA_VERIFICACAO}
+
+
+def pasta_vazia_para_uso(pasta: Path) -> bool:
+    """O --verificar-uso só roda numa pasta sem painel: inexistente ou vazia."""
+    pasta = Path(pasta)
+    return not pasta.exists() or (pasta.is_dir() and not any(pasta.iterdir()))
+
+
+def verificar_uso(janela, tempo_limite_s: float, relogio=time.monotonic, dormir=time.sleep) -> dict:
+    fim = relogio() + max(0.0, tempo_limite_s)
+    if not janela.events.loaded.wait(max(0.0, tempo_limite_s)):
+        return {"ok": False, "erro": "a interface não carregou"}
+    while not janela.evaluate_js("!!(window.pywebview && window.pywebview.api && window.pywebview.api.ativar_local)"):
+        if relogio() >= fim:
+            return {"ok": False, "erro": "a ponte do pywebview não ficou pronta"}
+        dormir(0.2)
+    janela.evaluate_js(SCRIPT_USO)
+    while True:
+        texto = janela.evaluate_js("window.__rgUso")
+        if texto:
+            passos = json.loads(texto)
+            falhas = [f"{p['passo']}: {p['erro']}" for p in passos if not p["ok"]]
+            return {"ok": not falhas, "passos": [p["passo"] for p in passos if p["ok"]],
+                    **({"erro": "; ".join(falhas)} if falhas else {})}
+        if relogio() >= fim:
+            return {"ok": False, "erro": "o primeiro uso não terminou a tempo"}
+        dormir(0.25)
+
+
+def _verificar_uso_e_fechar(janela, estado: dict, inicio: float) -> None:
+    try:
+        restante = TEMPO_LIMITE_VERIFICACAO_S - MARGEM_FECHAMENTO_S - (time.monotonic() - inicio)
+        estado["resultado"] = verificar_uso(janela, restante)
+    except Exception as erro:  # noqa: BLE001
+        estado["resultado"] = {"ok": False, "erro": f"{type(erro).__name__}: {erro}"}
+    finally:
+        janela.destroy()
+
+
 def linha_json(resultado: dict) -> str:
     return json.dumps(resultado, ensure_ascii=True)
 
@@ -386,6 +455,9 @@ def ler_argumentos(argv=None) -> argparse.Namespace:
     parser.add_argument("--verificar", action="store_true",
                         help="teste de fumaça com janela oculta: imprime uma linha JSON e sai com 0 se a interface "
                              "carregou em pt-BR, com a marca RotaGuard e sem dados fictícios")
+    parser.add_argument("--verificar-uso", action="store_true",
+                        help="teste do primeiro uso com janela oculta, só numa pasta de dados vazia "
+                             "(ROTAGUARD_PAINEL_DADOS): ativa, sai, entra, abre o Início e sai pela ponte real")
     parser.add_argument("--depurar", action="store_true",
                         help="fora do pacote: liga as ferramentas de desenvolvedor do WebView2")
     # parse_known_args: argumento desconhecido não derruba o app (o executável de janela não tem onde mostrar o erro).
@@ -403,6 +475,8 @@ def _falhar(verificar: bool, saida: SaidaUnica, avisar, erro: str) -> int:
 def main(argv=None, webview_mod=None, raiz=None, congelado: bool | None = None, imprimir=emitir,
          avisar=avisar_usuario, ponte=None) -> int:
     args = ler_argumentos(argv)
+    uso = bool(getattr(args, "verificar_uso", False))
+    args.verificar = args.verificar or uso  # mesma janela oculta, mesma linha JSON e o mesmo vigia
     congelado = esta_congelado() if congelado is None else congelado
     raiz = Path(raiz) if raiz is not None else pasta_interface(congelado)
     saida = SaidaUnica(imprimir)
@@ -418,6 +492,8 @@ def main(argv=None, webview_mod=None, raiz=None, congelado: bool | None = None, 
     try:
         if webview_mod is None:
             import webview as webview_mod
+        if uso and ponte is None and not pasta_vazia_para_uso(pasta_dados()):
+            raise RuntimeError(f"--verificar-uso só roda numa pasta de dados vazia (ROTAGUARD_PAINEL_DADOS); {pasta_dados()} tem dados")
         ponte = ponte if ponte is not None else Ponte()  # não grava nada até a tela chamar
         rota_trechos = getattr(ponte, "_rota_trechos", None)
         servidor.trechos = rota_trechos() if callable(rota_trechos) else None
@@ -431,7 +507,7 @@ def main(argv=None, webview_mod=None, raiz=None, congelado: bool | None = None, 
         janela.events.initialized += conferir_motor
         opcoes = opcoes_de_inicio(congelado, args.depurar, caminho_icone(congelado))
         if args.verificar:
-            webview_mod.start(func=_verificar_e_fechar, args=(janela, estado, inicio), **opcoes)
+            webview_mod.start(func=_verificar_uso_e_fechar if uso else _verificar_e_fechar, args=(janela, estado, inicio), **opcoes)
         else:
             ponte._iniciar_script()  # vigia do script local (agente 2); falha nele não impede o painel
             ponte._iniciar_central()  # spec 026: busca na central a cada 30 s, só se estiver conectado

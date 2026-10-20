@@ -163,6 +163,34 @@ def teste_de_fumaca() -> dict:
     return dados
 
 
+def teste_do_primeiro_uso() -> dict:
+    """ATV-04 (20/10/2026): o .exe faz o caminho de quem acabou de baixar, numa pasta de dados vazia, pela ponte real:
+    ativar, sair, entrar, Início e sair. Um painel baixado mostrou "Algo deu errado" ao ativar e o teste de fumaça só
+    conferia se a tela abria. Pacote que não passa aqui não vai para o site."""
+    import os
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="rg-uso-", ignore_cleanup_errors=True) as tmp:
+        ambiente = dict(os.environ, ROTAGUARD_PAINEL_DADOS=str(Path(tmp) / "Painel"))
+        inicio = time.monotonic()
+        resultado = subprocess.run([str(executavel()), "--verificar-uso"], capture_output=True, text=True,
+                                   errors="replace", timeout=TEMPO_FUMACA_S, env=ambiente)
+        duracao = time.monotonic() - inicio
+        linhas = [linha.strip() for linha in resultado.stdout.splitlines() if linha.strip().startswith("{")]
+        dados = json.loads(linhas[-1]) if linhas else {}
+        registro = Path(tmp) / "Painel" / "registro-painel.log"
+        print(f"Primeiro uso no .exe: {duracao:.1f} s, código {resultado.returncode}.")
+        print(linhas[-1] if linhas else "(nenhuma linha JSON na saída)")
+        if resultado.returncode != 0 or dados.get("ok") is not True:
+            if registro.exists():
+                print("registro-painel.log:")
+                print(registro.read_text(encoding="utf-8", errors="replace")[-4000:])
+            print(resultado.stdout[-2000:], resultado.stderr[-2000:])
+            raise SystemExit("Primeiro uso no pacote falhou: " + str(dados.get("erro") or f"código {resultado.returncode}"))
+    print("Primeiro uso no pacote OK.")
+    return dados
+
+
 def empacotar(sem_instalador: bool) -> list[Path]:
     PACOTES.mkdir(parents=True, exist_ok=True)
     zip_caminho = PACOTES / nome_zip()
@@ -201,6 +229,7 @@ def main(argv=None) -> int:
     conferir_pacote()
     if not args.sem_fumaca:
         teste_de_fumaca()
+        teste_do_primeiro_uso()
     for pacote in empacotar(args.sem_instalador):
         print(f"{pacote.name}  {pacote.stat().st_size / 1_048_576:.1f} MB  sha256 {APP_TESTE.sha256(pacote)}")
     return 0

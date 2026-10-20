@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +31,8 @@ from preferencias import Preferencias
 
 AQUI = Path(__file__).resolve().parent
 MENSAGEM_FALHA = "Algo deu errado. Tente de novo; se continuar, fale com a RotaGuard."
+ARQUIVO_REGISTRO = "registro-painel.log"
+TAMANHO_MAXIMO_REGISTRO = 1_000_000
 MENSAGEM_JA_ATIVADO = "O painel já foi ativado neste computador."
 MENSAGEM_NAO_ATIVADO = "O painel ainda não foi ativado."
 CHAVE_PASSOS_ESCONDIDOS = "primeiros_passos_escondidos"
@@ -60,7 +63,8 @@ def _resposta(travar: bool = True):
                 return erro.resposta()
             except Exception as erro:  # nunca exceção crua para o JavaScript (argumento errado, disco cheio...)
                 self._falhas.append(f"{metodo.__name__}: {type(erro).__name__}")
-                return {"ok": False, "erro": MENSAGEM_FALHA}
+                codigo = self._registrar_falha(metodo.__name__, erro)
+                return {"ok": False, "erro": f"{MENSAGEM_FALHA} (código {codigo})" if codigo else MENSAGEM_FALHA}
         return envolvido
     return decorador
 
@@ -115,6 +119,25 @@ class Ponte:
             return None
         nome = empresa.get("nome")
         return nome.strip() if isinstance(nome, str) and nome.strip() else None
+
+    def _registrar_falha(self, metodo: str, erro: BaseException) -> str | None:
+        """ATV-03 (20/10/2026): falha inesperada vai para registro-painel.log na pasta de dados, com um código curto que
+        a tela mostra. Só o nome do método e o erro com o rastro: nunca os argumentos (senha, nomes, arquivos).
+        O arquivo passa de 1 MB → recomeça. Falha ao gravar o registro nunca vira outra falha."""
+        codigo = "E-" + secrets.token_hex(3).upper()
+        try:
+            pasta = self._pasta if self._pasta is not None else pasta_dados()
+            pasta.mkdir(parents=True, exist_ok=True)
+            arquivo = pasta / ARQUIVO_REGISTRO
+            if arquivo.exists() and arquivo.stat().st_size > TAMANHO_MAXIMO_REGISTRO:
+                arquivo.unlink()
+            rastro = "".join(traceback.format_exception(type(erro), erro, erro.__traceback__))
+            with open(arquivo, "a", encoding="utf-8") as saida:
+                cabecalho = f"{datetime.now().isoformat(timespec='seconds')} {codigo} {metodo} versão {versao_app()}"
+                saida.write(cabecalho + "\n" + rastro + "\n")
+        except Exception:  # noqa: BLE001 - registro é ajuda, não pode derrubar a resposta
+            return None
+        return codigo
 
     def _ligar_janela(self, janela) -> None:
         self._janela = janela
@@ -241,7 +264,7 @@ class Ponte:
         return self._n().preferencias.salvar(quem["id"], valores)
 
     @_resposta()
-    def ativar_local(self, empresa, admin):
+    def ativar_local(self, empresa, admin, opcoes=None):  # noqa: ARG002 - opcoes: só na web (código de ativação)
         """Spec 030 (SDF-06): sem o arquivo da empresa, cria a empresa com o nome digitado e o administrador, sem
         carregar nenhum registro. As caixas só chegam com o arquivo da empresa (CXA-01)."""
         if self._n().contas.ativado():
@@ -249,7 +272,7 @@ class Ponte:
         return self._ativar(admin, "local", validar_nome_empresa(empresa), lambda banco: None)
 
     @_resposta()
-    def ativar_com_arquivo(self, conteudo, admin):
+    def ativar_com_arquivo(self, conteudo, admin, opcoes=None):  # noqa: ARG002 - opcoes: só na web
         if self._n().contas.ativado():
             raise ErroPainel(MENSAGEM_JA_ATIVADO, "conflito")
         chaveiro = ler_chaveiro(conteudo)

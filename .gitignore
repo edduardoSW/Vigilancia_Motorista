@@ -28,3 +28,6 @@ build/
 # Quadros de trabalho e backups do Blender (o vídeo final fica em site/public/midia)
 docs/site/midia/video-local/frame-*.png
 *.blend1
+
+# Cópias de trabalho dos agentes do Claude Code (git worktree)
+.claude/worktrees/
